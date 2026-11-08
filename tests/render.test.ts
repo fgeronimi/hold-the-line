@@ -5,7 +5,7 @@ import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { simulateWave } from '../src/engine/simulate.ts';
 import { HEX_WIDTH, hexAt, hexCenter, hexDistance, hexKey, hexLine, nearestFree } from '../src/render/hex.ts';
 import { layoutArchitecture, pathLength, pointAlong } from '../src/render/layout.ts';
-import { failuresForTick, isReturning, progressAt, trafficScale, tripDuration, vehiclesForTick } from '../src/render/traffic.ts';
+import { journeyAt, journeyDuration, journeysForTick, outcomeOf, trafficScale, tripDuration, type Journey } from '../src/render/traffic.ts';
 
 describe('layoutArchitecture', () => {
   it('range les nœuds en colonnes selon leur profondeur', () => {
@@ -69,56 +69,108 @@ describe('chemins', () => {
   });
 });
 
-describe('trafic', () => {
+describe('trajets', () => {
   const result = simulateWave(A.scaled(3), urlShortener.waves[2]!, catalog);
   const scale = trafficScale(result.ticks);
+  const linkFrom = (link: string) => link.split('→')[0]!;
+  const linkTo = (link: string) => link.split('→')[1]!;
 
-  it('donne au lien le plus chargé le maximum de véhicules', () => {
-    const counts = result.ticks.map((t, i) => vehiclesForTick(t, i, scale, new Set()).length);
-    // Le pic de la campagne (×5) fait partir bien plus de véhicules que le calme.
-    expect(Math.max(...counts)).toBeGreaterThan(counts[0]! * 2);
-    for (const t of result.ticks) {
-      for (const v of vehiclesForTick(t, 0, scale, new Set())) expect(v.start).toBeLessThan(1);
+  /** Les tronçons s'enchaînent : chacun part de là où le précédent est arrivé. */
+  function chained(j: Journey): boolean {
+    let at = linkFrom(j.legs[0]!.link);
+    for (const leg of j.legs) {
+      const [a, b] = leg.back ? [linkTo(leg.link), linkFrom(leg.link)] : [linkFrom(leg.link), linkTo(leg.link)];
+      if (a !== at) return false;
+      at = b;
+    }
+    return true;
+  }
+
+  it('part des hameaux, va jusqu’au bâtiment qui sert la requête, et revient aux hameaux', () => {
+    const journeys = journeysForTick(result.ticks[0]!, 0, scale).filter((j) => j.kind === 'read' && !j.failedFrom);
+    expect(journeys.length).toBeGreaterThan(0);
+    for (const j of journeys) {
+      expect(chained(j)).toBe(true);
+      expect(linkFrom(j.legs[0]!.link)).toBe('src');
+      expect(linkFrom(j.legs.at(-1)!.link)).toBe('src');
+      const half = j.legs.length / 2;
+      expect(j.legs.slice(0, half).every((l) => !l.back)).toBe(true);
+      expect(j.legs.slice(half).every((l) => l.back)).toBe(true);
     }
   });
 
-  it('montre au moins un véhicule sur un lien peu utilisé', () => {
-    const tick = { ...result.ticks[0]!, links: { 'app→db': { write: 0.001 } } };
-    expect(vehiclesForTick(tick, 0, scale, new Set())).toHaveLength(1);
+  it('une lecture va au carnet en cas de succès, aux archives en cas d’absence, dans les bonnes proportions', () => {
+    const ends = result.ticks
+      .flatMap((t, i) => journeysForTick(t, i, scale))
+      .filter((j) => j.kind === 'read' && !j.failedFrom)
+      .map((j) => linkTo(j.legs[j.legs.length / 2 - 1]!.link));
+    const hits = ends.filter((e) => e === 'cache').length;
+    const misses = ends.filter((e) => e === 'db').length;
+    expect(hits + misses).toBe(ends.length);
+    // 95 % de succès dans le catalogue : les absences sont rares mais présentes.
+    expect(hits / ends.length).toBeGreaterThan(0.85);
+    expect(misses).toBeGreaterThan(0);
   });
 
-  it('ralentit les véhicules vers un nœud lent', () => {
+  it('un clic async part sans revenir', () => {
+    const clicks = simulateWave(A.queuedClicks(4), urlShortener.waves[4]!, catalog);
+    const journeys = journeysForTick(clicks.ticks[0]!, 0, trafficScale(clicks.ticks)).filter((j) => j.kind === 'async');
+    expect(journeys.length).toBeGreaterThan(0);
+    expect(journeys.every((j) => j.legs.every((l) => !l.back) && chained(j))).toBe(true);
+    expect(journeys.some((j) => j.legs.some((l) => l.link === 'app→queue'))).toBe(true);
+  });
+
+  it('une requête refusée fait demi-tour depuis le bâtiment qui la refuse', () => {
+    const lost = simulateWave(A.scaled(1), urlShortener.waves[2]!, catalog);
+    const failed = journeysForTick(lost.ticks[30]!, 30, trafficScale(lost.ticks)).filter((j) => j.failedFrom !== undefined && !j.hostile);
+    expect(failed.length).toBeGreaterThan(0);
+    for (const j of failed) {
+      expect(chained(j)).toBe(true);
+      expect(j.legs.length).toBe(j.failedFrom! * 2);
+      // Le refus a lieu au bout de l'aller : c'est le bâtiment saturé.
+      expect(lost.ticks[30]!.nodes[linkTo(j.legs[j.failedFrom! - 1]!.link)]!.failed).toBeGreaterThan(0);
+    }
+  });
+
+  it('les pillards sont refoulés à la porte qui les limite', () => {
+    const limited = simulateWave(A.scaled(3, { rateLimitTier: A.TIER_40 }), urlShortener.waves[3]!, catalog);
+    const hostiles = journeysForTick(limited.ticks[10]!, 10, trafficScale(limited.ticks)).filter((j) => j.hostile);
+    expect(hostiles.length).toBeGreaterThan(0);
+    expect(hostiles.every((j) => j.legs.map((l) => l.link).join() === 'src→lb,src→lb' && j.failedFrom === 1)).toBe(true);
+  });
+
+  it('suit le voyageur tronçon par tronçon, et le retourne au retour', () => {
+    const j: Journey = { kind: 'read', start: 2, legs: [{ link: 'a→b', back: false, duration: 1 }, { link: 'a→b', back: true, duration: 1 }] };
+    expect(journeyDuration(j)).toBe(2);
+    expect(journeyAt(j, 1.9)).toBeUndefined();
+    expect(journeyAt(j, 2.25)).toEqual({ link: 'a→b', f: 0.25, returning: false, failed: false });
+    expect(journeyAt(j, 3.25)).toEqual({ link: 'a→b', f: 0.75, returning: true, failed: false });
+    expect(journeyAt(j, 4)).toBeUndefined();
+    expect(journeyAt({ ...j, failedFrom: 1 }, 3.5)?.failed).toBe(true);
+  });
+
+  it('donne l’issue d’un trajet : +1 aux hameaux au retour, −1 là où la requête est refusée', () => {
+    const legs = [
+      { link: 'src→app', back: false, duration: 1 },
+      { link: 'app→cache', back: false, duration: 0.5 },
+      { link: 'app→cache', back: true, duration: 0.5 },
+      { link: 'src→app', back: true, duration: 1 },
+    ];
+    // Servie : le +1 apparaît aux hameaux, quand la réponse revient.
+    expect(outcomeOf({ kind: 'read', start: 3, legs })).toEqual({ node: 'src', at: 6, result: 'served' });
+    // Un async ne revient pas : il compte au bout de son aller.
+    expect(outcomeOf({ kind: 'async', start: 3, legs: legs.slice(0, 2) })).toEqual({ node: 'cache', at: 4.5, result: 'served' });
+    expect(outcomeOf({ kind: 'read', start: 3, legs: [legs[0]!, legs[3]!], failedFrom: 1 })).toEqual({ node: 'app', at: 4, result: 'refused' });
+    expect(outcomeOf({ kind: 'read', start: 0, legs: [legs[0]!, legs[3]!], failedFrom: 1, hostile: true })?.result).toBe('repelled');
+  });
+
+  it('ralentit les voyageurs vers un nœud lent', () => {
     expect(tripDuration(200)).toBeGreaterThan(tripDuration(10));
     expect(tripDuration(10_000)).toBe(3);
   });
 
-  it('fait faire l’aller-retour aux consultations du cache', () => {
-    const tick = result.ticks[0]!;
-    const toCache = vehiclesForTick(tick, 0, scale, new Set(['app→cache'])).find((v) => v.link === 'app→cache')!;
-    expect(toCache.roundTrip).toBe(true);
-    expect(progressAt(toCache, toCache.start + toCache.duration * 0.5)).toBeCloseTo(0.5);
-    expect(progressAt(toCache, toCache.start + toCache.duration * 1.5)).toBeCloseTo(0.5);
-    expect(progressAt(toCache, toCache.start + toCache.duration * 2)).toBeUndefined();
-    expect(progressAt(toCache, toCache.start - 0.1)).toBeUndefined();
-    expect(isReturning(toCache, toCache.start + toCache.duration * 0.5)).toBe(false);
-    expect(isReturning(toCache, toCache.start + toCache.duration * 1.5)).toBe(true);
-  });
-
-  it('fait faire demi-tour aux requêtes en échec, sur la route d’arrivée la plus chargée', () => {
-    const lost = simulateWave(A.scaled(1), urlShortener.waves[2]!, catalog);
-    const peak = lost.ticks[30]!;
-    const wrecks = failuresForTick(peak, 30, trafficScale(lost.ticks));
-    expect(wrecks.length).toBeGreaterThan(0);
-    expect(wrecks.every((v) => v.failed && v.roundTrip && v.link === 'lb→app')).toBe(true);
-    expect(failuresForTick(result.ticks[0]!, 0, scale)).toEqual([]);
-  });
-
-  it('repousse le trafic abusif à la porte qui le limite', () => {
-    const limited = simulateWave(A.scaled(3, { rateLimitTier: A.TIER_40 }), urlShortener.waves[3]!, catalog);
-    const tick = limited.ticks[10]!;
-    expect(tick.nodes.lb!.shed).toBeGreaterThan(0);
-    const hostiles = failuresForTick(tick, 10, trafficScale(limited.ticks)).filter((v) => v.hostile);
-    expect(hostiles.length).toBeGreaterThan(0);
-    expect(hostiles.every((v) => v.link === 'src→lb' && v.roundTrip)).toBe(true);
+  it('le pic de la campagne fait partir bien plus de voyageurs que le calme', () => {
+    const counts = result.ticks.map((t, i) => journeysForTick(t, i, scale).length);
+    expect(Math.max(...counts)).toBeGreaterThan(counts[0]! * 2);
   });
 });

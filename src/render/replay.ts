@@ -2,7 +2,7 @@ import type { Architecture, Catalog, WaveResult } from '../engine/types.ts';
 import { escapeHtml } from './html.ts';
 import type { CityScene } from './scene.ts';
 import type { Theme } from './theme.ts';
-import { failuresForTick, trafficScale, vehiclesForTick, type Vehicle } from './traffic.ts';
+import { journeyDuration, journeysForTick, outcomeOf, trafficScale, type Journey, type Outcome } from './traffic.ts';
 
 export interface ReplayOptions {
   title: string;
@@ -42,19 +42,14 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   const seek = $<HTMLInputElement>('seek');
   const play = $<HTMLButtonElement>('play');
 
-  const roundTrips = new Set(
-    o.arch.links
-      .filter((l) => {
-        const type = o.arch.nodes.find((n) => n.id === l.to)?.type;
-        return type !== undefined && o.catalog.components[type]?.lookaside === true;
-      })
-      .map((l) => `${l.from}→${l.to}`),
-  );
   const scale = trafficScale(o.result.ticks);
-  const vehicles: Vehicle[] = o.result.ticks.flatMap((t, i) => [
-    ...vehiclesForTick(t, i, scale, roundTrips),
-    ...failuresForTick(t, i, scale),
-  ]);
+  const journeys: { j: Journey; end: number }[] = o.result.ticks
+    .flatMap((t, i) => journeysForTick(t, i, scale))
+    .map((j) => ({ j, end: j.start + journeyDuration(j) }));
+  const outcomes: Outcome[] = journeys
+    .map(({ j }) => outcomeOf(j))
+    .filter((o): o is Outcome => o !== undefined)
+    .sort((a, b) => a.at - b.at);
 
   scene.setArchitecture(o.arch, o.catalog);
   scene.setMode('replay');
@@ -75,8 +70,12 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
       seek.value = String(time);
     }
     const tick = o.result.ticks[Math.min(Math.floor(time), end - 1)];
-    // Les voyageurs partis jusqu'à 7 ticks plus tôt peuvent encore marcher (aller-retour lent).
-    scene.showTick(time, tick, vehicles.filter((v) => v.start <= time && v.start > time - 7));
+    scene.showTick(
+      time,
+      tick,
+      journeys.filter(({ j, end }) => j.start <= time && end > time).map(({ j }) => j),
+      outcomes.filter((o) => o.at <= time && o.at > time - 1),
+    );
     if (tick) {
       readout.textContent =
         `tick ${Math.floor(Math.min(time, end - 1)) + 1}/${end} · ${Math.round(tick.offered)} req/s` +

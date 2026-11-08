@@ -33,15 +33,24 @@ import { escapeHtml } from './html.ts';
 import { layoutArchitecture, pointAlong, type Layout, type Road } from './layout.ts';
 import { ModelLibrary, type ModelId } from './models.ts';
 import type { BuildingStyle, Shape, Theme } from './theme.ts';
-import { isReturning, progressAt, type Vehicle } from './traffic.ts';
+import { journeyAt, type Journey, type Outcome } from './traffic.ts';
 
 const MAX_VEHICLES_PER_KIND = 2500;
-/** Écart entre les voies : chaque type de requête roule sur sa file, pour rester lisible. */
-const LANE = 0.2;
+/** Écart entre les files : aller d'un côté du chemin, retour de l'autre, un rang par type. */
+const LANE = 0.12;
 /** Les tuiles sont un peu réduites : le joint entre elles dessine la grille. */
 const TILE_SCALE = 0.94;
 /** Un bâtiment tient dans sa case : au-delà de cette largeur, il est réduit. */
 const BUILDING_SPAN = HEX_WIDTH * 0.95;
+/** Durée de vie d'une pastille +1 / −1, en ticks : elle monte et s'efface. */
+const POP_LIFE = 0.9;
+/** Au-delà, les pastilles les plus anciennes ne sont plus affichées : on garde la scène lisible. */
+const MAX_POPS = 60;
+const POP_TEXT: Record<Outcome['result'], { text: string; className: string }> = {
+  served: { text: '+1 👍', className: 'pop ok' },
+  refused: { text: '−1 👎', className: 'pop ko' },
+  repelled: { text: '🛡', className: 'pop shield' },
+};
 /** Un glisser de moins de quelques pixels reste un clic (le glisser déplace la vue). */
 const CLICK_TOLERANCE_PX = 5;
 
@@ -71,6 +80,8 @@ interface Building {
   label: HTMLElement;
   techName: string;
   metaphor: string;
+  /** Hauteur du toit, pour placer étiquette et pastilles au-dessus. */
+  top: number;
 }
 
 export type SceneMode = 'build' | 'replay';
@@ -115,6 +126,8 @@ export class CityScene {
   private readonly cursor: Mesh;
   private readonly marker: Mesh;
   private ghost: Group | undefined;
+  /** Réserve d'étiquettes +1 / −1, réutilisées d'une image à l'autre. */
+  private readonly pops: CSS2DObject[] = [];
   private hovered: Hex | undefined;
   private readonly raycaster = new Raycaster();
   private readonly ground = new Plane(new Vector3(0, 1, 0), 0);
@@ -240,9 +253,37 @@ export class CityScene {
   }
 
   /** Affiche l'état du tick courant et les véhicules en route à l'instant `time`. */
-  showTick(time: number, tick: TickMetrics | undefined, vehicles: Vehicle[]): void {
+  showTick(time: number, tick: TickMetrics | undefined, journeys: Journey[], outcomes: Outcome[] = []): void {
     this.updateBuildings(tick);
-    this.updateVehicles(time, vehicles);
+    this.updateTravellers(time, journeys);
+    this.updatePops(time, outcomes);
+  }
+
+  /** Une pastille par requête servie (+1), refusée (−1) ou pillard repoussé, qui monte et s'efface. */
+  private updatePops(time: number, outcomes: Outcome[]): void {
+    const live = outcomes.filter((o) => time >= o.at && time - o.at < POP_LIFE).slice(-MAX_POPS);
+    while (this.pops.length < live.length) {
+      const el = document.createElement('div');
+      const pop = new CSS2DObject(el);
+      this.pops.push(pop);
+      this.scene.add(pop);
+    }
+    this.pops.forEach((pop, i) => {
+      const o = live[i];
+      const b = o && this.buildings.get(o.node);
+      const at = o && this.layout.nodes[o.node];
+      pop.visible = Boolean(o && at);
+      if (!o || !at) return;
+      const age = (time - o.at) / POP_LIFE;
+      // Petit décalage fixe par pastille : plusieurs +1 simultanés ne s'empilent pas exactement.
+      const jitter = hash(o.at * 977.3) - 0.5;
+      // Au-dessus de l'étiquette du bâtiment, pour ne pas la masquer.
+      pop.position.set(at.x + jitter * 0.8, (b?.top ?? 1) + 1.3 + age * 1.2, at.z + jitter * 0.4);
+      const style = POP_TEXT[o.result];
+      if (pop.element.textContent !== style.text) pop.element.textContent = style.text;
+      pop.element.className = style.className;
+      pop.element.style.opacity = String(1 - age);
+    });
   }
 
   dispose(): void {
@@ -449,6 +490,7 @@ export class CityScene {
       label: document.createElement('div'),
       techName: def?.techName ?? node.type,
       metaphor: this.theme.buildings[node.type]?.metaphor ?? node.type,
+      top: 1,
     };
   }
 
@@ -464,6 +506,7 @@ export class CityScene {
     b.label.className = 'city-label';
     const label = new CSS2DObject(b.label);
     const top = new Box3().setFromObject(b.group).max.y;
+    b.top = top;
     // L'étiquette est enfant du groupe réduit : on compense l'échelle pour la placer au-dessus.
     label.position.set(0, (top + 0.5) / b.group.scale.y, 0);
     b.group.add(label);
@@ -665,33 +708,33 @@ export class CityScene {
     }
   }
 
-  private updateVehicles(time: number, vehicles: Vehicle[]): void {
+  private updateTravellers(time: number, journeys: Journey[]): void {
     const counts = new Map<RequestKind, number>(REQUEST_KINDS.map((k) => [k, 0]));
     let wrecked = 0;
     let repelled = 0;
-    for (const v of vehicles) {
-      const f = progressAt(v, time);
-      const road = this.roads.get(v.link);
-      if (f === undefined || !road) continue;
-      const fleet = v.hostile ? this.hostiles : v.failed ? this.wrecks : this.fleets.get(v.kind);
-      const i = v.hostile ? repelled : v.failed ? wrecked : counts.get(v.kind)!;
+    for (const j of journeys) {
+      const at = journeyAt(j, time);
+      const road = at && this.roads.get(at.link);
+      if (!at || !road) continue;
+      // Un pillard reste un pillard ; une requête refusée ne rougit qu'en repartant.
+      const fleet = j.hostile ? this.hostiles : at.failed ? this.wrecks : this.fleets.get(j.kind);
+      const i = j.hostile ? repelled : at.failed ? wrecked : counts.get(j.kind)!;
       if (!fleet || i >= MAX_VEHICLES_PER_KIND) continue;
 
-      // Un demi-tour ne va qu'aux trois quarts de la route : il est refoulé avant d'arriver.
-      const turned = v.failed || v.hostile;
-      const { point, angle } = pointAlong(road.path, turned ? 0.25 + f * 0.75 : f);
-      const lane = v.hostile ? 2 * LANE : v.failed ? -2 * LANE : (REQUEST_KINDS.indexOf(v.kind) - 1) * LANE;
-      const [, h] = this.theme.vehicles[v.kind].size;
+      const { point, angle } = pointAlong(road.path, at.f);
+      // L'aller tient la droite, le retour l'autre côté : les deux sens se croisent sans se gêner.
+      const lane = (0.18 + REQUEST_KINDS.indexOf(j.kind) * LANE) * (at.returning ? -1 : 1);
+      const [, h] = this.theme.vehicles[j.kind].size;
       // Les personnages ont les pieds à zéro et sautillent en marchant ; une boîte est centrée.
-      const hop = Math.abs(Math.sin((time + v.start * 7.3) * 9)) * 0.06;
+      const hop = Math.abs(Math.sin((time + j.start * 7.3) * 9)) * 0.06;
       const y = fleet.userData.grounded ? 0.06 + hop : 0.04 + h / 2;
       this.dummy.position.set(point.x + Math.cos(angle) * lane, y, point.z - Math.sin(angle) * lane);
-      this.dummy.rotation.set(0, isReturning(v, time) ? angle + Math.PI : angle, 0);
+      this.dummy.rotation.set(0, at.returning ? angle + Math.PI : angle, 0);
       this.dummy.updateMatrix();
       fleet.setMatrixAt(i, this.dummy.matrix);
-      if (v.hostile) repelled++;
-      else if (v.failed) wrecked++;
-      else counts.set(v.kind, i + 1);
+      if (j.hostile) repelled++;
+      else if (at.failed) wrecked++;
+      else counts.set(j.kind, i + 1);
     }
     for (const [kind, fleet] of this.fleets) {
       fleet.count = counts.get(kind)!;
