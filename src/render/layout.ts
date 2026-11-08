@@ -1,5 +1,6 @@
 import { BOARD } from '../data/board.ts';
 import type { Architecture } from '../engine/types.ts';
+import { riverKeys } from './terrain.ts';
 import { HEX_ROW, HEX_WIDTH, hexAt, hexCenter, hexKey, hexLine, nearestFree, type Hex } from './hex.ts';
 
 export interface Point {
@@ -60,7 +61,8 @@ export function layoutArchitecture(arch: Architecture): Layout {
 
   const nodes: Record<string, Point> = {};
   const cells: Record<string, Hex> = {};
-  const taken = new Set<string>();
+  // La rivière n'accueille aucun bâtiment.
+  const taken = riverKeys();
   // Les bâtiments posés par le joueur gardent leur case ; les autres se placent autour.
   for (const n of arch.nodes) {
     if (!n.cell) continue;

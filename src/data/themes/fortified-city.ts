@@ -7,7 +7,6 @@ import type { Theme } from '../../render/theme.ts';
 export const fortifiedCity: Theme = {
   id: 'fortified-city',
   title: 'Les portes de la cité',
-  road: '#c9a46c',
   alert: '#d62828',
   failed: 'Requête en échec',
   hostile: { metaphor: 'Scraper (pillards squelettes)', color: '#2b2d42', model: 'kaykit-chars/Skeleton_Warrior.glb' },

@@ -7,6 +7,7 @@ import { scoreWave, starsFor } from '../engine/score.ts';
 import { simulateWave } from '../engine/simulate.ts';
 import type { Architecture, BoardCell } from '../engine/types.ts';
 import type { CityScene } from '../render/scene.ts';
+import { isRiver } from '../render/terrain.ts';
 import { autoPlace, connect, insideBoard, moveNode, nodeAt, placeNode, type BoardResult } from './board.ts';
 import { changedSettings, parseField, setAt } from './calibration.ts';
 import { addLink, addNode, removeLink, removeNode, setUpgrade } from './editor.ts';
@@ -117,7 +118,7 @@ function canUse(cell: BoardCell): boolean {
   switch (state.tool.kind) {
     case 'place':
     case 'move':
-      return insideBoard(cell) && (!here || (state.tool.kind === 'move' && here.id === state.tool.id));
+      return insideBoard(cell) && !isRiver(cell) && (!here || (state.tool.kind === 'move' && here.id === state.tool.id));
     case 'link':
       return here !== undefined;
     case 'remove':

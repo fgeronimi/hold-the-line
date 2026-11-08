@@ -28,6 +28,7 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 import type { Architecture, ArchNode, Catalog, RequestKind, TickMetrics } from '../engine/types.ts';
 import { REQUEST_KINDS } from '../engine/types.ts';
 import { BOARD } from '../data/board.ts';
+import { BRIDGE_MODEL, bridgeRotation, crossingTile, riverCells, riverKeys, riverTile, roadSides, roadTile, TERRAIN_MODELS, type Tile } from './terrain.ts';
 import { HEX_SIZE, HEX_WIDTH, hexAt, hexCenter, hexDistance, hexKey, type Hex } from './hex.ts';
 import { escapeHtml } from './html.ts';
 import { layoutArchitecture, pointAlong, type Layout, type Road } from './layout.ts';
@@ -70,7 +71,7 @@ const SHAPE_MODELS: Record<Shape, ModelId[]> = {
 const EDGE_DECOR = ['mountain_A_grass_trees', 'hills_A_trees', 'trees_A_large', 'trees_B_medium', 'hill_single_A', 'trees_A_medium'];
 /** Décor de l'intérieur, plus discret, pour laisser de la place à bâtir. */
 const INNER_DECOR = ['trees_A_small', 'trees_B_small', 'tree_single_A', 'tree_single_B', 'rock_single_A', 'rock_single_B', 'rock_single_C', 'hill_single_A'];
-const SCENERY_MODELS: ModelId[] = ['hex_grass', ...new Set([...EDGE_DECOR, ...INNER_DECOR])].map(K);
+const SCENERY_MODELS: ModelId[] = ['hex_grass', ...new Set([...EDGE_DECOR, ...INNER_DECOR]), ...TERRAIN_MODELS].map(K);
 
 interface Building {
   node: ArchNode;
@@ -183,8 +184,8 @@ export class CityScene {
     this.controls.maxZoom = 3;
 
     this.addLights();
-    this.addGround();
     this.scene.add(this.dynamic);
+    this.addTerrain();
     this.addFleets();
 
     // Le curseur hexagonal sous la souris, et le repère du bâtiment sélectionné.
@@ -212,7 +213,7 @@ export class CityScene {
     this.clearDynamic();
     this.layout = layoutArchitecture(arch);
     for (const road of this.layout.roads) this.roads.set(road.key, road);
-    this.addPaths();
+    this.addTerrain();
     for (const node of arch.nodes) this.addBuilding(node);
     this.addTrees();
     this.showTick(0, undefined, []);
@@ -432,13 +433,33 @@ export class CityScene {
   }
 
   /**
-   * Le sol est le plateau hexagonal où le joueur bâtit : une tuile d'herbe KayKit par case,
-   * instanciées, avec un joint visible entre elles. Il ne change jamais.
+   * Le sol du plateau, une tuile KayKit par case, avec un joint visible entre elles : la
+   * rivière, les chemins (la tuile de route qui relie exactement les côtés empruntés, un
+   * pont là où ils franchissent la rivière), et l'herbe partout ailleurs, instanciée.
    */
-  private addGround(): void {
-    const cells = this.groundCells();
+  private addTerrain(): void {
+    const roads = roadSides(this.layout.roads.map((r) => r.cells));
+    const river = riverCells();
+    const tile = (cell: Hex, t: Tile | undefined) => {
+      if (!t) return;
+      const p = hexCenter(cell);
+      this.put(this.dynamic, K(t.model), { x: p.x, z: p.z, rotate: (t.turns * Math.PI) / 3, scale: TILE_SCALE });
+    };
+    for (const [k, { cell, sides }] of river) {
+      const road = roads.get(k);
+      const crossing = road && crossingTile(sides, road.sides);
+      tile(cell, crossing ?? riverTile(sides));
+      if (crossing && road) {
+        const p = hexCenter(cell);
+        this.put(this.dynamic, K(BRIDGE_MODEL), { x: p.x, z: p.z, rotate: bridgeRotation(road.sides), scale: TILE_SCALE });
+      }
+    }
+    for (const [k, { cell, sides }] of roads) if (!river.has(k)) tile(cell, roadTile(sides));
+
+    const cells = this.groundCells().filter((c) => !roads.has(hexKey(c)) && !river.has(hexKey(c)));
     const source = this.models.mesh(K('hex_grass'));
-    const tiles = new InstancedMesh(source.geometry, source.material, cells.length);
+    const material = Array.isArray(source.material) ? source.material.map((m) => m.clone()) : source.material.clone();
+    const tiles = new InstancedMesh(source.geometry, material, cells.length);
     cells.forEach((c, i) => {
       const p = hexCenter(c);
       this.dummy.position.set(p.x, 0, p.z);
@@ -449,7 +470,7 @@ export class CityScene {
     });
     this.dummy.scale.set(1, 1, 1);
     tiles.receiveShadow = true;
-    this.scene.add(tiles);
+    this.dynamic.add(tiles);
   }
 
   /** Vide la partie variable. Les géométries des modèles sont partagées : on ne libère que ce qui est propre. */
@@ -478,25 +499,6 @@ export class CityScene {
   }
 
   /** Un chemin est une suite de cases pavées de terre, du bâtiment de départ à celui d'arrivée. */
-  private addPaths(): void {
-    const paved = new Map<string, Hex>();
-    for (const road of this.layout.roads) for (const c of road.cells) paved.set(hexKey(c), c);
-    if (paved.size === 0) return;
-    // Six segments, premier sommet sur l'axe z : la même orientation « pointe en haut » que les tuiles.
-    const geometry = new CylinderGeometry(HEX_SIZE * TILE_SCALE, HEX_SIZE * TILE_SCALE, 0.06, 6);
-    const tiles = new InstancedMesh(geometry, new MeshLambertMaterial({ color: this.theme.road }), paved.size);
-    tiles.userData.ownGeometry = true;
-    [...paved.values()].forEach((c, i) => {
-      const p = hexCenter(c);
-      this.dummy.position.set(p.x, 0.03, p.z);
-      this.dummy.rotation.set(0, 0, 0);
-      this.dummy.updateMatrix();
-      tiles.setMatrixAt(i, this.dummy.matrix);
-    });
-    tiles.receiveShadow = true;
-    this.dynamic.add(tiles);
-  }
-
   private newBuilding(node: ArchNode): Building {
     const def = this.catalog.components[node.type];
     return {
@@ -650,7 +652,11 @@ export class CityScene {
    * pour que l'entrée du trafic reste dégagée.
    */
   private addTrees(): void {
-    const taken = new Set([...Object.values(this.layout.cells).map(hexKey), ...this.layout.roads.flatMap((r) => r.cells.map(hexKey))]);
+    const taken = new Set([
+      ...Object.values(this.layout.cells).map(hexKey),
+      ...this.layout.roads.flatMap((r) => r.cells.map(hexKey)),
+      ...riverKeys(),
+    ]);
     const sources = Object.entries(this.layout.cells)
       .filter(([id]) => this.buildings.get(id)?.node.type === 'traffic-source')
       .map(([, c]) => c);

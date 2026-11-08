@@ -55,9 +55,23 @@ const DIRECTIONS: Hex[] = [
   { q: 0, r: 1 },
 ];
 
+/** Voisins dans l'ordre des côtés : est, nord-est, nord-ouest, ouest, sud-ouest, sud-est. */
 export function hexNeighbours(h: Hex): Hex[] {
   return DIRECTIONS.map((d) => ({ q: h.q + d.q, r: h.r + d.r }));
 }
+
+export function hexStep(h: Hex, dir: number): Hex {
+  const d = DIRECTIONS[((dir % 6) + 6) % 6]!;
+  return { q: h.q + d.q, r: h.r + d.r };
+}
+
+/** Côté de `a` par lequel on passe dans la case voisine `b`, ou -1 si elles ne se touchent pas. */
+export function hexSide(a: Hex, b: Hex): number {
+  return DIRECTIONS.findIndex((d) => a.q + d.q === b.q && a.r + d.r === b.r);
+}
+
+/** Saut par-dessus une case infranchissable : la case traversée, la case d'arrivée, le coût. */
+export type Crossing = (from: Hex, dir: number) => { via: Hex; to: Hex; cost: number } | undefined;
 
 /**
  * Chemin de cases adjacentes de `a` à `b`, en ligne droite sur la grille. Le léger
@@ -99,11 +113,18 @@ export function nearestFree(h: Hex, taken: Set<string>): Hex {
  * `blocked` — sauf l'arrivée, qui est le bâtiment visé. `inside` borne la recherche au
  * plateau. `undefined` si `b` est inaccessible.
  */
-export function findPath(a: Hex, b: Hex, blocked: Set<string>, inside: (h: Hex) => boolean): Hex[] | undefined {
+export function findPath(
+  a: Hex,
+  b: Hex,
+  blocked: Set<string>,
+  inside: (h: Hex) => boolean,
+  crossing?: Crossing,
+): Hex[] | undefined {
   const goal = hexKey(b);
   const open = new Map<string, { h: Hex; f: number }>([[hexKey(a), { h: a, f: hexDistance(a, b) }]]);
   const cost = new Map<string, number>([[hexKey(a), 0]]);
-  const came = new Map<string, Hex>();
+  // Les cases qui précèdent une case dans le chemin : une seule, ou deux après un saut.
+  const came = new Map<string, Hex[]>();
 
   while (open.size > 0) {
     // Le plateau compte quelques centaines de cases : un parcours linéaire suffit, sans tas.
@@ -116,21 +137,28 @@ export function findPath(a: Hex, b: Hex, blocked: Set<string>, inside: (h: Hex) 
       const path = [best.h];
       let k = bestKey;
       while (came.has(k)) {
-        const prev = came.get(k)!;
-        path.unshift(prev);
-        k = hexKey(prev);
+        const before = came.get(k)!;
+        path.unshift(...before);
+        k = hexKey(before[0]!);
       }
       return path;
     }
-    for (const n of hexNeighbours(best.h)) {
-      const k = hexKey(n);
-      if (k !== goal && (blocked.has(k) || !inside(n))) continue;
-      const g = cost.get(bestKey)! + 1;
-      if (g >= (cost.get(k) ?? Infinity)) continue;
+    const from = best.h;
+    const reach = (to: Hex, step: number, before: Hex[]) => {
+      const k = hexKey(to);
+      const g = cost.get(bestKey)! + step;
+      if (g >= (cost.get(k) ?? Infinity)) return;
       cost.set(k, g);
-      came.set(k, best.h);
-      open.set(k, { h: n, f: g + hexDistance(n, b) });
-    }
+      came.set(k, before);
+      open.set(k, { h: to, f: g + hexDistance(to, b) });
+    };
+    hexNeighbours(from).forEach((n, dir) => {
+      const k = hexKey(n);
+      if (k === goal || (!blocked.has(k) && inside(n))) return reach(n, 1, [from]);
+      const jump = crossing?.(from, dir);
+      const landing = jump && hexKey(jump.to);
+      if (jump && landing && (landing === goal || (!blocked.has(landing) && inside(jump.to)))) reach(jump.to, jump.cost, [from, jump.via]);
+    });
   }
   return undefined;
 }

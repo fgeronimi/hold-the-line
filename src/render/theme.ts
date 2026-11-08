@@ -31,7 +31,6 @@ export interface VehicleStyle {
 export interface Theme {
   id: string;
   title: string;
-  road: string;
   /** Teinte d'un bâtiment saturé, et des requêtes en échec. */
   alert: string;
   /** Nom d'une requête en échec qui fait demi-tour. */

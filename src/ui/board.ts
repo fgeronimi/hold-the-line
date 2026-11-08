@@ -1,7 +1,8 @@
 import { BOARD } from '../data/board.ts';
 import type { Architecture, ArchLink, ArchNode, BoardCell } from '../engine/types.ts';
-import { findPath, hexDistance, hexKey } from '../render/hex.ts';
+import { findPath, hexDistance, hexKey, hexSide } from '../render/hex.ts';
 import { layoutArchitecture } from '../render/layout.ts';
+import { bridge, isRiver, riverKeys } from '../render/terrain.ts';
 import { nextNodeId } from './editor.ts';
 
 /**
@@ -28,6 +29,7 @@ export function nodeAt(arch: Architecture, cell: BoardCell): ArchNode | undefine
 
 function freeForBuilding(arch: Architecture, cell: BoardCell, except?: string): string | undefined {
   if (!insideBoard(cell)) return 'Hors du plateau.';
+  if (isRiver(cell)) return 'On ne bâtit pas sur la rivière.';
   const owner = occupied(arch).get(hexKey(cell));
   if (owner && owner !== except) return 'Cette case est déjà occupée.';
   return undefined;
@@ -38,8 +40,9 @@ function route(arch: Architecture, from: string, to: string): BoardCell[] | unde
   const a = arch.nodes.find((n) => n.id === from)?.cell;
   const b = arch.nodes.find((n) => n.id === to)?.cell;
   if (!a || !b) return undefined;
-  const blocked = new Set([...occupied(arch).keys()].filter((k) => k !== hexKey(a) && k !== hexKey(b)));
-  return findPath(a, b, blocked, insideBoard);
+  // La rivière ne se franchit que par un pont, tout droit (voir `bridge`).
+  const blocked = new Set([...occupied(arch).keys(), ...riverKeys()].filter((k) => k !== hexKey(a) && k !== hexKey(b)));
+  return findPath(a, b, blocked, insideBoard, bridge);
 }
 
 /** Retrace les liens choisis ; un lien devenu impossible garde son ancien tracé. */
@@ -52,6 +55,16 @@ function reroute(arch: Architecture, which: (l: ArchLink) => boolean): Architect
       return path ? { ...l, path } : l;
     }),
   };
+}
+
+/** La case `i` d'un chemin est un pont : il y entre et en sort tout droit, par un franchissement autorisé. */
+function isBridge(path: BoardCell[], i: number): boolean {
+  const before = path[i - 1];
+  const after = path[i + 1];
+  const side = before ? hexSide(before, path[i]!) : -1;
+  if (!before || !after || side < 0) return false;
+  const jump = bridge(before, side);
+  return jump !== undefined && hexKey(jump.to) === hexKey(after);
 }
 
 const crosses = (l: ArchLink, cell: BoardCell) => l.path?.some((c) => hexKey(c) === hexKey(cell)) ?? false;
@@ -85,8 +98,11 @@ export function connect(arch: Architecture, from: string, to: string): BoardResu
  * qui touche un bâtiment replacé. Sans effet sur une architecture déjà bien placée.
  */
 export function autoPlace(arch: Architecture): Architecture {
-  const misplaced = new Set(arch.nodes.filter((n) => !n.cell || !insideBoard(n.cell)).map((n) => n.id));
-  const strays = (l: ArchLink) => !l.path || misplaced.has(l.from) || misplaced.has(l.to) || l.path.some((c) => !insideBoard(c));
+  const misplaced = new Set(arch.nodes.filter((n) => !n.cell || !insideBoard(n.cell) || isRiver(n.cell)).map((n) => n.id));
+  // Un chemin d'avant la rivière qui la longe ou la coupe hors d'un pont est retracé.
+  const wet = (l: ArchLink) => l.path?.some((c, i) => isRiver(c) && !isBridge(l.path!, i)) ?? false;
+  const strays = (l: ArchLink) =>
+    !l.path || misplaced.has(l.from) || misplaced.has(l.to) || l.path.some((c) => !insideBoard(c)) || wet(l);
   if (misplaced.size === 0 && !arch.links.some(strays)) return arch;
   const kept: Architecture = {
     ...arch,
