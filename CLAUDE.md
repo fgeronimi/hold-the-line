@@ -32,10 +32,14 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
   qui l'accepte. Un composant `lookaside` (le cache) est consulté, pas traversé : il sert
   sa part et le reste repart du nœud qui l'a consulté (cache-aside). `linkFlows` donne
   ce qui circule vraiment, pour l'affichage.
-- `src/ui/` : interface, TypeScript natif sans framework. `main.ts` tient l'état et les
-  actions (`data-action` délégués) ; `views.ts` rend en chaînes HTML trois zones (en-tête,
-  panneau du plateau, bas de page) à chaque changement ; `board.ts` (règles du plateau :
-  poser, déplacer, relier par A*), `editor.ts` et `calibration.ts` sont purs et testés.
+- `src/ui/` : interface de jeu plein écran, TypeScript natif sans framework. `main.ts`
+  tient l'état, la phase de partie (`briefing` → `build` → `wave` → `debrief`) et les
+  actions (`data-action` délégués) ; `views.ts` rend en chaînes HTML les calques posés sur
+  le plateau (barre du haut, barre d'outils, fiche, fenêtres, tiroir de debug) à chaque
+  changement ; `board.ts` (poser, déplacer, relier par A*), `debrief.ts` (analyse du
+  chambellan), `editor.ts` et `calibration.ts` sont purs et testés.
+- Mode debug : `?debug` dans l'URL ou la touche D. Essais hors partie, vue tableau et
+  calibrage n'existent que là.
 - Le plateau 3D (`CityScene`) est créé une fois dans `#board`, **hors** des zones
   réécrites : `main.ts` lui passe le brouillon par `setArchitecture` quand il change, et le
   rejeu (`startReplay`) l'anime sur place.

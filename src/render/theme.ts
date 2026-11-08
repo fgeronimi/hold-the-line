@@ -9,6 +9,8 @@ export type Shape = 'hamlet' | 'watchtower' | 'gatehouse' | 'tower' | 'lectern' 
 export interface BuildingStyle {
   /** Nom dans la métaphore ; le nom technique du catalogue est toujours affiché à côté. */
   metaphor: string;
+  /** Icône de la barre de construction. */
+  icon: string;
   shape: Shape;
   color: string;
   accent: string;

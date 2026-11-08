@@ -13,8 +13,8 @@ export interface ReplayOptions {
   wave: Wave;
   catalog: Catalog;
   theme: Theme;
-  /** Appelé quand le joueur revient à la construction. */
-  onClose: () => void;
+  /** Appelé une fois, quand la vague arrive à son terme ou que le joueur la passe. */
+  onEnd: () => void;
 }
 
 /** Ticks affichés par seconde à la vitesse ×1 : assez lent pour suivre un voyageur. */
@@ -23,9 +23,10 @@ const TICKS_PER_SECOND = 1.5;
 const SLOW_MOTION = { seconds: 3, factor: 0.35 };
 
 /**
- * Rejoue une vague sur le plateau de construction : pose l'architecture jouée, ajoute une
- * barre de lecture au-dessus du plateau et fait avancer le temps à chaque image. Ne
- * recalcule rien : relit `result.ticks`. Renvoie de quoi l'arrêter.
+ * Joue une vague sur le plateau : pose l'architecture jouée, ajoute la barre de la vague
+ * en bas de l'écran et fait avancer le temps à chaque image. Ne recalcule rien : relit
+ * `result.ticks`. Prévient par `onEnd` quand la vague est finie ; renvoie de quoi l'arrêter
+ * et rendre le plateau à la construction.
  */
 export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOptions): () => void {
   const bar = document.createElement('div');
@@ -41,7 +42,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     <span class="replay-legend">${Object.values(o.theme.vehicles)
       .map((v) => `<i style="background:${v.color}"></i>${escapeHtml(v.metaphor)}`)
       .join(' ')}<i style="background:${o.theme.alert}"></i>${escapeHtml(o.theme.failed)}<i style="background:${o.theme.hostile.color}"></i>${escapeHtml(o.theme.hostile.metaphor)}</span>
-    <button data-r="close">Retour à la construction</button>`;
+    <button data-r="skip" title="Aller à la fin de la vague">Passer ⏭</button>`;
   barHost.appendChild(bar);
   const alert = document.createElement('div');
   alert.className = 'replay-alert';
@@ -75,7 +76,13 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   let time = 0;
   let playing = true;
   let speed = 1;
+  let ended = false;
   const end = o.result.ticks.length;
+  const finish = () => {
+    if (ended) return;
+    ended = true;
+    o.onEnd();
+  };
 
   /** Le premier goulot : bandeau, caméra sur le bâtiment, ralenti. Une fois par bâtiment. */
   const raiseAlerts = () => {
@@ -112,6 +119,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
         time = end;
         playing = false;
         play.textContent = '▶';
+        finish();
       }
       seek.value = String(time);
     }
@@ -140,10 +148,8 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     scene.setMode('build');
     window.removeEventListener('keydown', onKey);
     bar.remove();
-    o.onClose();
   };
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') stop();
     if (e.key === ' ' && (e.target as HTMLElement).tagName !== 'INPUT') {
       e.preventDefault();
       togglePlay();
@@ -163,7 +169,11 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     scene.focusOn(undefined);
     alert.hidden = true;
   });
-  $('close').addEventListener('click', stop);
+  $('skip').addEventListener('click', () => {
+    time = end;
+    seek.value = String(end);
+    finish();
+  });
   window.addEventListener('keydown', onKey);
   return stop;
 }

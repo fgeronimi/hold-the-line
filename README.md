@@ -27,12 +27,15 @@ entretiens, la métaphore aide à mémoriser.
 
 ## Comment on joue
 
-1. Lire le briefing de la vague : le trafic, le budget, le plafond de complexité, le SLA.
-2. Bâtir sur le plateau hexagonal : poser des bâtiments, les relier (clic sur le départ,
-   puis sur l'arrivée), régler leurs évolutions dans leur fiche.
-3. Lancer la vague, puis la regarder : chaque requête fait l'aller-retour depuis les
+1. Le chambellan annonce la vague : le trafic, le budget, le plafond de complexité, le SLA.
+2. Bâtir sur le plateau hexagonal avec la barre du bas : poser des bâtiments, les relier
+   (clic sur le départ, puis sur l'arrivée), régler leurs évolutions dans leur fiche.
+3. Lancer la vague : elle se joue en direct, chaque requête fait l'aller-retour depuis les
    hameaux, +1 quand la réponse revient, −1 là où elle est refusée.
-4. Une vague perdue se rejoue ; on peut aussi revenir à une vague antérieure.
+4. Le chambellan explique ce qui a tenu ou cassé, et la parade. Une vague perdue se
+   rejoue ; le menu permet de revenir à une vague antérieure.
+
+Mode debug (calibrage, vue tableau, essais) : ajouter `?debug` à l'URL, ou touche D.
 
 ## Développement
 
