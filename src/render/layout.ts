@@ -1,5 +1,6 @@
+import { BOARD } from '../data/board.ts';
 import type { Architecture } from '../engine/types.ts';
-import { hexAt, hexCenter, hexKey, hexLine, nearestFree, type Hex } from './hex.ts';
+import { HEX_ROW, hexAt, hexCenter, hexKey, hexLine, nearestFree, type Hex } from './hex.ts';
 
 export interface Point {
   x: number;
@@ -60,8 +61,15 @@ export function layoutArchitecture(arch: Architecture): Layout {
   const nodes: Record<string, Point> = {};
   const cells: Record<string, Hex> = {};
   const taken = new Set<string>();
+  // Les bâtiments posés par le joueur gardent leur case ; les autres se placent autour.
+  for (const n of arch.nodes) {
+    if (!n.cell) continue;
+    cells[n.id] = n.cell;
+    nodes[n.id] = hexCenter(n.cell);
+    taken.add(hexKey(n.cell));
+  }
   for (const d of [...columns.keys()].sort((a, b) => a - b)) {
-    const ids = columns.get(d)!;
+    const ids = columns.get(d)!.filter((id) => !cells[id]);
     const wanted = (id: string) => {
       const ps = (parents.get(id) ?? []).map((p) => nodes[p]).filter((p): p is Point => p !== undefined);
       return ps.length > 0 ? ps.reduce((a, p) => a + p.z, 0) / ps.length : 0;
@@ -78,7 +86,7 @@ export function layoutArchitecture(arch: Architecture): Layout {
   const roads = arch.links
     .filter((l) => cells[l.from] && cells[l.to])
     .map((l): Road => {
-      const line = hexLine(cells[l.from]!, cells[l.to]!);
+      const line = l.path && l.path.length > 1 ? l.path : hexLine(cells[l.from]!, cells[l.to]!);
       return { key: `${l.from}→${l.to}`, from: l.from, to: l.to, cells: line, path: line.map(hexCenter) };
     });
 
@@ -88,11 +96,12 @@ export function layoutArchitecture(arch: Architecture): Layout {
     nodes,
     cells,
     roads,
+    // Le cadre couvre tout le plateau jouable, pour que la vue ne saute pas à chaque construction.
     bounds: {
-      minX: Math.min(0, ...xs),
-      maxX: Math.max(0, ...xs),
-      minZ: Math.min(0, ...zs),
-      maxZ: Math.max(0, ...zs),
+      minX: Math.min(BOARD.minX, ...xs),
+      maxX: Math.max(BOARD.maxX, ...xs),
+      minZ: Math.min(BOARD.minRow * HEX_ROW, ...zs),
+      maxZ: Math.max(BOARD.maxRow * HEX_ROW, ...zs),
     },
   };
 }

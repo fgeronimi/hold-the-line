@@ -1,3 +1,4 @@
+import type { BoardCell } from '../engine/types.ts';
 import type { Point } from './layout.ts';
 
 /**
@@ -5,10 +6,7 @@ import type { Point } from './layout.ts';
  * tuiles KayKit : 2 unités de large, 1,732 entre deux rangées. C'est la grille sur
  * laquelle le joueur posera ses bâtiments et tracera ses chemins.
  */
-export interface Hex {
-  q: number;
-  r: number;
-}
+export type Hex = BoardCell;
 
 export const HEX_WIDTH = 2;
 /** Rayon : distance du centre à un sommet. */
@@ -94,4 +92,45 @@ export function nearestFree(h: Hex, taken: Set<string>): Hex {
     ring = next;
   }
   return h;
+}
+
+/**
+ * Plus court chemin de cases adjacentes de `a` à `b` (A*), sans passer par une case de
+ * `blocked` — sauf l'arrivée, qui est le bâtiment visé. `inside` borne la recherche au
+ * plateau. `undefined` si `b` est inaccessible.
+ */
+export function findPath(a: Hex, b: Hex, blocked: Set<string>, inside: (h: Hex) => boolean): Hex[] | undefined {
+  const goal = hexKey(b);
+  const open = new Map<string, { h: Hex; f: number }>([[hexKey(a), { h: a, f: hexDistance(a, b) }]]);
+  const cost = new Map<string, number>([[hexKey(a), 0]]);
+  const came = new Map<string, Hex>();
+
+  while (open.size > 0) {
+    // Le plateau compte quelques centaines de cases : un parcours linéaire suffit, sans tas.
+    let bestKey = '';
+    let best: { h: Hex; f: number } | undefined;
+    for (const [k, v] of open) if (!best || v.f < best.f || (v.f === best.f && k < bestKey)) [bestKey, best] = [k, v];
+    if (!best) break;
+    open.delete(bestKey);
+    if (bestKey === goal) {
+      const path = [best.h];
+      let k = bestKey;
+      while (came.has(k)) {
+        const prev = came.get(k)!;
+        path.unshift(prev);
+        k = hexKey(prev);
+      }
+      return path;
+    }
+    for (const n of hexNeighbours(best.h)) {
+      const k = hexKey(n);
+      if (k !== goal && (blocked.has(k) || !inside(n))) continue;
+      const g = cost.get(bestKey)! + 1;
+      if (g >= (cost.get(k) ?? Infinity)) continue;
+      cost.set(k, g);
+      came.set(k, best.h);
+      open.set(k, { h: n, f: g + hexDistance(n, b) });
+    }
+  }
+  return undefined;
 }

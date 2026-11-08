@@ -10,21 +10,27 @@ import {
   HemisphereLight,
   InstancedMesh,
   Mesh,
+  MeshBasicMaterial,
   MeshLambertMaterial,
   Object3D,
   OrthographicCamera,
   PCFSoftShadowMap,
+  Plane,
   PlaneGeometry,
+  Raycaster,
   Scene,
+  Vector2,
+  Vector3,
   WebGLRenderer,
   type Material,
 } from 'three';
+import { MapControls } from 'three/examples/jsm/controls/MapControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import type { Architecture, ArchNode, Catalog, RequestKind, TickMetrics } from '../engine/types.ts';
 import { REQUEST_KINDS } from '../engine/types.ts';
+import { HEX_ROW, HEX_SIZE, HEX_WIDTH, hexAt, hexCenter, hexKey, type Hex } from './hex.ts';
 import { escapeHtml } from './html.ts';
-import { HEX_ROW, HEX_SIZE, HEX_WIDTH, hexCenter, hexKey, type Hex } from './hex.ts';
-import { pointAlong, type Layout, type Point, type Road } from './layout.ts';
+import { layoutArchitecture, pointAlong, type Layout, type Road } from './layout.ts';
 import { ModelLibrary, type ModelId } from './models.ts';
 import type { BuildingStyle, Shape, Theme } from './theme.ts';
 import { isReturning, progressAt, type Vehicle } from './traffic.ts';
@@ -34,12 +40,16 @@ const MAX_VEHICLES_PER_KIND = 2500;
 const LANE = 0.2;
 /** Les tuiles sont un peu réduites : le joint entre elles dessine la grille. */
 const TILE_SCALE = 0.94;
+/** Un bâtiment tient dans sa case : au-delà de cette largeur, il est réduit. */
+const BUILDING_SPAN = HEX_WIDTH * 0.95;
+/** Un glisser de moins de quelques pixels reste un clic (le glisser déplace la vue). */
+const CLICK_TOLERANCE_PX = 5;
 
 const K = (name: string): ModelId => `kaykit/${name}`;
 
-/** Les modèles KayKit dont chaque forme a besoin ; chargés une fois par rejeu. */
+/** Les modèles KayKit dont chaque forme a besoin. */
 const SHAPE_MODELS: Record<Shape, ModelId[]> = {
-  hamlet: ['building_home_A_blue', 'building_home_B_blue', 'building_well_blue', 'tree_single_A'].map(K),
+  hamlet: ['building_home_A_blue', 'building_home_B_blue', 'building_well_blue'].map(K),
   watchtower: ['building_tower_A_blue', 'flag_blue'].map(K),
   gatehouse: ['wall_straight_gate', 'building_tower_base_blue', 'building_barracks_blue', 'flag_blue'].map(K),
   tower: ['building_tower_A_blue', 'building_tower_B_blue'].map(K),
@@ -47,14 +57,7 @@ const SHAPE_MODELS: Record<Shape, ModelId[]> = {
   keep: ['building_castle_blue', 'building_tower_base_blue'].map(K),
   stables: ['building_tavern_blue', 'fence_wood_straight', 'crate_A_small', 'sack'].map(K),
 };
-const SCENERY_MODELS: ModelId[] = [
-  'building_tower_base_blue',
-  'hex_grass',
-  'trees_A_medium',
-  'trees_A_small',
-  'tree_single_B',
-  'rock_single_A',
-].map(K);
+const SCENERY_MODELS: ModelId[] = ['hex_grass', 'trees_A_medium', 'trees_A_small', 'tree_single_B', 'rock_single_A'].map(K);
 
 interface Building {
   node: ArchNode;
@@ -70,15 +73,29 @@ interface Building {
   metaphor: string;
 }
 
+export type SceneMode = 'build' | 'replay';
+
+/** Ce que l'interface veut savoir du plateau en mode construction. */
+export interface BoardEvents {
+  /** La case survolée, et si l'action en cours y est possible (teinte du curseur). */
+  canUse?: (cell: Hex) => boolean;
+  onClick?: (cell: Hex) => void;
+}
+
 /**
- * La cité en 3D isométrique. Elle ne simule rien : elle affiche l'état d'un tick calculé
- * par le moteur et place les véhicules que `traffic.ts` a déjà décidés.
+ * La cité en 3D isométrique, sur son plateau hexagonal. Elle est créée une fois : la
+ * construction la modifie par `setArchitecture`, le rejeu l'anime par `showTick`. Elle ne
+ * simule rien : elle affiche un tick calculé par le moteur et des véhicules que
+ * `traffic.ts` a déjà décidés.
  */
 export class CityScene {
   private readonly renderer: WebGLRenderer;
   private readonly labels: CSS2DRenderer;
   private readonly scene = new Scene();
   private readonly camera: OrthographicCamera;
+  private readonly controls: MapControls;
+  /** Bâtiments, chemins et arbres : tout ce que la construction refait. */
+  private readonly dynamic = new Group();
   private readonly buildings = new Map<string, Building>();
   private readonly roads = new Map<string, Road>();
   private readonly fleets = new Map<RequestKind, InstancedMesh>();
@@ -88,41 +105,42 @@ export class CityScene {
   private hostiles!: InstancedMesh;
   private readonly dummy = new Object3D();
   private readonly alert: Color;
-  private readonly resize = () => this.fit();
   private readonly host: HTMLElement;
   private readonly theme: Theme;
-  private readonly layout: Layout;
   private readonly models: ModelLibrary;
+  private catalog: Catalog;
+  private layout: Layout;
+  private mode: SceneMode = 'build';
 
-  /** Charge les modèles dont la scène a besoin, puis la construit. */
-  static async create(
-    host: HTMLElement,
-    arch: Architecture,
-    catalog: Catalog,
-    theme: Theme,
-    layout: Layout,
-    baseUrl: string,
-  ): Promise<CityScene> {
-    const shapes = arch.nodes.map((n) => theme.buildings[n.type]?.shape).filter((s): s is Shape => s !== undefined);
+  private readonly cursor: Mesh;
+  private readonly marker: Mesh;
+  private ghost: Group | undefined;
+  private hovered: Hex | undefined;
+  private readonly raycaster = new Raycaster();
+  private readonly ground = new Plane(new Vector3(0, 1, 0), 0);
+  private pressedAt: Vector2 | undefined;
+  private frameId = 0;
+  private last = performance.now();
+
+  /** Appelé à chaque image, avant le rendu : c'est par là que le rejeu avance. */
+  onFrame: ((dt: number) => void) | undefined;
+  events: BoardEvents = {};
+
+  /** Charge tous les modèles du thème une seule fois, puis construit le plateau vide. */
+  static async create(host: HTMLElement, catalog: Catalog, theme: Theme, baseUrl: string): Promise<CityScene> {
     const characters = [...Object.values(theme.vehicles).map((v) => v.model), theme.hostile.model].filter(
       (m): m is string => m !== undefined,
     );
-    const models = await ModelLibrary.load([...SCENERY_MODELS, ...shapes.flatMap((s) => SHAPE_MODELS[s]), ...characters], baseUrl);
-    return new CityScene(host, arch, catalog, theme, layout, models);
+    const models = await ModelLibrary.load([...SCENERY_MODELS, ...Object.values(SHAPE_MODELS).flat(), ...characters], baseUrl);
+    return new CityScene(host, catalog, theme, models);
   }
 
-  private constructor(
-    host: HTMLElement,
-    arch: Architecture,
-    catalog: Catalog,
-    theme: Theme,
-    layout: Layout,
-    models: ModelLibrary,
-  ) {
+  private constructor(host: HTMLElement, catalog: Catalog, theme: Theme, models: ModelLibrary) {
     this.host = host;
     this.theme = theme;
-    this.layout = layout;
     this.models = models;
+    this.catalog = catalog;
+    this.layout = layoutArchitecture({ nodes: [], links: [] });
     this.alert = new Color(theme.alert);
     this.scene.background = new Color('#e8eef3');
 
@@ -137,63 +155,184 @@ export class CityScene {
     host.appendChild(this.labels.domElement);
 
     this.camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
+    this.controls = new MapControls(this.camera, this.renderer.domElement);
+    // On garde la vue isométrique : on se déplace et on zoome, on ne tourne pas.
+    this.controls.enableRotate = false;
+    this.controls.zoomToCursor = true;
+    this.controls.minZoom = 0.6;
+    this.controls.maxZoom = 3;
+
     this.addLights();
     this.addGround();
-    for (const road of layout.roads) this.addRoad(road);
-    this.addPaths();
-    for (const node of arch.nodes) this.addBuilding(node, catalog);
-    this.addTrees();
+    this.scene.add(this.dynamic);
     this.addFleets();
 
-    window.addEventListener('resize', this.resize);
+    // Le curseur hexagonal sous la souris, et le repère du bâtiment sélectionné.
+    const hex = new CylinderGeometry(HEX_SIZE * TILE_SCALE, HEX_SIZE * TILE_SCALE, 0.04, 6);
+    this.cursor = new Mesh(hex, new MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.45 }));
+    this.marker = new Mesh(hex, new MeshBasicMaterial({ color: '#ffd166', transparent: true, opacity: 0.7 }));
+    this.cursor.visible = false;
+    this.marker.visible = false;
+    this.scene.add(this.cursor, this.marker);
+
+    this.resetView();
     this.fit();
+    window.addEventListener('resize', this.fit);
+    const canvas = this.renderer.domElement;
+    canvas.addEventListener('pointermove', this.pointerMove);
+    canvas.addEventListener('pointerdown', this.pointerDown);
+    canvas.addEventListener('pointerup', this.pointerUp);
+    canvas.addEventListener('pointerleave', this.pointerLeave);
+    this.frameId = requestAnimationFrame(this.frame);
+  }
+
+  /** Remplace bâtiments, chemins et arbres par ceux de l'architecture. */
+  setArchitecture(arch: Architecture, catalog: Catalog): void {
+    this.catalog = catalog;
+    this.clearDynamic();
+    this.layout = layoutArchitecture(arch);
+    for (const road of this.layout.roads) this.roads.set(road.key, road);
+    this.addPaths();
+    for (const node of arch.nodes) this.addBuilding(node);
+    this.addTrees();
+    this.showTick(0, undefined, []);
+  }
+
+  setMode(mode: SceneMode): void {
+    this.mode = mode;
+    this.cursor.visible = false;
+    if (this.ghost) this.ghost.visible = false;
+    if (mode === 'replay') this.marker.visible = false;
+  }
+
+  /** Bâtiment fantôme à poser sous le curseur, ou aucun. */
+  setGhost(type: string | undefined): void {
+    if (this.ghost) {
+      this.scene.remove(this.ghost);
+      this.disposeTree(this.ghost);
+      this.ghost = undefined;
+    }
+    const style = type ? this.theme.buildings[type] : undefined;
+    if (!type || !style) return;
+    const b = this.newBuilding({ id: '__ghost__', type });
+    this.build(b, style);
+    this.fitToCell(b.group);
+    b.group.traverse((o) => {
+      if (o instanceof Mesh) {
+        const materials = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of materials) Object.assign(m, { transparent: true, opacity: 0.55, depthWrite: false });
+        o.castShadow = false;
+      }
+    });
+    b.group.visible = false;
+    this.ghost = b.group;
+    this.scene.add(this.ghost);
+  }
+
+  /** Repère sous un bâtiment : celui qu'on a sélectionné, ou le départ d'un lien en cours. */
+  setMarked(nodeId: string | undefined, color = '#ffd166'): void {
+    const cell = nodeId ? this.layout.cells[nodeId] : undefined;
+    this.marker.visible = cell !== undefined && this.mode === 'build';
+    if (!cell) return;
+    const p = hexCenter(cell);
+    this.marker.position.set(p.x, 0.05, p.z);
+    (this.marker.material as MeshBasicMaterial).color.set(color);
   }
 
   /** Affiche l'état du tick courant et les véhicules en route à l'instant `time`. */
-  update(time: number, tick: TickMetrics | undefined, vehicles: Vehicle[]): void {
-    if (tick) this.updateBuildings(tick);
+  showTick(time: number, tick: TickMetrics | undefined, vehicles: Vehicle[]): void {
+    this.updateBuildings(tick);
     this.updateVehicles(time, vehicles);
-    this.renderer.render(this.scene, this.camera);
-    this.labels.render(this.scene, this.camera);
   }
 
   dispose(): void {
-    window.removeEventListener('resize', this.resize);
-    this.scene.traverse((o) => {
-      if (o instanceof Mesh || o instanceof InstancedMesh) {
-        o.geometry.dispose();
-        const m = o.material;
-        (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose());
-      }
-    });
+    cancelAnimationFrame(this.frameId);
+    window.removeEventListener('resize', this.fit);
+    this.controls.dispose();
+    this.disposeTree(this.scene);
     this.renderer.dispose();
     this.renderer.domElement.remove();
     this.labels.domElement.remove();
   }
 
-  private fit(): void {
-    const { clientWidth: w, clientHeight: h } = this.host;
-    this.renderer.setSize(w, h);
-    this.labels.setSize(w, h);
+  private readonly frame = (now: number) => {
+    const dt = Math.min((now - this.last) / 1000, 0.1);
+    this.last = now;
+    this.onFrame?.(dt);
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+    this.labels.render(this.scene, this.camera);
+    this.frameId = requestAnimationFrame(this.frame);
+  };
 
+  private resetView(): void {
     const { minX, maxX, minZ, maxZ } = this.layout.bounds;
     const cx = (minX + maxX) / 2;
     const cz = (minZ + maxZ) / 2;
     // Vue isométrique : la caméra regarde le centre depuis la diagonale, en hauteur.
     const d = 40;
     this.camera.position.set(cx + d, d * 0.82, cz + d);
+    this.controls.target.set(cx, 0, cz);
     this.camera.lookAt(cx, 0, cz);
+  }
 
+  private readonly fit = () => {
+    const { clientWidth: w, clientHeight: h } = this.host;
+    this.renderer.setSize(w, h);
+    this.labels.setSize(w, h);
+    const { minX, maxX, minZ, maxZ } = this.layout.bounds;
     // L'emprise projetée d'un rectangle vu à 45° : on cadre sur sa diagonale.
     const span = Math.max(maxX - minX, maxZ - minZ) + 6;
     const aspect = w / Math.max(h, 1);
-    const half = (span * 0.58) / Math.min(aspect, 1.6);
+    const half = (span * 0.5) / Math.min(aspect, 1.6);
     this.camera.left = -half * aspect;
     this.camera.right = half * aspect;
     this.camera.top = half;
     this.camera.bottom = -half;
     this.camera.updateProjectionMatrix();
+  };
+
+  /** Case du plateau sous un point de l'écran : rayon de la caméra contre le sol (y = 0). */
+  private cellUnder(e: PointerEvent): Hex | undefined {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const hit = this.raycaster.ray.intersectPlane(this.ground, new Vector3());
+    return hit ? hexAt({ x: hit.x, z: hit.z }) : undefined;
   }
+
+  private readonly pointerMove = (e: PointerEvent) => {
+    if (this.mode !== 'build') return;
+    this.hovered = this.cellUnder(e);
+    if (!this.hovered) return this.pointerLeave();
+    const ok = this.events.canUse?.(this.hovered) ?? true;
+    const p = hexCenter(this.hovered);
+    this.cursor.position.set(p.x, 0.06, p.z);
+    (this.cursor.material as MeshBasicMaterial).color.set(ok ? '#ffffff' : this.theme.alert);
+    this.cursor.visible = true;
+    if (this.ghost) {
+      this.ghost.position.set(p.x, 0, p.z);
+      this.ghost.visible = ok;
+    }
+  };
+
+  private readonly pointerDown = (e: PointerEvent) => {
+    this.pressedAt = new Vector2(e.clientX, e.clientY);
+  };
+
+  private readonly pointerUp = (e: PointerEvent) => {
+    const moved = this.pressedAt ? this.pressedAt.distanceTo(new Vector2(e.clientX, e.clientY)) : Infinity;
+    this.pressedAt = undefined;
+    if (this.mode !== 'build' || moved > CLICK_TOLERANCE_PX) return;
+    const cell = this.cellUnder(e);
+    if (cell) this.events.onClick?.(cell);
+  };
+
+  private readonly pointerLeave = () => {
+    this.hovered = undefined;
+    this.cursor.visible = false;
+    if (this.ghost) this.ghost.visible = false;
+  };
 
   private addLights(): void {
     // Lumière neutre : les couleurs du pack KayKit sont déjà chaudes, une lumière teintée les fausse.
@@ -212,20 +351,23 @@ export class CityScene {
     this.scene.add(sun, sun.target);
   }
 
-  /**
-   * Le sol est le plateau hexagonal où le joueur bâtira : une tuile d'herbe KayKit par case,
-   * instanciées, avec un joint visible entre elles.
-   */
-  private addGround(): void {
+  /** Cases du sol : le plateau jouable et une bordure autour. */
+  private groundCells(): Hex[] {
     const { minX, maxX, minZ, maxZ } = this.layout.bounds;
-    const x0 = minX - 8;
-    const x1 = maxX + 8;
-    const z0 = minZ - 7;
-    const z1 = maxZ + 7;
+    const [x0, x1, z0, z1] = [minX - 8, maxX + 8, minZ - 7, maxZ + 7];
     const cells: Hex[] = [];
     for (let r = Math.floor(z0 / HEX_ROW); r <= Math.ceil(z1 / HEX_ROW); r++) {
       for (let q = Math.ceil(x0 / HEX_WIDTH - r / 2); q <= Math.floor(x1 / HEX_WIDTH - r / 2); q++) cells.push({ q, r });
     }
+    return cells;
+  }
+
+  /**
+   * Le sol est le plateau hexagonal où le joueur bâtit : une tuile d'herbe KayKit par case,
+   * instanciées, avec un joint visible entre elles. Il ne change jamais.
+   */
+  private addGround(): void {
+    const cells = this.groundCells();
     const source = this.models.mesh(K('hex_grass'));
     const tiles = new InstancedMesh(source.geometry, source.material, cells.length);
     cells.forEach((c, i) => {
@@ -240,23 +382,51 @@ export class CityScene {
     tiles.receiveShadow = true;
     this.scene.add(tiles);
 
+    const { minX, maxX, minZ, maxZ } = this.layout.bounds;
     // Sous les tuiles, un fond sombre : il remplit les joints et les fait ressortir.
-    const under = new Mesh(new PlaneGeometry(x1 - x0 + 4, z1 - z0 + 4), new MeshLambertMaterial({ color: this.theme.ground }));
+    const under = new Mesh(
+      new PlaneGeometry(maxX - minX + 20, maxZ - minZ + 18),
+      new MeshLambertMaterial({ color: this.theme.ground }),
+    );
     under.rotation.x = -Math.PI / 2;
-    under.position.set((x0 + x1) / 2, -0.3, (z0 + z1) / 2);
+    under.position.set((minX + maxX) / 2, -0.3, (minZ + maxZ) / 2);
     this.scene.add(under);
   }
 
-  /**
-   * Un chemin est une suite de cases pavées de terre, sous les bâtiments qui en occupent
-   * les extrémités. C'est la forme qu'aura un chemin tracé par le joueur.
-   */
+  /** Vide la partie variable. Les géométries des modèles sont partagées : on ne libère que ce qui est propre. */
+  private clearDynamic(): void {
+    for (const child of [...this.dynamic.children]) {
+      this.dynamic.remove(child);
+      child.traverse((o) => {
+        if (o instanceof CSS2DObject) o.element.remove();
+        if (o instanceof Mesh || o instanceof InstancedMesh) {
+          (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose());
+          if (o.userData.ownGeometry) o.geometry.dispose();
+        }
+      });
+    }
+    this.buildings.clear();
+    this.roads.clear();
+  }
+
+  private disposeTree(root: Object3D): void {
+    root.traverse((o) => {
+      if (o instanceof Mesh || o instanceof InstancedMesh) {
+        o.geometry.dispose();
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose());
+      }
+    });
+  }
+
+  /** Un chemin est une suite de cases pavées de terre, du bâtiment de départ à celui d'arrivée. */
   private addPaths(): void {
     const paved = new Map<string, Hex>();
     for (const road of this.layout.roads) for (const c of road.cells) paved.set(hexKey(c), c);
+    if (paved.size === 0) return;
     // Six segments, premier sommet sur l'axe z : la même orientation « pointe en haut » que les tuiles.
     const geometry = new CylinderGeometry(HEX_SIZE * TILE_SCALE, HEX_SIZE * TILE_SCALE, 0.06, 6);
     const tiles = new InstancedMesh(geometry, new MeshLambertMaterial({ color: this.theme.road }), paved.size);
+    tiles.userData.ownGeometry = true;
     [...paved.values()].forEach((c, i) => {
       const p = hexCenter(c);
       this.dummy.position.set(p.x, 0.03, p.z);
@@ -265,40 +435,48 @@ export class CityScene {
       tiles.setMatrixAt(i, this.dummy.matrix);
     });
     tiles.receiveShadow = true;
-    this.scene.add(tiles);
+    this.dynamic.add(tiles);
   }
 
-  private addRoad(road: Road): void {
-    this.roads.set(road.key, road);
-  }
-
-  private addBuilding(node: ArchNode, catalog: Catalog): void {
-    const at = this.layout.nodes[node.id];
-    const def = catalog.components[node.type];
-    const style = this.theme.buildings[node.type];
-    if (!at || !def || !style) return;
-
-    const group = new Group();
-    group.position.set(at.x, 0, at.z);
-    const b: Building = {
+  private newBuilding(node: ArchNode): Building {
+    const def = this.catalog.components[node.type];
+    return {
       node,
-      group,
+      group: new Group(),
       tintable: [],
       instances: [],
       parked: [],
       label: document.createElement('div'),
-      techName: def.techName,
-      metaphor: style.metaphor,
+      techName: def?.techName ?? node.type,
+      metaphor: this.theme.buildings[node.type]?.metaphor ?? node.type,
     };
-    this.build(b, style, catalog);
+  }
+
+  private addBuilding(node: ArchNode): void {
+    const at = this.layout.nodes[node.id];
+    const style = this.theme.buildings[node.type];
+    if (!at || !style) return;
+    const b = this.newBuilding(node);
+    b.group.position.set(at.x, 0, at.z);
+    this.build(b, style);
+    this.fitToCell(b.group);
 
     b.label.className = 'city-label';
     const label = new CSS2DObject(b.label);
-    label.position.set(0, new Box3().setFromObject(group).max.y + 0.6, 0);
-    group.add(label);
+    const top = new Box3().setFromObject(b.group).max.y;
+    // L'étiquette est enfant du groupe réduit : on compense l'échelle pour la placer au-dessus.
+    label.position.set(0, (top + 0.5) / b.group.scale.y, 0);
+    b.group.add(label);
 
-    this.scene.add(group);
+    this.dynamic.add(b.group);
     this.buildings.set(node.id, b);
+  }
+
+  /** Réduit un bâtiment qui déborderait de sa case sur ses voisines. */
+  private fitToCell(group: Group): void {
+    const size = new Box3().setFromObject(group).getSize(new Vector3());
+    const span = Math.max(size.x, size.z);
+    if (span > BUILDING_SPAN) group.scale.setScalar(BUILDING_SPAN / span);
   }
 
   /**
@@ -321,10 +499,10 @@ export class CityScene {
   }
 
   /** Assemble les pièces KayKit qui forment ce composant dans la métaphore. */
-  private build(b: Building, style: BuildingStyle, catalog: Catalog): void {
+  private build(b: Building, style: BuildingStyle): void {
     const g = b.group;
     const levelOf = (effect: string) =>
-      Object.entries(b.node.upgrades ?? {}).reduce((a, [u, l]) => a + (catalog.upgrades[u]?.effect.type === effect ? l : 0), 0);
+      Object.entries(b.node.upgrades ?? {}).reduce((a, [u, l]) => a + (this.catalog.upgrades[u]?.effect.type === effect ? l : 0), 0);
 
     switch (style.shape) {
       case 'hamlet':
@@ -332,7 +510,6 @@ export class CityScene {
         this.put(g, K('building_home_B_blue'), { x: 0.8, z: -0.5, rotate: -0.4 }, b);
         this.put(g, K('building_home_A_blue'), { x: -0.4, z: 0.9, rotate: 2.6 }, b);
         this.put(g, K('building_well_blue'), { x: 0.7, z: 0.8 }, b);
-        this.put(g, K('tree_single_A'), { x: -1.6, z: 0.2 });
         break;
 
       case 'watchtower':
@@ -345,8 +522,8 @@ export class CityScene {
         this.put(g, K('wall_straight_gate'), { rotate: Math.PI / 2 }, b);
         for (const z of [-1.3, 1.3]) this.put(g, K('building_tower_base_blue'), { z }, b);
         this.put(g, K('flag_blue'), { y: 1.4, scale: 2.5 }, b);
-        // Le rate limiting devient la caserne de la garde, accolée à la porte côté cité.
-        if (levelOf('rateLimit') > 0) this.put(g, K('building_barracks_blue'), { x: 1.4, z: -2.1, rotate: Math.PI }, b);
+        // Le rate limiting devient la caserne de la garde, accolée à la porte.
+        if (levelOf('rateLimit') > 0) this.put(g, K('building_barracks_blue'), { x: 1.1, z: 0, rotate: Math.PI, scale: 0.7 }, b);
         break;
 
       case 'tower': {
@@ -354,13 +531,18 @@ export class CityScene {
         const max = 1 + levelOf('instances') + levelOf('autoscaling');
         const cols = Math.ceil(Math.sqrt(max));
         for (let i = 0; i < max; i++) {
-          const tower = this.put(g, K(i % 2 === 0 ? 'building_tower_A_blue' : 'building_tower_B_blue'), {
-            x: ((i % cols) - (cols - 1) / 2) * 1.1,
-            z: (Math.floor(i / cols) - (Math.ceil(max / cols) - 1) / 2) * 1.1,
-            scale: 0.8,
-            rotate: (i * 1.3) % (Math.PI * 2),
-          }, b);
-          tower.visible = i === 0;
+          const tower = this.put(
+            g,
+            K(i % 2 === 0 ? 'building_tower_A_blue' : 'building_tower_B_blue'),
+            {
+              x: ((i % cols) - (cols - 1) / 2) * 1.1,
+              z: (Math.floor(i / cols) - (Math.ceil(max / cols) - 1) / 2) * 1.1,
+              scale: 0.8,
+              rotate: (i * 1.3) % (Math.PI * 2),
+            },
+            b,
+          );
+          // En construction, toutes les tours possibles sont visibles : le joueur voit ce qu'il paie.
           b.instances.push(tower);
         }
         break;
@@ -377,25 +559,22 @@ export class CityScene {
         // Une tour annexe par réplica en lecture.
         const replicas = levelOf('readReplicas');
         for (let i = 0; i < replicas; i++) {
-          this.put(g, K('building_tower_base_blue'), { x: -1.6 + (i % 3) * 1, z: 1.7 + Math.floor(i / 3) * 1, scale: 0.8 }, b);
+          this.put(g, K('building_tower_base_blue'), { x: -1.4 + (i % 3) * 0.9, z: 1.3 + Math.floor(i / 3) * 0.9, scale: 0.6 }, b);
         }
         break;
       }
 
       case 'stables':
         // La taverne du relais et son enclos : les colis en attente s'y empilent.
-        this.put(g, K('building_tavern_blue'), { x: -1.2 }, b);
-        for (const z of [-0.6, 0.6]) this.put(g, K('fence_wood_straight'), { x: 1.1, z }, b);
-        for (const x of [0, 0.6]) {
-          this.put(g, K('fence_wood_straight'), { x, z: -1.1, rotate: Math.PI / 2 }, b);
-          this.put(g, K('fence_wood_straight'), { x, z: 1.1, rotate: Math.PI / 2 }, b);
-        }
+        this.put(g, K('building_tavern_blue'), { x: -0.8 }, b);
+        for (const z of [-0.5, 0.5]) this.put(g, K('fence_wood_straight'), { x: 1.1, z }, b);
         for (let i = 0; i < 12; i++) {
-          const parcel = this.put(g, K(i % 3 === 0 ? 'sack' : 'crate_A_small'), {
-            x: -0.2 + (i % 4) * 0.3,
-            z: -0.6 + Math.floor(i / 4) * 0.5,
-            scale: 2,
-          }, b);
+          const parcel = this.put(
+            g,
+            K(i % 3 === 0 ? 'sack' : 'crate_A_small'),
+            { x: 0.1 + (i % 3) * 0.3, z: -0.6 + Math.floor(i / 3) * 0.4, scale: 2 },
+            b,
+          );
           parcel.visible = false;
           b.parked.push(parcel);
         }
@@ -403,22 +582,23 @@ export class CityScene {
     }
   }
 
-  /** Bosquets et rochers autour des bâtiments, placés de façon déterministe : le même rejeu, le même paysage. */
+  /**
+   * Bosquets et rochers, une chance par case, toujours la même : le paysage ne change pas
+   * d'un rejeu à l'autre. Jamais sur un bâtiment ni sur un chemin, et plus rares sur le
+   * plateau jouable, pour laisser de la place à bâtir.
+   */
   private addTrees(): void {
+    const taken = new Set([...Object.values(this.layout.cells).map(hexKey), ...this.layout.roads.flatMap((r) => r.cells.map(hexKey))]);
     const { minX, maxX, minZ, maxZ } = this.layout.bounds;
-    const roadPoints = this.layout.roads.flatMap((r) => sample(r.path, 0.3));
-    const nodes = Object.values(this.layout.nodes);
     const kinds = ['trees_A_medium', 'trees_A_small', 'tree_single_B', 'rock_single_A'];
-    for (let i = 0; i < 80; i++) {
-      // Hachage fixe : pas de Math.random dans le rendu, le même rejeu donne le même paysage.
-      const u = hash(i * 2 + 1);
-      const v = hash(i * 2 + 2);
-      const x = minX - 6 + u * (maxX - minX + 12);
-      const z = minZ - 6 + v * (maxZ - minZ + 12);
-      const crowded =
-        nodes.some((p) => Math.hypot(p.x - x, p.z - z) < 2.2) || roadPoints.some((p) => Math.hypot(p.x - x, p.z - z) < 1.2);
-      if (crowded) continue;
-      this.put(this.scene, K(kinds[i % kinds.length]!), { x, z, rotate: u * Math.PI * 2 });
+    for (const cell of this.groundCells()) {
+      if (taken.has(hexKey(cell))) continue;
+      const p = hexCenter(cell);
+      const onBoard = p.x >= minX && p.x <= maxX && p.z >= minZ && p.z <= maxZ;
+      const roll = hash(cell.q * 73.1 + cell.r * 37.7);
+      if (roll > (onBoard ? 0.05 : 0.3)) continue;
+      const pick = Math.floor(hash(cell.q * 11.3 - cell.r * 5.9) * kinds.length);
+      this.put(this.dynamic, K(kinds[pick]!), { x: p.x, z: p.z, rotate: roll * 40 });
     }
   }
 
@@ -456,9 +636,9 @@ export class CityScene {
     this.hostiles = this.fleet({ ...this.theme.hostile, size: [w * 1.2, h * 1.1, l] });
   }
 
-  private updateBuildings(tick: TickMetrics): void {
+  private updateBuildings(tick: TickMetrics | undefined): void {
     for (const [id, b] of this.buildings) {
-      const n = tick.nodes[id];
+      const n = tick?.nodes[id];
       const u = n?.utilization ?? 0;
       // Le bâtiment rougit à l'approche de la saturation, franchement au-delà.
       const heat = Math.min(Math.max((u - 0.8) / 0.4, 0), 1);
@@ -466,7 +646,8 @@ export class CityScene {
         if ('emissive' in m && m.emissive instanceof Color) m.emissive.copy(this.alert).multiplyScalar(heat * 0.6);
       }
 
-      const visible = n?.instances ?? 1;
+      // En construction, toutes les tours payées sont visibles ; au rejeu, celles en service.
+      const visible = tick ? (n?.instances ?? 1) : b.instances.length;
       b.instances.forEach((o, i) => (o.visible = i < visible));
 
       const backlog = n?.backlog ?? 0;
@@ -521,18 +702,6 @@ export class CityScene {
     this.hostiles.count = repelled;
     this.hostiles.instanceMatrix.needsUpdate = true;
   }
-}
-
-/** Points régulièrement espacés le long d'un chemin, pour tester la proximité d'une route. */
-function sample(path: Point[], step: number): Point[] {
-  const out: Point[] = [];
-  for (let i = 1; i < path.length; i++) {
-    const a = path[i - 1]!;
-    const b = path[i]!;
-    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
-    for (let k = 0; k <= n; k++) out.push({ x: a.x + ((b.x - a.x) * k) / n, z: a.z + ((b.z - a.z) * k) / n });
-  }
-  return out;
 }
 
 /** Pseudo-aléatoire déterministe dans [0, 1[, sans corrélation visible entre indices voisins. */

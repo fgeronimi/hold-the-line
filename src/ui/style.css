@@ -15,16 +15,29 @@ textarea { width: 100%; height: 200px; font-family: monospace; }
 .lost h2 { color: #b00020; }
 .briefing { font-size: 16px; }
 
-/* Rejeu 3D : plein écran au-dessus de l'interface brute. */
-.replay { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; background: #e8eef3; }
-.replay-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px; background: #fff; border-bottom: 1px solid #ccc; }
-.replay-bar input[type=range] { flex: 1; min-width: 160px; }
+/* Espace de travail : le plateau 3D et son panneau. */
+body { max-width: 1400px; }
+.workspace { display: flex; gap: 12px; align-items: stretch; margin: 8px 0; }
+.board { position: relative; flex: 1; min-width: 0; height: 68vh; min-height: 420px; border-radius: 8px; overflow: hidden; background: #e8eef3; }
+.side { width: 300px; flex-shrink: 0; max-height: 68vh; overflow-y: auto; font-size: 13px; }
+.side h3 { margin: 10px 0 4px; }
+.side .tools button.active, .palette button.active { outline: 2px solid #3a86ff; background: #e7f0ff; }
+.palette { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.palette button { display: flex; flex-direction: column; align-items: flex-start; text-align: left; padding: 4px 6px; }
+.palette button span { color: #666; font-size: 11px; }
+.side .card { border: 1px solid #ddd; border-radius: 6px; padding: 6px 8px; margin-top: 8px; }
+.side .card label { display: block; margin: 2px 0; }
+.side .launch button { margin: 2px 0; }
+@media (max-width: 900px) { .workspace { flex-direction: column; } .side { width: auto; max-height: none; } }
+
+/* Rejeu : une barre posée sur le plateau. */
+.replay-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(255, 255, 255, .92); border-bottom: 1px solid #ccc; font-size: 12px; }
+.replay-bar input[type=range] { flex: 1; min-width: 120px; }
 .replay-legend i { display: inline-block; width: 10px; height: 10px; margin: 0 4px 0 8px; border-radius: 2px; }
-.replay-stage { position: relative; flex: 1; overflow: hidden; }
+.replay-loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: #555; }
 .city-labels { position: absolute; inset: 0; pointer-events: none; }
 .city-label { display: flex; flex-direction: column; align-items: center; padding: 2px 6px; border-radius: 4px;
   background: rgba(255, 255, 255, .8); font-size: 10px; line-height: 1.2; text-align: center; white-space: nowrap; }
 .city-label span { color: #555; }
 .city-label em { font-style: normal; color: #333; }
 .city-label em.hot { color: #b00020; font-weight: bold; }
-.replay-loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: #555; }

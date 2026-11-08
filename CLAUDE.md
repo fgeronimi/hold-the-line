@@ -32,9 +32,13 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
   qui l'accepte. Un composant `lookaside` (le cache) est consulté, pas traversé : il sert
   sa part et le reste repart du nœud qui l'a consulté (cache-aside). `linkFlows` donne
   ce qui circule vraiment, pour l'affichage.
-- `src/ui/` : interface brute de phase 1, TypeScript natif sans framework. `main.ts`
-  tient l'état et les actions (`data-action` délégués), `views.ts` rend tout en chaînes
-  HTML à chaque changement, `editor.ts` et `calibration.ts` sont purs et testés.
+- `src/ui/` : interface, TypeScript natif sans framework. `main.ts` tient l'état et les
+  actions (`data-action` délégués) ; `views.ts` rend en chaînes HTML trois zones (en-tête,
+  panneau du plateau, bas de page) à chaque changement ; `board.ts` (règles du plateau :
+  poser, déplacer, relier par A*), `editor.ts` et `calibration.ts` sont purs et testés.
+- Le plateau 3D (`CityScene`) est créé une fois dans `#board`, **hors** des zones
+  réécrites : `main.ts` lui passe le brouillon par `setArchitecture` quand il change, et le
+  rejeu (`startReplay`) l'anime sur place.
 - `src/render/` : rejeu 3D isométrique (Three.js), chargé à la demande depuis le debrief.
   `hex.ts` (grille hexagonale), `layout.ts` et `traffic.ts` sont purs et testés ; `scene.ts` ne fait qu'afficher un tick
   déjà calculé. La métaphore vient d'un thème en données (`src/data/themes/fortified-city.ts`).
@@ -73,6 +77,9 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
   avant d'entrer dans le HTML.
 - Le rendu ne simule rien : s'il faut une donnée de plus pour animer, elle s'ajoute aux
   ticks du moteur, jamais recalculée dans `src/render/`.
+- `ArchNode.cell` et `ArchLink.path` sont de la mise en scène : la simulation les ignore.
+  Tout brouillon passe par `autoPlace` dans `update()`, pour qu'un bâtiment ajouté sans
+  case (vue tableau, ancienne sauvegarde) en reçoive une.
 - Pas de cascade de pannes : un aval saturé ne ralentit pas l'amont (décision M3, V2).
 - Le travail d'un flux est divisé par sa taille de lot (`batch`), mais les échecs se
   comptent toujours en messages.

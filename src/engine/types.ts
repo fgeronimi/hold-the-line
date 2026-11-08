@@ -85,16 +85,26 @@ export interface Catalog {
   upgrades: Record<string, UpgradeDef>;
 }
 
+/** Case d'un plateau hexagonal, en coordonnées axiales. */
+export interface BoardCell {
+  q: number;
+  r: number;
+}
+
 export interface ArchNode {
   id: string;
   type: string;
   upgrades?: Record<string, number>;
+  /** Case du plateau où le joueur a posé le bâtiment. Ignorée par la simulation. */
+  cell?: BoardCell;
 }
 
 /** Un lien relie deux composants ; ce qui y circule est déduit par `routeTable`. */
 export interface ArchLink {
   from: string;
   to: string;
+  /** Cases du chemin tracé sur le plateau, départ et arrivée inclus. Ignoré par la simulation. */
+  path?: BoardCell[];
 }
 
 export interface Architecture {

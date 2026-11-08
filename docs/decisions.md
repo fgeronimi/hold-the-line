@@ -52,6 +52,7 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 | I1 | Les liens ne portent plus de type de requête : le joueur relie des composants, le moteur déduit le chemin. Chaque composant déclare les types qu'il accepte ; un type va au voisin le plus spécialisé qui l'accepte (cache pour les lectures, file pour l'async), sinon au généraliste. Le schéma affiche ce qui circule réellement sur chaque lien. Les types restent dans le moteur. | Cocher read, write et async par lien n'offrait aucun vrai choix (personne n'envoie ses lectures en base à côté d'un cache) et alourdissait la construction. Sans les types dans le moteur, cache, réplicas, file et rate limiting perdraient leur sens. | Fait ; équilibrage inchangé |
 
 | I3 | Le cache est en **cache-aside** : le serveur le consulte, et en cas d'absence lit lui-même la base. On relie serveur → cache et serveur → base ; un cache ne peut alimenter aucun composant. Le CDN reste en ligne, devant le serveur. | Le modèle précédent était un cache read-through (serveur → cache → base) : faux pour le pattern attendu en entretien, et contre-intuitif à câbler. Retour de jeu de François. | Fait ; équilibrage inchangé |
+| I4 | **Construction sur le plateau hexagonal**, devenu l'écran principal : palette de bâtiments, outils Sélection / Relier / Retirer, fiche du bâtiment (évolutions, chemins, déplacer, retirer), facture et lancement dans un panneau latéral ; la vague se rejoue sur le même plateau. On relie en cliquant A puis B : le plus court chemin de cases (A*) qui contourne les bâtiments est tracé seul ; un bâtiment posé ou déplacé fait retracer les chemins concernés. Les cases et chemins sont gardés sur l'architecture (`ArchNode.cell`, `ArchLink.path`) mais **ignorés par la simulation**. Les tableaux HTML restent en « vue tableau » repliée. | Le joueur construit lui-même, comme dans un vrai jeu de construction. Chemins décoratifs d'abord pour valider l'ergonomie sans toucher au moteur ni à l'équilibrage. Piste ouverte : faire compter la longueur des chemins (coût, latence), ce qui rendrait le placement stratégique mais imposerait de recalibrer. | Fait |
 | I2 | Pas de lien vers le calendrier dans le debrief. Le champ `conceptRef` des vagues reste : le contenu des fiches servira à écrire des explications dans le jeu. | Envoyer le joueur hors du jeu casse la boucle ; l'explication doit venir au moment où la vague casse. | Lien retiré ; explications à faire (lire `concepts.js`, repo voisin, `--add-dir` nécessaire) |
 
 ## Phase 2 : rendu
@@ -96,9 +97,9 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 
 ## Prochaines étapes
 
-0. Phase 2 : construction par le joueur sur la grille hexagonale (poser un bâtiment sur
-   une case, tracer un chemin case par case) ; scénariser les vagues dans la métaphore ;
-   animer la marche des personnages proches (aujourd'hui figés).
+0. Phase 2 : décider si les chemins comptent (coût, latence) ; glisser-déposer et
+   annulation sur le plateau ; scénariser les vagues dans la métaphore ; animer la marche
+   des personnages proches (aujourd'hui figés).
 
 1. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
    comprise (B4).

@@ -3,6 +3,7 @@ import type { GameState } from '../engine/game.ts';
 import type { Architecture, Catalog, Gauge, Scenario, SimEvent, Wave, WaveResult } from '../engine/types.ts';
 import { linkFlows, type LinkFlows } from '../engine/routing.ts';
 import { validateArchitecture } from '../engine/validate.ts';
+import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { calibrationGroups, formatField, getAt } from './calibration.ts';
 
 
@@ -20,6 +21,14 @@ export interface Attempt {
   arch: Architecture;
 }
 
+/** Outil actif sur le plateau. */
+export type Tool =
+  | { kind: 'select' }
+  | { kind: 'place'; type: string }
+  | { kind: 'link'; from?: string | undefined }
+  | { kind: 'move'; id: string }
+  | { kind: 'remove' };
+
 export interface ViewState {
   catalog: Catalog;
   scenario: Scenario;
@@ -28,6 +37,15 @@ export interface ViewState {
   attempts: Attempt[];
   selected?: number | undefined;
   tab: 'build' | 'calibrate';
+  tool: Tool;
+  /** Bâtiment dont la fiche est ouverte dans le panneau. */
+  selectedNode?: string | undefined;
+  /** Dernier refus ou conseil du plateau (case occupée, chemin impossible…). */
+  boardMessage?: string | undefined;
+  /** Les tableaux de composants et de liens, repliés par défaut. */
+  showTable: boolean;
+  /** Tentative en cours de rejeu sur le plateau. */
+  replaying?: number | undefined;
 }
 
 export const esc = (s: unknown) =>
@@ -36,7 +54,8 @@ export const esc = (s: unknown) =>
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 const pct = (n: number) => `${(n * 100).toFixed(2)} %`;
 
-export function renderApp(s: ViewState): string {
+/** En-tête et briefing, au-dessus du plateau. */
+export function renderTop(s: ViewState): string {
   const wave = s.scenario.waves[s.game.waveIndex];
   return `
     <header>
@@ -53,10 +72,119 @@ export function renderApp(s: ViewState): string {
         <button data-action="tab" data-tab="calibrate" ${s.tab === 'calibrate' ? 'disabled' : ''}>Calibrage</button>
       </nav>
     </header>
-    ${wave ? renderBriefing(wave, s) : '<section><h2>Partie terminée</h2></section>'}
-    ${s.tab === 'build' ? (wave ? renderBuild(s, wave) : '') : renderCalibration(s)}
+    ${wave ? renderBriefing(wave, s) : '<section><h2>Partie terminée</h2></section>'}`;
+}
+
+/** Sous le plateau : debrief, vue tableau, calibrage. */
+export function renderBottom(s: ViewState): string {
+  const wave = s.scenario.waves[s.game.waveIndex];
+  return `
     ${renderAttempts(s)}
-  `;
+    ${s.tab === 'calibrate' ? renderCalibration(s) : ''}
+    ${s.tab === 'build' && wave ? `<section><button data-action="toggle-table">${s.showTable ? 'Masquer' : 'Afficher'} la vue tableau</button></section>${s.showTable ? renderBuild(s, wave) : ''}` : ''}`;
+}
+
+/** Le panneau à côté du plateau : outils, palette, fiche du bâtiment, facture, lancement. */
+export function renderSide(s: ViewState): string {
+  const wave = s.scenario.waves[s.game.waveIndex];
+  if (s.replaying !== undefined) return '<p class="muted">Rejeu en cours sur le plateau. « Retour à la construction » pour reprendre.</p>';
+  if (!wave) return '<p>Partie terminée : revenir à une vague, ou nouvelle partie.</p>';
+  const { catalog, draft, tool } = s;
+  const active = (t: Tool['kind'], type?: string) =>
+    tool.kind === t && (type === undefined || (tool.kind === 'place' && tool.type === type)) ? ' class="active"' : '';
+
+  const palette = Object.values(catalog.components)
+    .filter((d) => d.behavior !== 'source')
+    .map(
+      (d) => `<button data-action="tool" data-tool="place" data-type="${esc(d.id)}"${active('place', d.id)}>
+        <b>${esc(theme.buildings[d.id]?.metaphor ?? d.techName)}</b><span>${esc(d.techName)} · coût ${d.cost}</span></button>`,
+    )
+    .join('');
+
+  const hint: Record<Tool['kind'], string> = {
+    select: 'Cliquer un bâtiment pour ouvrir sa fiche. Glisser pour déplacer la vue, molette pour zoomer.',
+    place: 'Cliquer une case libre pour bâtir. Échap pour arrêter.',
+    link: tool.kind === 'link' && tool.from ? `Départ : ${tool.from}. Cliquer le bâtiment d'arrivée.` : 'Cliquer le bâtiment de départ, puis celui d’arrivée.',
+    move: 'Cliquer la case où déplacer le bâtiment.',
+    remove: 'Cliquer un bâtiment pour le retirer, avec ses chemins.',
+  };
+
+  return `
+    <h3>Outils</h3>
+    <p class="tools">
+      <button data-action="tool" data-tool="select"${active('select')}>Sélection</button>
+      <button data-action="tool" data-tool="link"${active('link')}>Relier</button>
+      <button data-action="tool" data-tool="remove"${active('remove')}>Retirer</button>
+    </p>
+    <p class="muted">${esc(hint[tool.kind])}</p>
+    ${s.boardMessage ? `<p class="ko">${esc(s.boardMessage)}</p>` : ''}
+    <h3>Bâtir</h3>
+    <div class="palette">${palette}</div>
+    ${renderNodeCard(s)}
+    ${renderLaunch(s, wave)}`;
+}
+
+function renderNodeCard(s: ViewState): string {
+  const node = s.draft.nodes.find((n) => n.id === s.selectedNode);
+  if (!node) return '';
+  const def = s.catalog.components[node.type];
+  const links = s.draft.links
+    .map((l, i) => ({ l, i }))
+    .filter(({ l }) => l.from === node.id || l.to === node.id)
+    .map(({ l, i }) => `<li><code>${esc(l.from)}</code> → <code>${esc(l.to)}</code> <button data-action="remove-link" data-link="${i}">retirer</button></li>`)
+    .join('');
+  const source = def?.behavior === 'source';
+  return `
+    <section class="card">
+      <h3>${esc(theme.buildings[node.type]?.metaphor ?? node.type)} <small>${esc(def?.techName ?? '')} · ${esc(node.id)}</small></h3>
+      ${def ? `<p class="muted">cap. ${def.capacity}, ${def.latencyMs} ms, coût ${def.cost}, complexité ${def.complexity}</p>` : ''}
+      <p>${upgradeSelects(node, s.catalog) || '<span class="muted">aucune évolution</span>'}</p>
+      ${links ? `<ul>${links}</ul>` : '<p class="muted">Aucun chemin.</p>'}
+      <p>
+        <button data-action="tool" data-tool="move" data-node="${esc(node.id)}">Déplacer</button>
+        ${source ? '' : `<button data-action="remove-node" data-node="${esc(node.id)}">Retirer</button>`}
+      </p>
+    </section>`;
+}
+
+function renderLaunch(s: ViewState, wave: Wave): string {
+  const { catalog, draft } = s;
+  const validation = validateArchitecture(draft, catalog);
+  const lines = bill(draft, catalog);
+  const fixed = lines.reduce((a, l) => a + l.cost, 0);
+  const complexity = lines.reduce((a, l) => a + l.complexity, 0);
+  const migration = migrationCost(s.game.committed, draft, catalog);
+  const over = (v: number, max: number) => (v > max ? ' class="ko"' : '');
+  return `
+    <h3>Facture prévue</h3>
+    <p><span${over(fixed + migration, wave.budget)}>coût ${fmt(fixed)}${migration > 0 ? ` + ${fmt(migration)} de migration` : ''} / ${wave.budget}</span><br>
+      <span${over(complexity, wave.complexityCap)}>complexité ${complexity} / ${wave.complexityCap}</span></p>
+    ${validation.ok ? '' : `<ul class="ko">${validation.errors.map((e) => `<li>${esc(e)}</li>`).join('')}</ul>`}
+    <p class="launch">
+      <button data-action="play" ${validation.ok ? '' : 'disabled'}><b>Lancer la vague</b></button>
+      <button data-action="try" ${validation.ok ? '' : 'disabled'}>Essai (hors partie)</button>
+      <button data-action="revert">Revenir à l'architecture validée</button>
+    </p>`;
+}
+
+/** Les sélecteurs d'évolutions d'un bâtiment : partagés par la fiche et la vue tableau. */
+function upgradeSelects(n: Architecture['nodes'][number], catalog: Catalog): string {
+  return Object.values(catalog.upgrades)
+    .filter((u) => u.appliesTo === n.type)
+    .map((u) => {
+      const level = n.upgrades?.[u.id] ?? 0;
+      const options = Array.from({ length: u.maxLevel + 1 }, (_, i) => {
+        const label =
+          u.effect.type === 'rateLimit'
+            ? i === 0 ? 'off' : `${u.effect.tiersPerClientRps[i - 1]} req/s/client`
+            : u.effect.type === 'autoscaling'
+              ? i === 0 ? 'off' : `≤ +${i}`
+              : String(i);
+        return `<option value="${i}" ${i === level ? 'selected' : ''}>${esc(label)}</option>`;
+      }).join('');
+      return `<label>${esc(u.techName)} <select data-action="upgrade" data-node="${esc(n.id)}" data-upgrade="${esc(u.id)}">${options}</select></label>`;
+    })
+    .join(' ');
 }
 
 function renderBriefing(wave: Wave, s: ViewState): string {
@@ -85,22 +213,7 @@ function renderBuild(s: ViewState, wave: Wave): string {
   const nodeRows = draft.nodes
     .map((n) => {
       const def = catalog.components[n.type];
-      const ups = Object.values(catalog.upgrades).filter((u) => u.appliesTo === n.type);
-      const upgrades = ups
-        .map((u) => {
-          const level = n.upgrades?.[u.id] ?? 0;
-          const options = Array.from({ length: u.maxLevel + 1 }, (_, i) => {
-            const label =
-              u.effect.type === 'rateLimit'
-                ? i === 0 ? 'off' : `${u.effect.tiersPerClientRps[i - 1]} req/s/client`
-                : u.effect.type === 'autoscaling'
-                  ? i === 0 ? 'off' : `≤ +${i}`
-                  : String(i);
-            return `<option value="${i}" ${i === level ? 'selected' : ''}>${esc(label)}</option>`;
-          }).join('');
-          return `<label>${esc(u.techName)} <select data-action="upgrade" data-node="${esc(n.id)}" data-upgrade="${esc(u.id)}">${options}</select></label>`;
-        })
-        .join(' ');
+      const upgrades = upgradeSelects(n, catalog);
       const removable = def?.behavior !== 'source';
       return `<tr>
         <td><code>${esc(n.id)}</code></td>
@@ -155,11 +268,6 @@ function renderBuild(s: ViewState, wave: Wave): string {
           (hors autoscaling, connu après la vague) ·
           <span${over(complexity, wave.complexityCap)}>complexité ${complexity} / ${wave.complexityCap}</span></p>
         ${validation.ok ? '' : `<ul class="ko">${validation.errors.map((e) => `<li>${esc(e)}</li>`).join('')}</ul>`}
-        <p>
-          <button data-action="play" ${validation.ok ? '' : 'disabled'}><b>Lancer la vague</b></button>
-          <button data-action="try" ${validation.ok ? '' : 'disabled'}>Essai (hors partie)</button>
-          <button data-action="revert">Revenir à l'architecture validée</button>
-        </p>
       </div>
     </section>`;
 }
