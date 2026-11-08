@@ -66,6 +66,8 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 | R6 | Plus de remparts autour de la cité. | Un rectangle de murs coupait la grille hexagonale en biais et encombrait le plateau ; la porte et ses deux tours suffisent à porter l'idée de cité à défendre. Demandé par François. | Fait |
 | R7 | Les requêtes sont des **personnages KayKit** (Adventurers et Skeletons, CC0) : Rogue = messager (lecture), Barbarian = porteur (écriture), Mage = mage messager (async), Skeleton Warrior = pillards (scraper), le messager teinté de rouge = requête en échec qui fait demi-tour. Chaque personnage est figé dans une pose de sa marche au chargement et fusionné en une géométrie instanciée, avec un sautillement ; il se retourne sur le chemin du retour. Fichiers allégés par `scripts/strip-characters.mjs` (une animation, accessoires choisis) : 1,3 Mo au lieu de 20. | Mêmes auteur et style que les bâtiments ; des centaines de personnages squelettés animés seraient trop lourds, la pose figée s'instancie comme une boîte. Aucun pack du style n'a de charrette ni de pigeon : les noms de la métaphore suivent les personnages. | Fait |
 | R8 | Les requêtes font des **trajets complets** : des hameaux jusqu'au bâtiment qui les sert, puis retour par le même chemin avec la réponse (l'aller tient un côté du chemin, le retour l'autre). À chaque bâtiment, le lien de sortie est tiré au prorata des débits réels du tick (succès du cache vers le carnet, absences vers les archives), et le refus dans la proportion des échecs du bâtiment : la requête refusée revient en rouge. L'async fait un aller simple ; les pillards sont refoulés à la porte. Une **pastille** monte : +1 👍 au-dessus des hameaux quand la réponse revient (une requête n'a réussi qu'une fois la réponse reçue), −1 👎 au-dessus du bâtiment qui refuse, 🛡 à la porte pour un pillard repoussé ; un async, sans retour, compte au bout de son aller. Tirages déterministes, logique dans `src/render/traffic.ts`. | Demandé par François : voir une requête aller en base et revenir aux hameaux, et lire d'un coup d'œil ce qui réussit et ce qui échoue, où. | Fait |
+| R9 | **Le chambellan, recruteur dans la métaphore.** Il ouvre chaque vague par un récit (`theme.narratives`), les chiffres techniques restant affichés dessous. Après la vague, il l'analyse (`src/ui/debrief.ts`, pur et testé) : lien manquant, goulot avec sa leçon, garde trop stricte, clics perdus derrière le CDN, trésor ou rouages dépassés, latence trop haute ; en cas de victoire, le goulot le plus proche, les pillards repoussés et les bâtiments à alléger. Chaque constat donne ce qu'il dit, l'explication d'entretien, la parade et la notion à réviser (`src/data/lessons.ts`). | Le cœur pédagogique de la spec manquait : savoir *pourquoi* une vague casse et quoi faire, avec le vocabulaire d'entretien. | Fait |
+| R10 | **Tableau de bord du rejeu** : échecs cumulés face au SLA, latence du tick face à sa limite, coût face au budget, compteurs +1 / −1 / pillards (`src/render/hud.ts`, pur et testé). À la première saturation de chaque bâtiment : bandeau d'alerte, caméra recentrée et zoomée sur lui, ralenti de 3 secondes ; bouton « Recentrer ». | On comprenait ce qui s'était passé en lisant le debrief sous le plateau ; le rejeu doit le montrer pendant qu'il se produit. | Fait |
 | R3 | Additions au moteur pour la phase 2, en sortie seulement : `TickMetrics.links` (débit par lien et par type à chaque tick) et `NodeTick.shed` (trafic abusif écarté par nœud). | Le rejeu doit savoir ce qui roule sur chaque route et qui est repoussé à la porte ; la simulation elle-même ne change pas. | Fait |
 
 ## Élargissement du MVP
@@ -98,9 +100,9 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 
 ## Prochaines étapes
 
-0. Phase 2 : décider si les chemins comptent (coût, latence) ; glisser-déposer et
-   annulation sur le plateau ; scénariser les vagues dans la métaphore ; animer la marche
-   des personnages proches (aujourd'hui figés).
+0. Phase 2 : la géographie (terrain, hameaux éloignés, distance = latence) ; incidents
+   en pleine vague ; trois étoiles par vague ; question d'entretien après chaque vague ;
+   tutoriel de la vague 1 ; glisser-déposer et annulation ; marche animée.
 
 1. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
    comprise (B4).

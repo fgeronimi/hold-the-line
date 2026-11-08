@@ -37,4 +37,8 @@ export interface Theme {
   hostile: { metaphor: string; color: string; model?: string };
   buildings: Record<string, BuildingStyle>;
   vehicles: Record<RequestKind, VehicleStyle>;
+  /** Le personnage qui annonce les vagues et analyse les défaites : le recruteur, dans la métaphore. */
+  narrator: { name: string; icon: string };
+  /** Le récit de chaque vague dans la métaphore (clé : id de la vague) ; les chiffres restent affichés à côté. */
+  narratives: Record<string, string>;
 }

@@ -1,5 +1,6 @@
-import type { Architecture, Catalog, WaveResult } from '../engine/types.ts';
+import type { Architecture, Catalog, Wave, WaveResult } from '../engine/types.ts';
 import { escapeHtml } from './html.ts';
+import { firstSaturations, replayStats } from './hud.ts';
 import type { CityScene } from './scene.ts';
 import type { Theme } from './theme.ts';
 import { journeyDuration, journeysForTick, outcomeOf, trafficScale, type Journey, type Outcome } from './traffic.ts';
@@ -8,6 +9,8 @@ export interface ReplayOptions {
   title: string;
   arch: Architecture;
   result: WaveResult;
+  /** Pour les seuils du tableau de bord (SLA, budget). */
+  wave: Wave;
   catalog: Catalog;
   theme: Theme;
   /** Appelé quand le joueur revient à la construction. */
@@ -16,6 +19,8 @@ export interface ReplayOptions {
 
 /** Ticks affichés par seconde à la vitesse ×1 : assez lent pour suivre un voyageur. */
 const TICKS_PER_SECOND = 1.5;
+/** À la première saturation d'un bâtiment, le rejeu ralentit pendant ces quelques secondes. */
+const SLOW_MOTION = { seconds: 3, factor: 0.35 };
 
 /**
  * Rejoue une vague sur le plateau de construction : pose l'architecture jouée, ajoute une
@@ -31,14 +36,21 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     <select data-r="speed"><option value="1">×1</option><option value="2">×2</option><option value="4">×4</option></select>
     <input data-r="seek" type="range" min="0" max="${o.result.ticks.length}" step="0.01" value="0">
     <span data-r="readout"></span>
+    <span class="hud" data-r="hud"></span>
+    <button data-r="recenter" title="Revoir tout le plateau">Recentrer</button>
     <span class="replay-legend">${Object.values(o.theme.vehicles)
       .map((v) => `<i style="background:${v.color}"></i>${escapeHtml(v.metaphor)}`)
       .join(' ')}<i style="background:${o.theme.alert}"></i>${escapeHtml(o.theme.failed)}<i style="background:${o.theme.hostile.color}"></i>${escapeHtml(o.theme.hostile.metaphor)}</span>
     <button data-r="close">Retour à la construction</button>`;
   barHost.appendChild(bar);
+  const alert = document.createElement('div');
+  alert.className = 'replay-alert';
+  alert.hidden = true;
+  barHost.appendChild(alert);
 
   const $ = <T extends HTMLElement>(name: string) => bar.querySelector<T>(`[data-r="${name}"]`)!;
   const readout = $('readout');
+  const hud = $('hud');
   const seek = $<HTMLInputElement>('seek');
   const play = $<HTMLButtonElement>('play');
 
@@ -54,14 +66,48 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   scene.setArchitecture(o.arch, o.catalog);
   scene.setMode('replay');
 
+  const typeOf = new Map(o.arch.nodes.map((n) => [n.id, n.type]));
+  const metaphor = (id: string) => o.theme.buildings[typeOf.get(id) ?? '']?.metaphor ?? id;
+  const alerts = firstSaturations(o.result.events);
+  const shown = new Set<string>();
+  let slowFor = 0;
+
   let time = 0;
   let playing = true;
   let speed = 1;
   const end = o.result.ticks.length;
 
+  /** Le premier goulot : bandeau, caméra sur le bâtiment, ralenti. Une fois par bâtiment. */
+  const raiseAlerts = () => {
+    for (const a of alerts) {
+      if (a.tick > time || shown.has(a.node)) continue;
+      shown.add(a.node);
+      alert.textContent = `⚠ ${metaphor(a.node)} sature au tick ${a.tick + 1} : les voyageurs s'entassent.`;
+      alert.hidden = false;
+      scene.focusOn(a.node);
+      slowFor = SLOW_MOTION.seconds;
+    }
+  };
+
+  const renderHud = () => {
+    const st = replayStats(o.result, outcomes, time);
+    const { sla, budget } = o.wave;
+    const cost = o.result.gauges.cost.value;
+    const gauge = (label: string, value: string, bad: boolean) => `<span class="${bad ? 'ko' : ''}">${label} <b>${value}</b></span>`;
+    hud.innerHTML = [
+      gauge('échecs', `${(st.failureRate * 100).toFixed(2)} % / ${(sla.maxFailureRate * 100).toFixed(0)} %`, st.failureRate > sla.maxFailureRate),
+      gauge('latence', `${Math.round(st.latencyMs)} / ${sla.maxP95LatencyMs} ms`, st.latencyMs > sla.maxP95LatencyMs),
+      gauge('coût', `${Math.round(cost)} / ${budget}`, cost > budget),
+      `<span class="ok">+${st.served} 👍</span> <span class="ko">−${st.refused} 👎</span>${st.repelled > 0 ? ` <span>🛡 ${st.repelled}</span>` : ''}`,
+    ].join(' · ');
+  };
+
   scene.onFrame = (dt) => {
     if (playing) {
-      time += dt * speed * TICKS_PER_SECOND;
+      const slow = slowFor > 0 ? SLOW_MOTION.factor : 1;
+      slowFor = Math.max(0, slowFor - dt);
+      if (slowFor === 0) alert.hidden = true;
+      time += dt * speed * slow * TICKS_PER_SECOND;
       if (time >= end) {
         time = end;
         playing = false;
@@ -76,11 +122,9 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
       journeys.filter(({ j, end }) => j.start <= time && end > time).map(({ j }) => j),
       outcomes.filter((o) => o.at <= time && o.at > time - 1),
     );
-    if (tick) {
-      readout.textContent =
-        `tick ${Math.floor(Math.min(time, end - 1)) + 1}/${end} · ${Math.round(tick.offered)} req/s` +
-        ` · ${Math.round(tick.failed)} en échec · ${Math.round(tick.avgLatencyMs)} ms`;
-    }
+    if (tick) readout.textContent = `tick ${Math.floor(Math.min(time, end - 1)) + 1}/${end} · ${Math.round(tick.offered)} req/s`;
+    raiseAlerts();
+    renderHud();
   };
 
   const togglePlay = () => {
@@ -90,6 +134,8 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   };
   const stop = () => {
     scene.onFrame = undefined;
+    scene.focusOn(undefined);
+    alert.remove();
     scene.showTick(0, undefined, []);
     scene.setMode('build');
     window.removeEventListener('keydown', onKey);
@@ -110,6 +156,12 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     time = Number(seek.value);
     playing = false;
     play.textContent = '▶';
+    // Revenir en arrière réarme les alertes des goulots pas encore atteints.
+    for (const a of alerts) if (a.tick > time) shown.delete(a.node);
+  });
+  $('recenter').addEventListener('click', () => {
+    scene.focusOn(undefined);
+    alert.hidden = true;
   });
   $('close').addEventListener('click', stop);
   window.addEventListener('keydown', onKey);

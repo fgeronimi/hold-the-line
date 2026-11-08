@@ -146,6 +146,7 @@ async function replay(attempt: Attempt): Promise<void> {
     title: `${theme.title} — vague ${attempt.waveIndex + 1}${wave ? ` : ${wave.title}` : ''}`,
     arch: attempt.arch,
     result: attempt.result,
+    wave: wave!,
     catalog: state.catalog,
     theme,
     onClose: () => {

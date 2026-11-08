@@ -5,6 +5,7 @@ import { linkFlows, type LinkFlows } from '../engine/routing.ts';
 import { validateArchitecture } from '../engine/validate.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { calibrationGroups, formatField, getAt } from './calibration.ts';
+import { analyzeWave, type Finding } from './debrief.ts';
 
 
 export interface Attempt {
@@ -191,6 +192,7 @@ function renderBriefing(wave: Wave, s: ViewState): string {
   return `
     <section>
       <h2>Vague ${s.game.waveIndex + 1} — ${esc(wave.title)}</h2>
+      ${theme.narratives[wave.id] ? speech(theme.narratives[wave.id]!) : ''}
       <p class="briefing">${esc(wave.briefing)}</p>
       <p>Budget ${wave.budget} · complexité max ${wave.complexityCap}
         · SLA : ${pct(wave.sla.maxFailureRate)} d'échecs, ${wave.sla.maxP95LatencyMs} ms p95 (approx.)
@@ -323,8 +325,30 @@ function renderAttempts(s: ViewState): string {
     </section>`;
 }
 
+/** Une réplique du narrateur, avec son portrait. */
+function speech(text: string): string {
+  return `<div class="speech"><span class="speaker">${theme.narrator.icon}</span>
+    <p><b>${esc(theme.narrator.name)} :</b> « ${esc(text)} »</p></div>`;
+}
+
+/** L'analyse du narrateur : ce qu'il dit, l'explication d'entretien, la parade, la notion à réviser. */
+function renderFindings(findings: Finding[]): string {
+  if (findings.length === 0) return '';
+  return `<div class="findings">${findings
+    .map(
+      (f, i) => `<div class="finding ${f.tone}">
+        ${i === 0 ? speech(f.says) : `<p class="says">« ${esc(f.says)} »</p>`}
+        ${f.tech ? `<p>${esc(f.tech)}</p>` : ''}
+        ${f.remedy ? `<p><b>Parade :</b> ${esc(f.remedy)}</p>` : ''}
+        ${f.concept ? `<p class="muted">À réviser : ${esc(f.concept)}</p>` : ''}
+      </div>`,
+    )
+    .join('')}</div>`;
+}
+
 function renderDebrief(a: Attempt, s: ViewState): string {
   const r = a.result;
+  const wave = s.scenario.waves[a.waveIndex];
   const nodes = Object.entries(r.nodes)
     .filter(([, n]) => n.peakUtilization > 0 || n.failed > 0)
     .sort(([, x], [, y]) => y.peakUtilization - x.peakUtilization);
@@ -335,6 +359,7 @@ function renderDebrief(a: Attempt, s: ViewState): string {
       ${r.ticks.length > 0 ? `<p><button data-action="replay" data-attempt="${a.id}"><b>Voir la vague</b></button></p>` : ''}
       ${r.lossReasons.length > 0 ? `<ul>${r.lossReasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
       ${a.played && !r.won ? '<p>La vague se rejoue depuis l’architecture validée à la vague précédente. Si un choix plus ancien la rend impossible, revenir à une vague antérieure (en haut) : ça compte comme un rejeu.</p>' : ''}
+      ${wave ? renderFindings(analyzeWave(r, a.arch, wave, s.catalog, theme)) : ''}
       <div class="cols">
         <div>
           <h3>Jauges</h3>

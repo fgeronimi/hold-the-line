@@ -21,6 +21,19 @@ export const fortifiedCity: Theme = {
     database: { metaphor: 'Archives royales', shape: 'keep', color: '#c7bfae', accent: '#7a3b2e' },
     'message-queue': { metaphor: 'Relais de poste', shape: 'stables', color: '#9c6b3f', accent: '#6b4226' },
   },
+  narrator: { name: 'Le chambellan', icon: '🎩' },
+  narratives: {
+    launch:
+      'Sire, le bureau des raccourcis ouvre ses portes. Une centaine de voyageurs par seconde : presque tous demandent leur chemin, quelques-uns déposent un nouveau raccourci. Une tour de scribes et les archives devraient suffire… à condition de les relier.',
+    'read-surge':
+      'La nouvelle s’est répandue dans tout le royaume : dix fois plus de voyageurs demandent leur chemin. Les archives grondent sous les demandes. Comment les soulager sans vider le trésor ?',
+    'marketing-peak':
+      'Les crieurs annoncent une grande foire : pendant un tiers de la journée, cinq fois plus de monde, et la foule arrive en quelques instants. Vos scribes tiendront-ils le choc ?',
+    'noisy-client':
+      'La foire a réussi, la foule est restée. Cinquante marchands partenaires passent à grand débit… et deux bandes de pillards inondent la porte en visitant chaque raccourci du royaume.',
+    'click-tracking':
+      'Le trésorier veut compter chaque passage par un raccourci. Mais un voyageur ne doit jamais attendre qu’on ait fini de compter.',
+  },
   vehicles: {
     // La hauteur des personnages est la deuxième valeur de `size`.
     read: { metaphor: 'Messager (lecture)', color: '#3a86ff', size: [0.3, 0.55, 0.3], model: 'kaykit-chars/Rogue.glb' },

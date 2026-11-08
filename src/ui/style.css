@@ -46,3 +46,19 @@ body { max-width: 1400px; }
 .pop.ok { background: #2b9348; }
 .pop.ko { background: #d62828; }
 .pop.shield { background: #2b2d42; }
+/* Le narrateur : portrait et bulle. */
+.speech { display: flex; gap: 10px; align-items: flex-start; margin: 6px 0; }
+.speech .speaker { font-size: 28px; line-height: 1; }
+.speech p { margin: 0; padding: 8px 12px; background: #fff8e6; border: 1px solid #f0d9a0; border-radius: 10px; font-size: 15px; }
+.findings { display: grid; gap: 6px; margin: 8px 0; }
+.finding { padding: 6px 10px; border-left: 4px solid #ccc; background: #fafafa; }
+.finding p { margin: 3px 0; }
+.finding .says { font-style: italic; }
+.finding.bad { border-color: #d62828; }
+.finding.good { border-color: #2b9348; }
+.finding.tip { border-color: #f4a261; }
+/* Tableau de bord et alerte du rejeu. */
+.replay-bar .hud { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.replay-bar .hud .ok { color: #2b9348; font-weight: bold; }
+.replay-bar .hud .ko { color: #b00020; font-weight: bold; }
+.replay-alert { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); z-index: 2; padding: 6px 14px; border-radius: 8px; background: #d62828; color: #fff; font-weight: bold; box-shadow: 0 2px 8px rgba(0, 0, 0, .25); }

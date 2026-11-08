@@ -134,6 +134,9 @@ export class CityScene {
   private pressedAt: Vector2 | undefined;
   private frameId = 0;
   private last = performance.now();
+  /** Cadrage visé par un recentrage en cours : la caméra glisse vers lui à chaque image. */
+  private focus: { target: Vector3; zoom: number } | undefined;
+  private readonly home = { target: new Vector3(), zoom: 1 };
 
   /** Appelé à chaque image, avant le rendu : c'est par là que le rejeu avance. */
   onFrame: ((dt: number) => void) | undefined;
@@ -252,6 +255,12 @@ export class CityScene {
     (this.marker.material as MeshBasicMaterial).color.set(color);
   }
 
+  /** Recentre doucement la vue sur un bâtiment (zoom avant), ou sur tout le plateau. */
+  focusOn(nodeId: string | undefined, zoom = 1.8): void {
+    const at = nodeId ? this.layout.nodes[nodeId] : undefined;
+    this.focus = at ? { target: new Vector3(at.x, 0, at.z), zoom } : { target: this.home.target.clone(), zoom: this.home.zoom };
+  }
+
   /** Affiche l'état du tick courant et les véhicules en route à l'instant `time`. */
   showTick(time: number, tick: TickMetrics | undefined, journeys: Journey[], outcomes: Outcome[] = []): void {
     this.updateBuildings(tick);
@@ -300,11 +309,24 @@ export class CityScene {
     const dt = Math.min((now - this.last) / 1000, 0.1);
     this.last = now;
     this.onFrame?.(dt);
+    this.glideToFocus(dt);
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
     this.labels.render(this.scene, this.camera);
     this.frameId = requestAnimationFrame(this.frame);
   };
+
+  /** Rapproche cible et zoom du cadrage visé ; la caméra garde son angle isométrique. */
+  private glideToFocus(dt: number): void {
+    if (!this.focus) return;
+    const k = Math.min(1, dt * 4);
+    const delta = this.focus.target.clone().sub(this.controls.target).multiplyScalar(k);
+    this.controls.target.add(delta);
+    this.camera.position.add(delta);
+    this.camera.zoom += (this.focus.zoom - this.camera.zoom) * k;
+    this.camera.updateProjectionMatrix();
+    if (delta.length() < 1e-3 && Math.abs(this.focus.zoom - this.camera.zoom) < 1e-3) this.focus = undefined;
+  }
 
   private resetView(): void {
     const { minX, maxX, minZ, maxZ } = this.layout.bounds;
@@ -315,6 +337,7 @@ export class CityScene {
     this.camera.position.set(cx + d, d * 0.82, cz + d);
     this.controls.target.set(cx, 0, cz);
     this.camera.lookAt(cx, 0, cz);
+    this.home.target.set(cx, 0, cz);
   }
 
   private readonly fit = () => {
