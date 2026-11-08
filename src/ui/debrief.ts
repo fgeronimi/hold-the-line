@@ -16,7 +16,7 @@ export interface Finding {
   tone: 'bad' | 'warn' | 'good' | 'tip';
   /** Dit dans la métaphore. */
   says: string;
-  /** La même chose en vrai, avec les mots d'entretien. */
+  /** La même chose en vrai, avec les termes techniques. */
   tech?: string;
   remedy?: string;
   concept?: string;
@@ -175,7 +175,7 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     out.push({
       tone: 'tip',
       says: `Sans ${superfluous.map(metaphor).join(', ')}, la cité aurait tenu quand même : ${plural ? 'ils coûtent' : 'il coûte'} sans rien apporter cette vague.`,
-      tech: `${superfluous.map(name).join(', ')} : la vague rejouée sans ${plural ? 'eux' : 'lui'} respecte toujours le SLA. En entretien, justifier chaque composant par un besoin précis.`,
+      tech: `${superfluous.map(name).join(', ')} : la vague rejouée sans ${plural ? 'eux' : 'lui'} respecte toujours le SLA. Chaque composant d’un système doit répondre à un besoin précis.`,
       remedy: 'Le retirer, ou le garder en connaissance de cause pour une vague à venir.',
       concept: 'Over-engineering',
     });

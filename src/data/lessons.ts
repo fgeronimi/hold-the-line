@@ -2,7 +2,7 @@
  * Ce que le chambellan explique après une vague : par composant qui sature, et par cause
  * d'échec. `says` est dit dans la métaphore (`{name}` : le nom du bâtiment, placé pour que la
  * phrase reste correcte quel que soit son genre ou son nombre), `tech` donne
- * l'explication d'entretien, `remedy` les parades, `concept` la notion à réviser.
+ * l'explication technique, `remedy` les parades, `concept` la notion à réviser.
  */
 export interface Lesson {
   says: string;

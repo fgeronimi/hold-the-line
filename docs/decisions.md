@@ -110,13 +110,21 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 
 ## Prochaines étapes
 
-0. Phase 2 : la géographie (terrain, hameaux éloignés, distance = latence) ; question
-   d'entretien après chaque vague ; glisser-déposer et annulation ; marche animée ;
-   incidents en vagues 4 et 5 (demande un recalibrage).
+0. Phase 2 : glisser-déposer et annulation ; marche animée ; incidents en vagues 4 et 5
+   (demande un recalibrage). Pas de géographie (P2).
 
 1. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
    comprise (B4).
 2. Faire jouer 2 ou 3 personnes de la cible : publier sur GitHub Pages (dépôt distant
    et workflow de déploiement à créer).
-3. Explications en jeu tirées des fiches du calendrier (I2).
+3. Reproduire les fiches du calendrier dans le jeu (I2, P3), plus tard.
 4. Corriger la spec : colonne MVP du CDN et de l'autoscaling, « or gagné » (E1).
+
+## Positionnement
+
+| # | Décision | Pourquoi | Statut |
+|---|---|---|---|
+| P1 | Le jeu est **pédagogique** : il fait comprendre le system design, il n'entraîne pas à l'entretien. Les textes parlent de systèmes, pas de recruteurs ; pas de question d'entretien après les vagues. Remplace le cadrage « relance d'entretien » de la spec et de R9. | Choix de François. | Fait |
+| P2 | **Pas de géographie** (distance = latence, hameaux éloignés) : le plateau reste de la mise en scène. | Choix de François. | Fait |
+| P3 | Les fiches du calendrier Advent of System Design seront **reproduites dans le jeu**, pas seulement citées ni liées. Chantier ultérieur. | Choix de François : le jeu doit se suffire à lui-même. | À faire |
+

@@ -433,7 +433,7 @@ function renderAttempts(s: ViewState): string {
 
 /**
  * Double narration : le chambellan parle dans la métaphore, la ligne en italique dit la
- * même chose en vrai, avec les termes d'entretien. La métaphore seule ne s'apprend pas.
+ * même chose en vrai, avec les termes techniques. La métaphore seule ne s'apprend pas.
  */
 function speech(text: string, real?: string): string {
   return `<div class="speech"><span class="speaker">${theme.narrator.icon}</span>
@@ -443,7 +443,7 @@ function speech(text: string, real?: string): string {
 
 const TONE_ICONS: Record<Finding['tone'], string> = { good: '✅', warn: '⚡', bad: '❌', tip: '💡' };
 
-/** L'analyse du narrateur : ce qu'il dit, l'explication d'entretien, la parade, la notion à réviser. */
+/** L'analyse du narrateur : ce qu'il dit, l'explication technique, la parade, la notion à réviser. */
 function renderFindings(findings: Finding[]): string {
   if (findings.length === 0) return '';
   return `<div class="findings">${findings
