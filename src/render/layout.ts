@@ -1,4 +1,5 @@
 import type { Architecture } from '../engine/types.ts';
+import { hexAt, hexCenter, hexKey, hexLine, nearestFree, type Hex } from './hex.ts';
 
 export interface Point {
   x: number;
@@ -10,21 +11,28 @@ export interface Road {
   key: string;
   from: string;
   to: string;
+  /** Cases traversées, du nœud de départ au nœud d'arrivée inclus. */
+  cells: Hex[];
+  /** Centres de ces cases : le trajet des véhicules. */
   path: Point[];
 }
 
 export interface Layout {
   nodes: Record<string, Point>;
+  /** Case occupée par chaque nœud. */
+  cells: Record<string, Hex>;
   roads: Road[];
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
 }
 
-const SPACING = { x: 5, z: 3.5 };
+/** Écart visé entre colonnes et entre nœuds d'une colonne, avant calage sur la grille. */
+const SPACING = { x: 6, z: 3.5 };
 
 /**
- * Place la ville : une colonne par profondeur dans le graphe (le plus long chemin depuis
- * la source), le trafic s'écoule vers +x. Dans une colonne, chaque nœud est rangé à la
- * hauteur moyenne de ses parents, ce qui limite les croisements de routes.
+ * Place la cité sur la grille hexagonale : une colonne par profondeur dans le graphe (le
+ * plus long chemin depuis la source), le trafic s'écoule vers +x. Dans une colonne, chaque
+ * nœud vise la hauteur moyenne de ses parents, puis se cale sur la case libre la plus
+ * proche. Chaque lien devient un chemin de cases adjacentes.
  */
 export function layoutArchitecture(arch: Architecture): Layout {
   const parents = new Map(arch.nodes.map((n) => [n.id, [] as string[]]));
@@ -50,6 +58,8 @@ export function layoutArchitecture(arch: Architecture): Layout {
   }
 
   const nodes: Record<string, Point> = {};
+  const cells: Record<string, Hex> = {};
+  const taken = new Set<string>();
   for (const d of [...columns.keys()].sort((a, b) => a - b)) {
     const ids = columns.get(d)!;
     const wanted = (id: string) => {
@@ -58,18 +68,25 @@ export function layoutArchitecture(arch: Architecture): Layout {
     };
     const sorted = [...ids].sort((a, b) => wanted(a) - wanted(b) || a.localeCompare(b));
     sorted.forEach((id, i) => {
-      nodes[id] = { x: d * SPACING.x, z: (i - (sorted.length - 1) / 2) * SPACING.z };
+      const cell = nearestFree(hexAt({ x: d * SPACING.x, z: (i - (sorted.length - 1) / 2) * SPACING.z }), taken);
+      taken.add(hexKey(cell));
+      cells[id] = cell;
+      nodes[id] = hexCenter(cell);
     });
   }
 
   const roads = arch.links
-    .filter((l) => nodes[l.from] && nodes[l.to])
-    .map((l): Road => ({ key: `${l.from}→${l.to}`, from: l.from, to: l.to, path: roadPath(nodes[l.from]!, nodes[l.to]!) }));
+    .filter((l) => cells[l.from] && cells[l.to])
+    .map((l): Road => {
+      const line = hexLine(cells[l.from]!, cells[l.to]!);
+      return { key: `${l.from}→${l.to}`, from: l.from, to: l.to, cells: line, path: line.map(hexCenter) };
+    });
 
   const xs = Object.values(nodes).map((p) => p.x);
   const zs = Object.values(nodes).map((p) => p.z);
   return {
     nodes,
+    cells,
     roads,
     bounds: {
       minX: Math.min(0, ...xs),
@@ -78,13 +95,6 @@ export function layoutArchitecture(arch: Architecture): Layout {
       maxZ: Math.max(0, ...zs),
     },
   };
-}
-
-/** Route en baïonnette : droite si les deux nœuds sont alignés, sinon trois segments. */
-export function roadPath(a: Point, b: Point): Point[] {
-  if (a.z === b.z || a.x === b.x) return [a, b];
-  const mx = (a.x + b.x) / 2;
-  return [a, { x: mx, z: a.z }, { x: mx, z: b.z }, b];
 }
 
 export function pathLength(path: Point[]): number {

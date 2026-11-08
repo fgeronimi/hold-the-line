@@ -36,11 +36,14 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
   tient l'état et les actions (`data-action` délégués), `views.ts` rend tout en chaînes
   HTML à chaque changement, `editor.ts` et `calibration.ts` sont purs et testés.
 - `src/render/` : rejeu 3D isométrique (Three.js), chargé à la demande depuis le debrief.
-  `layout.ts` et `traffic.ts` sont purs et testés ; `scene.ts` ne fait qu'afficher un tick
+  `hex.ts` (grille hexagonale), `layout.ts` et `traffic.ts` sont purs et testés ; `scene.ts` ne fait qu'afficher un tick
   déjà calculé. La métaphore vient d'un thème en données (`src/data/themes/fortified-city.ts`).
-- `public/models/` : modèles Kenney (CC0) chargés par le rejeu. N'y copier que les modèles
-  utilisés, avec les textures qu'ils référencent (chemin `Textures/` conservé), et tenir
-  `CREDITS.md` à jour.
+- `public/models/kaykit/` : modèles glTF du KayKit Medieval Hexagon Pack (CC0), chargés
+  par le rejeu. N'y copier que les modèles utilisés (`.gltf` + `.bin`, à plat, avec la
+  texture commune `hexagons_medieval.png`) et tenir `public/models/CREDITS.md` à jour.
+- `public/models/kaykit-chars/` : personnages KayKit (CC0) allégés par
+  `node scripts/strip-characters.mjs <originaux> public/models/kaykit-chars`. Ne pas
+  copier un personnage original (~4 Mo) : le passer par ce script.
 - `src/balance/` : outillage d'équilibrage (énumération canonique, rapport par vague) ;
   hors moteur, il ne fait qu'appeler `simulateWave`.
 - `src/data/catalog.ts` : composants et évolutions. `src/data/scenarios/` : un fichier

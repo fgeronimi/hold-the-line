@@ -3,6 +3,7 @@ import {
   Box3,
   BoxGeometry,
   Color,
+  CylinderGeometry,
   DirectionalLight,
   DynamicDrawUsage,
   Group,
@@ -15,7 +16,6 @@ import {
   PCFSoftShadowMap,
   PlaneGeometry,
   Scene,
-  Vector3,
   WebGLRenderer,
   type Material,
 } from 'three';
@@ -23,35 +23,38 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 import type { Architecture, ArchNode, Catalog, RequestKind, TickMetrics } from '../engine/types.ts';
 import { REQUEST_KINDS } from '../engine/types.ts';
 import { escapeHtml } from './html.ts';
+import { HEX_ROW, HEX_SIZE, HEX_WIDTH, hexCenter, hexKey, type Hex } from './hex.ts';
 import { pointAlong, type Layout, type Point, type Road } from './layout.ts';
 import { ModelLibrary, type ModelId } from './models.ts';
 import type { BuildingStyle, Shape, Theme } from './theme.ts';
-import { progressAt, type Vehicle } from './traffic.ts';
+import { isReturning, progressAt, type Vehicle } from './traffic.ts';
 
 const MAX_VEHICLES_PER_KIND = 2500;
-const ROAD_WIDTH = 0.8;
 /** Écart entre les voies : chaque type de requête roule sur sa file, pour rester lisible. */
 const LANE = 0.2;
-/** Longueur d'un tronçon de rempart, à l'échelle des modèles. */
-const WALL = 0.8;
+/** Les tuiles sont un peu réduites : le joint entre elles dessine la grille. */
+const TILE_SCALE = 0.94;
 
-/** Les modèles Kenney dont chaque forme a besoin ; chargés une fois par rejeu. */
+const K = (name: string): ModelId => `kaykit/${name}`;
+
+/** Les modèles KayKit dont chaque forme a besoin ; chargés une fois par rejeu. */
 const SHAPE_MODELS: Record<Shape, ModelId[]> = {
-  hamlet: ['fantasy/wall-pane-wood', 'fantasy/roof', 'castle/tree-small'],
-  watchtower: ['castle/tower-square-base', 'castle/tower-square-mid-windows', 'castle/tower-square-top-roof', 'castle/flag'],
-  gatehouse: ['castle/wall-narrow-gate', 'castle/tower-square', 'castle/tower-hexagon-roof', 'castle/metal-gate'],
-  tower: ['castle/tower-hexagon-base', 'castle/tower-hexagon-mid', 'castle/tower-hexagon-roof'],
-  lectern: ['fantasy/structure', 'fantasy/overhang', 'fantasy/barrels', 'fantasy/detail-crate'],
-  keep: ['castle/tower-square-base', 'castle/tower-square-mid-windows', 'castle/tower-square-top-roof', 'castle/flag'],
-  stables: ['fantasy/fence-wood', 'fantasy/structure', 'fantasy/overhang', 'fantasy/detail-crate'],
+  hamlet: ['building_home_A_blue', 'building_home_B_blue', 'building_well_blue', 'tree_single_A'].map(K),
+  watchtower: ['building_tower_A_blue', 'flag_blue'].map(K),
+  gatehouse: ['wall_straight_gate', 'building_tower_base_blue', 'building_barracks_blue', 'flag_blue'].map(K),
+  tower: ['building_tower_A_blue', 'building_tower_B_blue'].map(K),
+  lectern: ['building_market_blue', 'sack'].map(K),
+  keep: ['building_castle_blue', 'building_tower_base_blue'].map(K),
+  stables: ['building_tavern_blue', 'fence_wood_straight', 'crate_A_small', 'sack'].map(K),
 };
 const SCENERY_MODELS: ModelId[] = [
-  'castle/wall',
-  'castle/tower-hexagon-base',
-  'castle/tower-hexagon-roof',
-  'castle/tree-large',
-  'castle/tree-small',
-];
+  'building_tower_base_blue',
+  'hex_grass',
+  'trees_A_medium',
+  'trees_A_small',
+  'tree_single_B',
+  'rock_single_A',
+].map(K);
 
 interface Building {
   node: ArchNode;
@@ -101,7 +104,10 @@ export class CityScene {
     baseUrl: string,
   ): Promise<CityScene> {
     const shapes = arch.nodes.map((n) => theme.buildings[n.type]?.shape).filter((s): s is Shape => s !== undefined);
-    const models = await ModelLibrary.load([...SCENERY_MODELS, ...shapes.flatMap((s) => SHAPE_MODELS[s])], baseUrl);
+    const characters = [...Object.values(theme.vehicles).map((v) => v.model), theme.hostile.model].filter(
+      (m): m is string => m !== undefined,
+    );
+    const models = await ModelLibrary.load([...SCENERY_MODELS, ...shapes.flatMap((s) => SHAPE_MODELS[s]), ...characters], baseUrl);
     return new CityScene(host, arch, catalog, theme, layout, models);
   }
 
@@ -134,8 +140,8 @@ export class CityScene {
     this.addLights();
     this.addGround();
     for (const road of layout.roads) this.addRoad(road);
+    this.addPaths();
     for (const node of arch.nodes) this.addBuilding(node, catalog);
-    this.addRamparts(arch, catalog);
     this.addTrees();
     this.addFleets();
 
@@ -190,9 +196,10 @@ export class CityScene {
   }
 
   private addLights(): void {
-    this.scene.add(new HemisphereLight('#ffffff', '#8aa07a', 1.6));
-    this.scene.add(new AmbientLight('#ffffff', 0.4));
-    const sun = new DirectionalLight('#fff4e0', 2.2);
+    // Lumière neutre : les couleurs du pack KayKit sont déjà chaudes, une lumière teintée les fausse.
+    this.scene.add(new HemisphereLight('#ffffff', '#6f8f5a', 0.8));
+    this.scene.add(new AmbientLight('#ffffff', 0.25));
+    const sun = new DirectionalLight('#ffffff', 1.7);
     const { minX, maxX, minZ, maxZ } = this.layout.bounds;
     const cx = (minX + maxX) / 2;
     const cz = (minZ + maxZ) / 2;
@@ -205,32 +212,64 @@ export class CityScene {
     this.scene.add(sun, sun.target);
   }
 
+  /**
+   * Le sol est le plateau hexagonal où le joueur bâtira : une tuile d'herbe KayKit par case,
+   * instanciées, avec un joint visible entre elles.
+   */
   private addGround(): void {
     const { minX, maxX, minZ, maxZ } = this.layout.bounds;
-    const ground = new Mesh(
-      new PlaneGeometry(maxX - minX + 14, maxZ - minZ + 14),
-      new MeshLambertMaterial({ color: this.theme.ground }),
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set((minX + maxX) / 2, 0, (minZ + maxZ) / 2);
-    ground.receiveShadow = true;
-    this.scene.add(ground);
+    const x0 = minX - 8;
+    const x1 = maxX + 8;
+    const z0 = minZ - 7;
+    const z1 = maxZ + 7;
+    const cells: Hex[] = [];
+    for (let r = Math.floor(z0 / HEX_ROW); r <= Math.ceil(z1 / HEX_ROW); r++) {
+      for (let q = Math.ceil(x0 / HEX_WIDTH - r / 2); q <= Math.floor(x1 / HEX_WIDTH - r / 2); q++) cells.push({ q, r });
+    }
+    const source = this.models.mesh(K('hex_grass'));
+    const tiles = new InstancedMesh(source.geometry, source.material, cells.length);
+    cells.forEach((c, i) => {
+      const p = hexCenter(c);
+      this.dummy.position.set(p.x, 0, p.z);
+      this.dummy.rotation.set(0, 0, 0);
+      this.dummy.scale.set(TILE_SCALE, 1, TILE_SCALE);
+      this.dummy.updateMatrix();
+      tiles.setMatrixAt(i, this.dummy.matrix);
+    });
+    this.dummy.scale.set(1, 1, 1);
+    tiles.receiveShadow = true;
+    this.scene.add(tiles);
+
+    // Sous les tuiles, un fond sombre : il remplit les joints et les fait ressortir.
+    const under = new Mesh(new PlaneGeometry(x1 - x0 + 4, z1 - z0 + 4), new MeshLambertMaterial({ color: this.theme.ground }));
+    under.rotation.x = -Math.PI / 2;
+    under.position.set((x0 + x1) / 2, -0.3, (z0 + z1) / 2);
+    this.scene.add(under);
+  }
+
+  /**
+   * Un chemin est une suite de cases pavées de terre, sous les bâtiments qui en occupent
+   * les extrémités. C'est la forme qu'aura un chemin tracé par le joueur.
+   */
+  private addPaths(): void {
+    const paved = new Map<string, Hex>();
+    for (const road of this.layout.roads) for (const c of road.cells) paved.set(hexKey(c), c);
+    // Six segments, premier sommet sur l'axe z : la même orientation « pointe en haut » que les tuiles.
+    const geometry = new CylinderGeometry(HEX_SIZE * TILE_SCALE, HEX_SIZE * TILE_SCALE, 0.06, 6);
+    const tiles = new InstancedMesh(geometry, new MeshLambertMaterial({ color: this.theme.road }), paved.size);
+    [...paved.values()].forEach((c, i) => {
+      const p = hexCenter(c);
+      this.dummy.position.set(p.x, 0.03, p.z);
+      this.dummy.rotation.set(0, 0, 0);
+      this.dummy.updateMatrix();
+      tiles.setMatrixAt(i, this.dummy.matrix);
+    });
+    tiles.receiveShadow = true;
+    this.scene.add(tiles);
   }
 
   private addRoad(road: Road): void {
     this.roads.set(road.key, road);
-    const material = new MeshLambertMaterial({ color: this.theme.road });
-    for (let i = 1; i < road.path.length; i++) {
-      const a = road.path[i - 1]!;
-      const b = road.path[i]!;
-      const length = Math.hypot(b.x - a.x, b.z - a.z);
-      // Le segment déborde d'une demi-largeur pour que les virages se rejoignent sans trou.
-      const seg = new Mesh(new BoxGeometry(ROAD_WIDTH, 0.04, length + ROAD_WIDTH), material);
-      seg.position.set((a.x + b.x) / 2, 0.02, (a.z + b.z) / 2);
-      seg.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
-      seg.receiveShadow = true;
-      this.scene.add(seg);
-    }
   }
 
   private addBuilding(node: ArchNode, catalog: Catalog): void {
@@ -264,7 +303,7 @@ export class CityScene {
 
   /**
    * Pose un modèle dans `parent`. Ses matériaux rougissent avec le bâtiment `b` ; le décor
-   * (remparts, arbres) n'en a pas et ne rougit jamais.
+   * (arbres, rochers) n'en a pas et ne rougit jamais.
    */
   private put(
     parent: Object3D,
@@ -281,7 +320,7 @@ export class CityScene {
     return object;
   }
 
-  /** Assemble les pièces Kenney qui forment ce composant dans la métaphore. */
+  /** Assemble les pièces KayKit qui forment ce composant dans la métaphore. */
   private build(b: Building, style: BuildingStyle, catalog: Catalog): void {
     const g = b.group;
     const levelOf = (effect: string) =>
@@ -289,35 +328,25 @@ export class CityScene {
 
     switch (style.shape) {
       case 'hamlet':
-        // Des maisons faites de quatre pans de bois et d'un toit, et un arbre.
-        for (const [x, z, r] of [[-0.8, -0.7, 0], [0.7, -0.6, 0.4], [-0.6, 0.8, -0.3], [0.9, 0.8, 0.1]] as const) {
-          const house = new Group();
-          for (const [px, pz, pr] of [[0, 0.5, 0], [0, -0.5, Math.PI], [-0.5, 0, -Math.PI / 2], [0.5, 0, Math.PI / 2]] as const) {
-            this.put(house, 'fantasy/wall-pane-wood', { x: px, z: pz, rotate: pr }, b);
-          }
-          this.put(house, 'fantasy/roof', { y: 1 }, b);
-          house.position.set(x, 0, z);
-          house.rotation.y = r;
-          house.scale.setScalar(0.7);
-          g.add(house);
-        }
-        this.put(g, 'castle/tree-small', { x: -1.6, z: 0.1 });
+        this.put(g, K('building_home_A_blue'), { x: -0.7, z: -0.7, rotate: 0.3 }, b);
+        this.put(g, K('building_home_B_blue'), { x: 0.8, z: -0.5, rotate: -0.4 }, b);
+        this.put(g, K('building_home_A_blue'), { x: -0.4, z: 0.9, rotate: 2.6 }, b);
+        this.put(g, K('building_well_blue'), { x: 0.7, z: 0.8 }, b);
+        this.put(g, K('tree_single_A'), { x: -1.6, z: 0.2 });
         break;
 
       case 'watchtower':
-        this.stack(g, ['castle/tower-square-base', 'castle/tower-square-mid-windows', 'castle/tower-square-top-roof'], 0.8, b);
-        this.put(g, 'castle/flag', { y: 2.4, scale: 0.8 }, b);
+        this.put(g, K('building_tower_A_blue'), {}, b);
+        this.put(g, K('flag_blue'), { y: 2.2, scale: 2 }, b);
         break;
 
       case 'gatehouse':
-        // Le mur percé d'une porte, entre deux tours : la route passe dessous.
-        this.put(g, 'castle/wall-narrow-gate', { scale: 1.5, x: -0.25 }, b);
-        for (const z of [-1.1, 1.1]) {
-          this.put(g, 'castle/tower-square', { z, scale: 1.1 }, b);
-          this.put(g, 'castle/tower-hexagon-roof', { z, y: 1.44, scale: 1.1 }, b);
-        }
-        // Le rate limiting devient une herse baissée dans la porte.
-        if (levelOf('rateLimit') > 0) this.put(g, 'castle/metal-gate', { x: -0.05, scale: 1.4 }, b);
+        // La porte est un mur percé, flanqué de deux tours : la route passe dessous.
+        this.put(g, K('wall_straight_gate'), { rotate: Math.PI / 2 }, b);
+        for (const z of [-1.3, 1.3]) this.put(g, K('building_tower_base_blue'), { z }, b);
+        this.put(g, K('flag_blue'), { y: 1.4, scale: 2.5 }, b);
+        // Le rate limiting devient la caserne de la garde, accolée à la porte côté cité.
+        if (levelOf('rateLimit') > 0) this.put(g, K('building_barracks_blue'), { x: 1.4, z: -2.1, rotate: Math.PI }, b);
         break;
 
       case 'tower': {
@@ -325,164 +354,106 @@ export class CityScene {
         const max = 1 + levelOf('instances') + levelOf('autoscaling');
         const cols = Math.ceil(Math.sqrt(max));
         for (let i = 0; i < max; i++) {
-          const tower = new Group();
-          const floors = 1 + ((i * 37) % 3);
-          const parts: ModelId[] = [
-            'castle/tower-hexagon-base',
-            ...Array<ModelId>(floors).fill('castle/tower-hexagon-mid'),
-            'castle/tower-hexagon-roof',
-          ];
-          this.stack(tower, parts, 0.85, b);
-          tower.position.set(
-            ((i % cols) - (cols - 1) / 2) * 0.95,
-            0,
-            (Math.floor(i / cols) - (Math.ceil(max / cols) - 1) / 2) * 0.95,
-          );
+          const tower = this.put(g, K(i % 2 === 0 ? 'building_tower_A_blue' : 'building_tower_B_blue'), {
+            x: ((i % cols) - (cols - 1) / 2) * 1.1,
+            z: (Math.floor(i / cols) - (Math.ceil(max / cols) - 1) / 2) * 1.1,
+            scale: 0.8,
+            rotate: (i * 1.3) % (Math.PI * 2),
+          }, b);
           tower.visible = i === 0;
           b.instances.push(tower);
-          g.add(tower);
         }
         break;
       }
 
       case 'lectern':
-        // Une échoppe de bois sous auvent : le scribe y lit sans aller jusqu'aux archives.
-        this.put(g, 'fantasy/structure', { scale: 1.1 }, b);
-        this.put(g, 'fantasy/overhang', { y: 0.8, z: 0.6, scale: 1.1 }, b);
-        this.put(g, 'fantasy/barrels', { x: 0.1, z: 0.1 }, b);
-        this.put(g, 'fantasy/detail-crate', { x: -0.7, z: 0.5 }, b);
+        // Le comptoir du marché : le scribe y trouve la réponse sans aller jusqu'aux archives.
+        this.put(g, K('building_market_blue'), { scale: 0.9 }, b);
+        this.put(g, K('sack'), { x: 0.9, z: 0.5, scale: 2 }, b);
         break;
 
       case 'keep': {
-        this.stack(
-          g,
-          ['castle/tower-square-base', 'castle/tower-square-mid-windows', 'castle/tower-square-mid-windows', 'castle/tower-square-top-roof'],
-          1.5,
-          b,
-        );
-        this.put(g, 'castle/flag', { y: 5.3, scale: 1.2 }, b);
-        // Une annexe par réplica en lecture.
+        this.put(g, K('building_castle_blue'), { scale: 0.9 }, b);
+        // Une tour annexe par réplica en lecture.
         const replicas = levelOf('readReplicas');
         for (let i = 0; i < replicas; i++) {
-          const annex = new Group();
-          this.stack(annex, ['castle/tower-square-base', 'castle/tower-square-top-roof'], 0.7, b);
-          annex.position.set(-1.4 + (i % 3) * 0.8, 0, 1.4 + Math.floor(i / 3) * 0.8);
-          g.add(annex);
+          this.put(g, K('building_tower_base_blue'), { x: -1.6 + (i % 3) * 1, z: 1.7 + Math.floor(i / 3) * 1, scale: 0.8 }, b);
         }
         break;
       }
 
       case 'stables':
-        // Un enclos de bois et un abri : les coursiers en attente s'y alignent.
-        for (const x of [-0.5, 0.5]) {
-          this.put(g, 'fantasy/fence-wood', { x, z: -0.8 }, b);
-          this.put(g, 'fantasy/fence-wood', { x, z: 0.8 }, b);
+        // La taverne du relais et son enclos : les colis en attente s'y empilent.
+        this.put(g, K('building_tavern_blue'), { x: -1.2 }, b);
+        for (const z of [-0.6, 0.6]) this.put(g, K('fence_wood_straight'), { x: 1.1, z }, b);
+        for (const x of [0, 0.6]) {
+          this.put(g, K('fence_wood_straight'), { x, z: -1.1, rotate: Math.PI / 2 }, b);
+          this.put(g, K('fence_wood_straight'), { x, z: 1.1, rotate: Math.PI / 2 }, b);
         }
-        for (const z of [-0.4, 0.4]) this.put(g, 'fantasy/fence-wood', { x: 1, z, rotate: Math.PI / 2 }, b);
-        this.put(g, 'fantasy/structure', { x: -1.4 }, b);
-        this.put(g, 'fantasy/overhang', { x: -1.4, y: 0.8, z: 0.55 }, b);
         for (let i = 0; i < 12; i++) {
-          const crate = this.put(g, 'fantasy/detail-crate', { x: -0.7 + (i % 6) * 0.3, z: -0.4 + Math.floor(i / 6) * 0.8 }, b);
-          crate.visible = false;
-          b.parked.push(crate);
+          const parcel = this.put(g, K(i % 3 === 0 ? 'sack' : 'crate_A_small'), {
+            x: -0.2 + (i % 4) * 0.3,
+            z: -0.6 + Math.floor(i / 4) * 0.5,
+            scale: 2,
+          }, b);
+          parcel.visible = false;
+          b.parked.push(parcel);
         }
         break;
     }
   }
 
-  /** Empile des étages (base, milieux, toit) en lisant la hauteur réelle de chacun. */
-  private stack(parent: Object3D, parts: ModelId[], scale: number, b: Building): void {
-    let y = 0;
-    const size = new Vector3();
-    for (const id of parts) {
-      const piece = this.put(parent, id, { y, scale }, b);
-      y += new Box3().setFromObject(piece).getSize(size).y;
-    }
-  }
-
-  /**
-   * L'enceinte entoure tout ce qui n'est pas une source. Côté entrée, elle passe par la
-   * première rangée de bâtiments : la porte est dans le mur. Les tronçons que traverse
-   * une route sont omis : ce sont les ouvertures de la cité.
-   */
-  private addRamparts(arch: Architecture, catalog: Catalog): void {
-    if (!this.theme.ramparts) return;
-    const inside = arch.nodes.filter((n) => catalog.components[n.type]?.behavior !== 'source');
-    const points = inside.map((n) => this.layout.nodes[n.id]).filter((p) => p !== undefined);
-    if (points.length === 0) return;
-
-    const m = 2;
-    const minX = Math.min(...points.map((p) => p.x));
-    const maxX = Math.max(...points.map((p) => p.x)) + m;
-    const minZ = Math.min(...points.map((p) => p.z)) - m;
-    const maxZ = Math.max(...points.map((p) => p.z)) + m;
-
-    const roadPoints = this.layout.roads.flatMap((r) => sample(r.path, 0.2));
-    const nearRoad = (x: number, z: number) => roadPoints.some((p) => Math.hypot(p.x - x, p.z - z) < 0.75);
-    // Sur le mur d'entrée, la place des bâtiments d'entrée (la porte et ses tours) reste libre.
-    const nearEntry = (x: number, z: number) =>
-      Math.abs(x - minX) < 0.1 && points.some((p) => p.x === minX && Math.abs(p.z - z) < 1.6);
-
-    const wall = (x: number, z: number, alongX: boolean) => {
-      if (nearRoad(x, z) || nearEntry(x, z)) return;
-      this.put(this.scene, 'castle/wall', { x, z, scale: WALL, rotate: alongX ? 0 : Math.PI / 2 });
-    };
-    for (let x = minX + WALL / 2; x < maxX; x += WALL) {
-      wall(x, minZ, true);
-      wall(x, maxZ, true);
-    }
-    for (let z = minZ + WALL / 2; z < maxZ; z += WALL) {
-      wall(minX, z, false);
-      wall(maxX, z, false);
-    }
-    for (const [x, z] of [[minX, minZ], [minX, maxZ], [maxX, minZ], [maxX, maxZ]] as const) {
-      this.put(this.scene, 'castle/tower-hexagon-base', { x, z, scale: 1.1 });
-      this.put(this.scene, 'castle/tower-hexagon-roof', { x, z, y: 1.44, scale: 1.1 });
-    }
-  }
-
-  /** Quelques arbres hors les murs, placés de façon déterministe : le même rejeu, le même paysage. */
+  /** Bosquets et rochers autour des bâtiments, placés de façon déterministe : le même rejeu, le même paysage. */
   private addTrees(): void {
     const { minX, maxX, minZ, maxZ } = this.layout.bounds;
     const roadPoints = this.layout.roads.flatMap((r) => sample(r.path, 0.3));
     const nodes = Object.values(this.layout.nodes);
-    for (let i = 0; i < 40; i++) {
-      // Suite fixe (hachage multiplicatif de Knuth) : pas de Math.random dans le rendu.
-      const u = ((i * 2654435761) % 1000) / 1000;
-      const v = ((i * 40503 + 7919) % 1000) / 1000;
-      const x = minX - 5 + u * (maxX - minX + 10);
-      const z = minZ - 5 + v * (maxZ - minZ + 10);
-      const insideWalls = x > minX + 2.5 && x < maxX + 2.5 && z > minZ - 2.5 && z < maxZ + 2.5;
+    const kinds = ['trees_A_medium', 'trees_A_small', 'tree_single_B', 'rock_single_A'];
+    for (let i = 0; i < 80; i++) {
+      // Hachage fixe : pas de Math.random dans le rendu, le même rejeu donne le même paysage.
+      const u = hash(i * 2 + 1);
+      const v = hash(i * 2 + 2);
+      const x = minX - 6 + u * (maxX - minX + 12);
+      const z = minZ - 6 + v * (maxZ - minZ + 12);
       const crowded =
-        nodes.some((p) => Math.hypot(p.x - x, p.z - z) < 2) || roadPoints.some((p) => Math.hypot(p.x - x, p.z - z) < 1);
-      if (insideWalls || crowded) continue;
-      this.put(this.scene, i % 3 === 0 ? 'castle/tree-large' : 'castle/tree-small', { x, z, rotate: u * Math.PI * 2 });
+        nodes.some((p) => Math.hypot(p.x - x, p.z - z) < 2.2) || roadPoints.some((p) => Math.hypot(p.x - x, p.z - z) < 1.2);
+      if (crowded) continue;
+      this.put(this.scene, K(kinds[i % kinds.length]!), { x, z, rotate: u * Math.PI * 2 });
     }
   }
 
-  private addFleets(): void {
-    for (const kind of REQUEST_KINDS) {
-      const style = this.theme.vehicles[kind];
-      const [w, h, l] = style.size;
-      const mesh = new InstancedMesh(new BoxGeometry(w, h, l), new MeshLambertMaterial({ color: style.color }), MAX_VEHICLES_PER_KIND);
-      mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-      mesh.castShadow = true;
-      mesh.count = 0;
-      this.fleets.set(kind, mesh);
-      this.scene.add(mesh);
+  /**
+   * Une flotte instanciée par sorte de voyageur : le personnage du thème figé en pleine
+   * marche, ou une boîte de couleur s'il n'en a pas. `tint` recolore le personnage
+   * (les requêtes en échec reprennent le messager, en rouge).
+   */
+  private fleet(style: { color: string; size: [number, number, number]; model?: string }, tint?: string): InstancedMesh {
+    const [w, h, l] = style.size;
+    let mesh: InstancedMesh;
+    if (style.model) {
+      const { geometry, materials } = this.models.bakeCharacter(style.model, h);
+      const own = materials.map((m) => {
+        const c = m.clone();
+        if (tint && 'color' in c && c.color instanceof Color) c.color.set(tint);
+        return c;
+      });
+      mesh = new InstancedMesh(geometry, own, MAX_VEHICLES_PER_KIND);
+      mesh.userData.grounded = true;
+    } else {
+      mesh = new InstancedMesh(new BoxGeometry(w, h, l), new MeshLambertMaterial({ color: tint ?? style.color }), MAX_VEHICLES_PER_KIND);
     }
+    mesh.instanceMatrix.setUsage(DynamicDrawUsage);
+    mesh.castShadow = true;
+    mesh.count = 0;
+    this.scene.add(mesh);
+    return mesh;
+  }
+
+  private addFleets(): void {
+    for (const kind of REQUEST_KINDS) this.fleets.set(kind, this.fleet(this.theme.vehicles[kind]));
+    this.wrecks = this.fleet(this.theme.vehicles.read, this.theme.alert);
     const [w, h, l] = this.theme.vehicles.read.size;
-    this.wrecks = new InstancedMesh(new BoxGeometry(w, h, l), new MeshLambertMaterial({ color: this.theme.alert }), MAX_VEHICLES_PER_KIND);
-    this.wrecks.instanceMatrix.setUsage(DynamicDrawUsage);
-    this.wrecks.count = 0;
-    this.hostiles = new InstancedMesh(
-      new BoxGeometry(w * 1.2, h * 1.3, l),
-      new MeshLambertMaterial({ color: this.theme.hostile.color }),
-      MAX_VEHICLES_PER_KIND,
-    );
-    this.hostiles.instanceMatrix.setUsage(DynamicDrawUsage);
-    this.hostiles.count = 0;
-    this.scene.add(this.wrecks, this.hostiles);
+    this.hostiles = this.fleet({ ...this.theme.hostile, size: [w * 1.2, h * 1.1, l] });
   }
 
   private updateBuildings(tick: TickMetrics): void {
@@ -506,7 +477,8 @@ export class CityScene {
       const shed = n?.shed ?? 0;
       b.label.innerHTML =
         `<b>${escapeHtml(b.metaphor)}</b><span>${escapeHtml(b.techName)} · ${escapeHtml(id)}</span>` +
-        (u > 0 ? `<em class="${u > 1 ? 'hot' : ''}">charge ${Math.round(u * 100)} %</em>` : '') +
+        // La charge n'apparaît que quand elle compte : moins d'étiquettes qui se chevauchent.
+        (u > 0.6 ? `<em class="${u > 1 ? 'hot' : ''}">charge ${Math.round(u * 100)} %</em>` : '') +
         (failed > 0 ? `<em class="hot">✕ ${Math.round(failed)} req/s en échec</em>` : '') +
         (shed > 0 ? `<em>🛡 ${Math.round(shed)} req/s abusives repoussées</em>` : '');
     }
@@ -529,8 +501,11 @@ export class CityScene {
       const { point, angle } = pointAlong(road.path, turned ? 0.25 + f * 0.75 : f);
       const lane = v.hostile ? 2 * LANE : v.failed ? -2 * LANE : (REQUEST_KINDS.indexOf(v.kind) - 1) * LANE;
       const [, h] = this.theme.vehicles[v.kind].size;
-      this.dummy.position.set(point.x + Math.cos(angle) * lane, 0.04 + h / 2, point.z - Math.sin(angle) * lane);
-      this.dummy.rotation.set(0, angle, 0);
+      // Les personnages ont les pieds à zéro et sautillent en marchant ; une boîte est centrée.
+      const hop = Math.abs(Math.sin((time + v.start * 7.3) * 9)) * 0.06;
+      const y = fleet.userData.grounded ? 0.06 + hop : 0.04 + h / 2;
+      this.dummy.position.set(point.x + Math.cos(angle) * lane, y, point.z - Math.sin(angle) * lane);
+      this.dummy.rotation.set(0, isReturning(v, time) ? angle + Math.PI : angle, 0);
       this.dummy.updateMatrix();
       fleet.setMatrixAt(i, this.dummy.matrix);
       if (v.hostile) repelled++;
@@ -558,4 +533,10 @@ function sample(path: Point[], step: number): Point[] {
     for (let k = 0; k <= n; k++) out.push({ x: a.x + ((b.x - a.x) * k) / n, z: a.z + ((b.z - a.z) * k) / n });
   }
   return out;
+}
+
+/** Pseudo-aléatoire déterministe dans [0, 1[, sans corrélation visible entre indices voisins. */
+function hash(n: number): number {
+  const x = Math.sin(n * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
 }

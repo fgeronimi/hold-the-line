@@ -3,16 +3,18 @@ import { catalog } from '../src/data/catalog.ts';
 import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { simulateWave } from '../src/engine/simulate.ts';
-import { layoutArchitecture, pathLength, pointAlong, roadPath } from '../src/render/layout.ts';
-import { failuresForTick, progressAt, trafficScale, tripDuration, vehiclesForTick } from '../src/render/traffic.ts';
+import { HEX_WIDTH, hexAt, hexCenter, hexDistance, hexKey, hexLine, nearestFree } from '../src/render/hex.ts';
+import { layoutArchitecture, pathLength, pointAlong } from '../src/render/layout.ts';
+import { failuresForTick, isReturning, progressAt, trafficScale, tripDuration, vehiclesForTick } from '../src/render/traffic.ts';
 
 describe('layoutArchitecture', () => {
   it('range les nœuds en colonnes selon leur profondeur', () => {
     const l = layoutArchitecture(A.scaled(3));
     expect(l.nodes.src!.x).toBeLessThan(l.nodes.lb!.x);
     expect(l.nodes.lb!.x).toBeLessThan(l.nodes.app!.x);
-    // Le cache et la base sont tous deux juste après le serveur.
-    expect(l.nodes.cache!.x).toBe(l.nodes.db!.x);
+    // Le cache et la base sont tous deux juste après le serveur, à une case près : le calage
+    // sur la grille peut décaler un nœud vers la case libre voisine.
+    expect(Math.abs(l.nodes.cache!.x - l.nodes.db!.x)).toBeLessThanOrEqual(HEX_WIDTH);
     expect(l.nodes.cache!.z).not.toBe(l.nodes.db!.z);
   });
 
@@ -27,17 +29,42 @@ describe('layoutArchitecture', () => {
   });
 });
 
-describe('chemins', () => {
-  it('fait une baïonnette entre deux nœuds décalés', () => {
-    const p = roadPath({ x: 0, z: 0 }, { x: 4, z: 2 });
-    expect(p).toEqual([{ x: 0, z: 0 }, { x: 2, z: 0 }, { x: 2, z: 2 }, { x: 4, z: 2 }]);
-    expect(pathLength(p)).toBe(6);
+describe('grille hexagonale', () => {
+  it('retrouve la case de son propre centre', () => {
+    for (const h of [{ q: 0, r: 0 }, { q: 3, r: -2 }, { q: -4, r: 5 }]) expect(hexAt(hexCenter(h))).toEqual(h);
   });
 
+  it('trace une ligne de cases adjacentes', () => {
+    const line = hexLine({ q: 0, r: 0 }, { q: 4, r: -3 });
+    expect(line[0]).toEqual({ q: 0, r: 0 });
+    expect(line.at(-1)).toEqual({ q: 4, r: -3 });
+    for (let i = 1; i < line.length; i++) expect(hexDistance(line[i - 1]!, line[i]!)).toBe(1);
+  });
+
+  it('trouve la case libre la plus proche', () => {
+    const taken = new Set([hexKey({ q: 0, r: 0 })]);
+    const free = nearestFree({ q: 0, r: 0 }, taken);
+    expect(hexDistance(free, { q: 0, r: 0 })).toBe(1);
+  });
+
+  it('place chaque nœud sur sa propre case, et chaque lien sur des cases adjacentes', () => {
+    const l = layoutArchitecture(A.queuedClicks(3));
+    const keys = Object.values(l.cells).map(hexKey);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const road of l.roads) {
+      expect(road.cells[0]).toEqual(l.cells[road.from]);
+      expect(road.cells.at(-1)).toEqual(l.cells[road.to]);
+      for (let i = 1; i < road.cells.length; i++) expect(hexDistance(road.cells[i - 1]!, road.cells[i]!)).toBe(1);
+    }
+  });
+});
+
+describe('chemins', () => {
   it('suit le chemin à la bonne distance', () => {
-    const p = roadPath({ x: 0, z: 0 }, { x: 4, z: 2 });
-    expect(pointAlong(p, 0.5).point).toEqual({ x: 2, z: 1 });
-    expect(pointAlong(p, 1).point).toEqual({ x: 4, z: 2 });
+    const p = [{ x: 0, z: 0 }, { x: 2, z: 0 }, { x: 2, z: 2 }];
+    expect(pathLength(p)).toBe(4);
+    expect(pointAlong(p, 0.5).point).toEqual({ x: 2, z: 0 });
+    expect(pointAlong(p, 1).point).toEqual({ x: 2, z: 2 });
     expect(pointAlong(p, 0).point).toEqual({ x: 0, z: 0 });
   });
 });
@@ -73,6 +100,8 @@ describe('trafic', () => {
     expect(progressAt(toCache, toCache.start + toCache.duration * 1.5)).toBeCloseTo(0.5);
     expect(progressAt(toCache, toCache.start + toCache.duration * 2)).toBeUndefined();
     expect(progressAt(toCache, toCache.start - 0.1)).toBeUndefined();
+    expect(isReturning(toCache, toCache.start + toCache.duration * 0.5)).toBe(false);
+    expect(isReturning(toCache, toCache.start + toCache.duration * 1.5)).toBe(true);
   });
 
   it('fait faire demi-tour aux requêtes en échec, sur la route d’arrivée la plus chargée', () => {

@@ -91,6 +91,11 @@ export function failuresForTick(tick: TickMetrics, t: number, scale: TrafficScal
   return out;
 }
 
+/** Sur un aller-retour, vrai pendant le retour : le voyageur doit alors faire face à son départ. */
+export function isReturning(v: Vehicle, time: number): boolean {
+  return v.roundTrip && time - v.start >= v.duration;
+}
+
 /** Fraction parcourue du trajet à l'instant `time`, ou `undefined` si le véhicule n'est pas sur la route. */
 export function progressAt(v: Vehicle, time: number): number | undefined {
   const elapsed = time - v.start;

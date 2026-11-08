@@ -7,12 +7,11 @@ import type { Theme } from '../../render/theme.ts';
 export const fortifiedCity: Theme = {
   id: 'fortified-city',
   title: 'Les portes de la cité',
-  ground: '#a9c47f',
-  road: '#b89a6a',
+  ground: '#3f5a2c',
+  road: '#c9a46c',
   alert: '#d62828',
   failed: 'Requête en échec',
-  hostile: { metaphor: 'Pillards repoussés (scraper)', color: '#2b2d42' },
-  ramparts: { color: '#b9b2a4' },
+  hostile: { metaphor: 'Pillards squelettes (scraper)', color: '#2b2d42', model: 'kaykit-chars/Skeleton_Warrior.glb' },
   buildings: {
     'traffic-source': { metaphor: 'Hameaux', shape: 'hamlet', color: '#e8d5a8', accent: '#9c6b3f' },
     cdn: { metaphor: 'Avant-poste', shape: 'watchtower', color: '#b9b2a4', accent: '#3f7cac' },
@@ -23,8 +22,9 @@ export const fortifiedCity: Theme = {
     'message-queue': { metaphor: 'Relais de poste', shape: 'stables', color: '#9c6b3f', accent: '#6b4226' },
   },
   vehicles: {
-    read: { metaphor: 'Messager (lecture)', color: '#3a86ff', size: [0.2, 0.3, 0.36] },
-    write: { metaphor: 'Charrette (écriture)', color: '#fb8500', size: [0.3, 0.26, 0.5] },
-    async: { metaphor: 'Pigeon voyageur (async)', color: '#9b5de5', size: [0.14, 0.14, 0.2] },
+    // La hauteur des personnages est la deuxième valeur de `size`.
+    read: { metaphor: 'Messager (lecture)', color: '#3a86ff', size: [0.3, 0.55, 0.3], model: 'kaykit-chars/Rogue.glb' },
+    write: { metaphor: 'Porteur (écriture)', color: '#fb8500', size: [0.3, 0.6, 0.3], model: 'kaykit-chars/Barbarian.glb' },
+    async: { metaphor: 'Mage messager (async)', color: '#9b5de5', size: [0.3, 0.55, 0.3], model: 'kaykit-chars/Mage.glb' },
   },
 };

@@ -16,9 +16,12 @@ export interface BuildingStyle {
 
 export interface VehicleStyle {
   metaphor: string;
+  /** Couleur de légende, et de la boîte qui remplace le personnage s'il n'y en a pas. */
   color: string;
   /** Largeur, hauteur, longueur, en unités de la grille. */
   size: [number, number, number];
+  /** Personnage animé (`.glb` sous `public/models/`), figé dans une pose de marche. */
+  model?: string;
 }
 
 export interface Theme {
@@ -31,9 +34,7 @@ export interface Theme {
   /** Nom d'une requête en échec qui fait demi-tour. */
   failed: string;
   /** Trafic abusif repoussé par le rate limiting : l'ennemi du tower defense. */
-  hostile: { metaphor: string; color: string };
-  /** Enceinte autour de tout ce qui n'est pas une source : la cité à défendre. */
-  ramparts?: { color: string };
+  hostile: { metaphor: string; color: string; model?: string };
   buildings: Record<string, BuildingStyle>;
   vehicles: Record<RequestKind, VehicleStyle>;
 }

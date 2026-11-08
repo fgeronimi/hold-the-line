@@ -23,7 +23,7 @@ textarea { width: 100%; height: 200px; font-family: monospace; }
 .replay-stage { position: relative; flex: 1; overflow: hidden; }
 .city-labels { position: absolute; inset: 0; pointer-events: none; }
 .city-label { display: flex; flex-direction: column; align-items: center; padding: 2px 6px; border-radius: 4px;
-  background: rgba(255, 255, 255, .85); font-size: 11px; line-height: 1.2; text-align: center; white-space: nowrap; }
+  background: rgba(255, 255, 255, .8); font-size: 10px; line-height: 1.2; text-align: center; white-space: nowrap; }
 .city-label span { color: #555; }
 .city-label em { font-style: normal; color: #333; }
 .city-label em.hot { color: #b00020; font-weight: bold; }
