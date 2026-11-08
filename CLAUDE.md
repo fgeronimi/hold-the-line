@@ -37,7 +37,7 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
   actions (`data-action` délégués) ; `views.ts` rend en chaînes HTML les calques posés sur
   le plateau (barre du haut, barre d'outils, fiche, fenêtres, tiroir de debug) à chaque
   changement ; `board.ts` (poser, déplacer, relier par A*), `debrief.ts` (analyse du
-  chambellan), `editor.ts` et `calibration.ts` sont purs et testés.
+  chambellan), `tutorial.ts` (guide de la vague 1), `editor.ts` et `calibration.ts` sont purs et testés.
 - Mode debug : `?debug` dans l'URL ou la touche D. Essais hors partie, vue tableau et
   calibrage n'existent que là.
 - Le plateau 3D (`CityScene`) est créé une fois dans `#board`, **hors** des zones
@@ -75,7 +75,7 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
 - `tests/balance.test.ts` énumère un espace réduit qui doit contenir toutes les réponses
   attendues : si un recalibrage déplace une réponse hors de cet espace, l'agrandir.
 - Le MVP de la spec a été élargi au CDN et à l'autoscaling (`docs/decisions.md`, X1–X4).
-- Le calibrage et la partie sont gardés dans `localStorage` (clé `hold-the-line:v4`) :
+- Le calibrage et la partie sont gardés dans `localStorage` (clé `hold-the-line:v5`) :
   changer la version de la clé dès que la forme de la partie ou du catalogue change.
 - Tout texte venant de l'état passe par `esc()` (interface) ou `escapeHtml()` (rendu)
   avant d'entrer dans le HTML.
@@ -84,6 +84,10 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
 - `ArchNode.cell` et `ArchLink.path` sont de la mise en scène : la simulation les ignore.
   Tout brouillon passe par `autoPlace` dans `update()`, pour qu'un bâtiment ajouté sans
   case (vue tableau, ancienne sauvegarde) en reçoive une.
+- Double narration (décision I6) : nom technique d'abord, métaphore entre parenthèses ;
+  toute réplique du chambellan a sa ligne « En vrai ».
+- Les incidents (X5) sont calés pour ne faire perdre aucune réponse attendue : en ajouter
+  un, c'est relancer `npm run balance` et `url-shortener.test.ts`.
 - Pas de cascade de pannes : un aval saturé ne ralentit pas l'amont (décision M3, V2).
 - Le travail d'un flux est divisé par sa taille de lot (`batch`), mais les échecs se
   comptent toujours en messages.

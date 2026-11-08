@@ -24,6 +24,7 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 | E3 | Le coût de migration entre dans la facture de la vague, contre le même plafond ; le debrief l'affiche sur une ligne « migration ». | C'est la leçon : un choix de la vague 2 peut coûter la vague 3. | Fait (affichage debrief à faire) |
 | E4 | Une vague perdue se rejoue sans limite, depuis l'architecture de fin de la vague précédente. Pas de défaite définitive en phase 1. | Refaire les vagues déjà gagnées n'apprend rien. | Fait (`engine/game.ts`) |
 | E6 | On peut revenir au début de toute vague déjà atteinte, avec l'architecture validée à ce moment-là ; le retour compte comme un rejeu de la vague visée et efface les scores suivants. | Sans ça, un choix passé peut bloquer la partie : depuis le parcours CDN (vagues 3 et 4), aucune architecture ne gagne la vague 5, et le rejeu repartait toujours de la vague 4. | Fait |
+| E7 | **Trois étoiles par vague**, une par objectif : tenir la vague, la tenir du premier coup, et rester économe (facture ≤ `thriftyCost`, calé sur la stratégie gagnante la moins chère). Le score reste à côté. | Des objectifs lisibles avant de jouer, là où le score est une moyenne de marges opaque. L'étoile d'économie récompense la réponse la plus fine sans punir les autres stratégies, qui gagnent quand même. | Fait |
 | E5 | Score d'une vague = 100 × moyenne des marges (coût, complexité, échecs, latence), bornée à [0, 1], moins 20 % par rejeu. Score de partie = somme des vagues. Coefficients en données. | Récompense la marge, comme le dit la spec, et pénalise les essais à l'aveugle. | Fait |
 
 ## Compromis
@@ -54,6 +55,8 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 | I3 | Le cache est en **cache-aside** : le serveur le consulte, et en cas d'absence lit lui-même la base. On relie serveur → cache et serveur → base ; un cache ne peut alimenter aucun composant. Le CDN reste en ligne, devant le serveur. | Le modèle précédent était un cache read-through (serveur → cache → base) : faux pour le pattern attendu en entretien, et contre-intuitif à câbler. Retour de jeu de François. | Fait ; équilibrage inchangé |
 | I4 | **Construction sur le plateau hexagonal**, devenu l'écran principal : palette de bâtiments, outils Sélection / Relier / Retirer, fiche du bâtiment (évolutions, chemins, déplacer, retirer), facture et lancement dans un panneau latéral ; la vague se rejoue sur le même plateau. On relie en cliquant A puis B : le plus court chemin de cases (A*) qui contourne les bâtiments est tracé seul ; un bâtiment posé ou déplacé fait retracer les chemins concernés. Les cases et chemins sont gardés sur l'architecture (`ArchNode.cell`, `ArchLink.path`) mais **ignorés par la simulation**. Les tableaux HTML restent en « vue tableau » repliée. | Le joueur construit lui-même, comme dans un vrai jeu de construction. Chemins décoratifs d'abord pour valider l'ergonomie sans toucher au moteur ni à l'équilibrage. Piste ouverte : faire compter la longueur des chemins (coût, latence), ce qui rendrait le placement stratégique mais imposerait de recalibrer. | Fait |
 | I5 | **Mode jeu plein écran.** Le plateau occupe toute la fenêtre ; l'interface flotte par-dessus en panneaux HTML habillés (parchemin, bois) : barre du haut (vague, coût, complexité, SLA, score, menu), barre d'outils du bas (outils, bâtiments avec icône et coût, « Lancer la vague »), fiche du bâtiment à droite. Déroulé en phases : briefing du chambellan → construction → vague jouée **en direct** sur le plateau (barre de vague, « Passer ») → debrief en fenêtre (« Vague suivante », « Réessayer », « Revoir la vague »). Le **mode debug** (`?debug` ou touche D) ouvre un tiroir : essais hors partie, vue tableau, calibrage, détail chiffré et comparaison des tentatives. | « Tout en 3D, en mode jeu » demandé par François : l'interface en listes devenait l'outil de calibrage, pas le jeu. HTML plutôt que rendu dans la scène : texte net, accessible, rapide à faire évoluer. | Fait |
+| I6 | **Double narration, termes techniques d'abord.** Le chambellan parle dans la métaphore ; sous chaque réplique, une ligne en italique « En vrai » dit la même chose avec les mots d'entretien. Partout ailleurs (barre d'outils, étiquettes, fiche, alertes, légende), le nom technique vient en premier et la métaphore entre parenthèses. | La métaphore seule ne s'apprend pas : le joueur doit sortir en sachant ce qu'est un load balancer, pas une porte de la cité. |  Fait |
+| I7 | **Tutoriel de la vague 1**, déduit du brouillon (`tutorialStep`) : poser le serveur, relier les clients, poser la base, relier, lancer. Le bouton à utiliser clignote. | Sans compteur d'étapes, le guide suit un joueur qui construit dans le désordre, défait ou passe par la vue tableau. | Fait |
 | I2 | Pas de lien vers le calendrier dans le debrief. Le champ `conceptRef` des vagues reste : le contenu des fiches servira à écrire des explications dans le jeu. | Envoyer le joueur hors du jeu casse la boucle ; l'explication doit venir au moment où la vague casse. | Lien retiré ; explications à faire (lire `concepts.js`, repo voisin, `--add-dir` nécessaire) |
 
 ## Phase 2 : rendu
@@ -84,6 +87,7 @@ scaling permanent ne soulage le serveur au pic. Un essai par des réplicas plus 
 | X2 | L'**autoscaling** entre dans le MVP : évolution du serveur, plafond d'instances en niveau, démarrage en 2 ticks, cible de 70 % de charge, instances facturées au prorata de leurs ticks de service. Réduire est immédiat. | Moins cher que le scaling permanent sur un pic court, mais des échecs pendant la montée en charge et +2 de complexité : le compromis de la spec. Sans socle d'instances fixes, il arrive trop tard. | Fait |
 | X3 | Une source peut être en **longue traîne** (`longTail`) : ses lectures ne tombent dans aucun cache, CDN compris. Le scraper l'est. | Un crawler visite tous les liens. Sans ça, le CDN absorbait le scraper et rendait le rate limiting inutile en vague 4. | Fait |
 | X4 | La vague 3 monte en rampe sur 4 ticks (×2, ×3,5, puis ×5) au lieu d'un saut. | Une campagne monte en quelques secondes ; un saut instantané rendait l'autoscaling injouable. | Fait |
+| X5 | **Incidents annoncés** au briefing, déterministes : `instance-down` (des instances d'un type tombent, à zéro le composant ne sert plus rien) et `cold-cache` (taux de succès à 0 puis remontée linéaire). Vague 2 : le cache redémarre à froid (ticks 31 à 33). Vague 3 : une instance du serveur tombe après le pic (ticks 46 à 48). Rien en vagues 4 et 5. | Ils enseignent la redondance (SPOF) et le cache stampede sans tirage aléatoire. Calés pour ne faire perdre aucune réponse attendue : en vague 4 ou 5, toute panne fait perdre toutes les réponses, il faudrait recalibrer. Le debrief dit ce que la panne a coûté et ce qui l'aurait encaissée. | Fait |
 
 ## Calibrage actuel du raccourcisseur
 
@@ -95,15 +99,17 @@ scaling permanent ne soulage le serveur au pic. Un essai par des réplicas plus 
 | 4 | 165 | 9 | LB + scaling + rate limiting + cache (160) · CDN + LB + rate limiting + cache (160) ; paliers gagnants : 40 et 80 |
 | 5 | 225 | 12 | LB + scaling + rate limiting + cache + file (225 avec 5 instances, 205 avec 4) (réponse unique assumée) |
 
+Seuils de l'étoile d'économie : 70, 85, 145, 160, 205.
+
 SLA constant : 1 % d'échecs, 60 ms de latence p95. Scraper : 2 adresses à 1 000 req/s,
 en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagues, et
 3 vagues sur 5 ont au moins deux stratégies.
 
 ## Prochaines étapes
 
-0. Phase 2 : la géographie (terrain, hameaux éloignés, distance = latence) ; incidents
-   en pleine vague ; trois étoiles par vague ; question d'entretien après chaque vague ;
-   tutoriel de la vague 1 ; glisser-déposer et annulation ; marche animée.
+0. Phase 2 : la géographie (terrain, hameaux éloignés, distance = latence) ; question
+   d'entretien après chaque vague ; glisser-déposer et annulation ; marche animée ;
+   incidents en vagues 4 et 5 (demande un recalibrage).
 
 1. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
    comprise (B4).

@@ -6,6 +6,8 @@ import { validateArchitecture } from '../engine/validate.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { calibrationGroups, formatField, getAt } from './calibration.ts';
 import { analyzeWave, type Finding } from './debrief.ts';
+import { tutorialStep } from './tutorial.ts';
+import type { Stars } from '../engine/score.ts';
 
 
 export interface Attempt {
@@ -20,6 +22,8 @@ export interface Attempt {
   settings: string[];
   /** Architecture jouée, pour la rejouer en 3D. */
   arch: Architecture;
+  /** Objectifs atteints, comptés au moment de la tentative (les rejeux d'avant comptent). */
+  stars: Stars;
 }
 
 /** Outil actif sur le plateau. */
@@ -62,6 +66,16 @@ const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 const pct = (n: number) => `${(n * 100).toFixed(2)} %`;
 
 const totalScore = (s: ViewState) => s.game.scores.reduce((a, x) => a + x, 0);
+const totalStars = (s: ViewState) => s.game.stars.reduce((a, x) => a + x, 0);
+
+/** Nom technique d'abord, la métaphore entre parenthèses. */
+function nameOf(type: string, catalog: Catalog): string {
+  const tech = catalog.components[type]?.techName ?? type;
+  const metaphor = theme.buildings[type]?.metaphor;
+  return metaphor ? `${tech} (${metaphor})` : tech;
+}
+
+const starIcons = (n: number) => '★'.repeat(n) + '☆'.repeat(3 - n);
 
 /** La barre du haut : la vague, ce que coûte la cité en construction, le score, le menu. */
 export function renderHud(s: ViewState): string {
@@ -99,7 +113,8 @@ export function renderHud(s: ViewState): string {
         <span>${wave ? `Vague ${shownIndex + 1}/${n} — ${esc(wave.title)}` : 'Partie terminée'}</span></div>
       <div class="hud-gauges">${gauges}</div>
       <div class="hud-actions">
-        <span class="gauge" title="Score">⭐ ${fmt(totalScore(s))}</span>
+        <span class="gauge stars" title="Étoiles gagnées">★ ${totalStars(s)} / ${n * 3}</span>
+        <span class="gauge" title="Score">🏅 ${fmt(totalScore(s))}</span>
         ${wave ? `<button data-action="show-briefing" title="Revoir le briefing">${theme.narrator.icon}</button>` : ''}
         <button data-action="menu" title="Menu">☰</button>
       </div>
@@ -113,13 +128,15 @@ export function renderToolbar(s: ViewState): string {
   if (s.phase !== 'build' || !wave) return '';
   const { catalog, draft, tool } = s;
   const active = (on: boolean) => (on ? ' active' : '');
+  const guide = s.game.waveIndex === 0 ? tutorialStep(draft, catalog) : undefined;
+  const hint = (on: boolean) => (on ? ' hint' : '');
   const tools = [
     { kind: 'select', icon: '👆', label: 'Sélection', hint: 'Cliquer un bâtiment pour ouvrir sa fiche' },
     { kind: 'link', icon: '🛤️', label: 'Relier', hint: 'Cliquer le départ, puis l’arrivée' },
     { kind: 'remove', icon: '🧨', label: 'Retirer', hint: 'Cliquer un bâtiment pour le démolir' },
   ]
     .map(
-      (t) => `<button class="tool${active(tool.kind === t.kind)}" data-action="tool" data-tool="${t.kind}" title="${esc(t.hint)}">
+      (t) => `<button class="tool${active(tool.kind === t.kind)}${hint(guide?.highlight?.tool === t.kind)}" data-action="tool" data-tool="${t.kind}" title="${esc(t.hint)}">
         <span class="icon">${t.icon}</span><span>${t.label}</span></button>`,
     )
     .join('');
@@ -128,21 +145,27 @@ export function renderToolbar(s: ViewState): string {
     .map((d) => {
       const style = theme.buildings[d.id];
       const on = tool.kind === 'place' && tool.type === d.id;
-      return `<button class="tool build${active(on)}" data-action="tool" data-tool="place" data-type="${esc(d.id)}"
-        title="${esc(`${style?.metaphor ?? d.techName} — ${d.techName}. Coût ${d.cost}, complexité ${d.complexity}`)}">
-        <span class="icon">${style?.icon ?? '🏠'}</span><span>${esc(style?.metaphor ?? d.techName)}</span><small>💰 ${d.cost}</small></button>`;
+      const guided = guide?.highlight?.tool === 'place' && guide.highlight.type === d.id;
+      return `<button class="tool build${active(on)}${hint(guided)}" data-action="tool" data-tool="place" data-type="${esc(d.id)}"
+        title="${esc(`${d.techName}${style ? ` — ${style.metaphor}` : ''}. Coût ${d.cost}, complexité ${d.complexity}`)}">
+        <span class="icon">${style?.icon ?? '🏠'}</span><span>${esc(d.techName)}</span><small>${esc(style?.metaphor ?? '')}</small><small>💰 ${d.cost}</small></button>`;
     })
     .join('');
   const validation = validateArchitecture(draft, catalog);
   const why = validation.ok ? 'Lancer la vague' : validation.errors.join('\n');
-  const linkHint = tool.kind === 'link' && tool.from ? `<div class="toast panel">Départ : ${esc(tool.from)} — cliquer l’arrivée</div>` : '';
+  const from = tool.kind === 'link' && tool.from ? draft.nodes.find((n) => n.id === tool.from) : undefined;
+  const linkHint = from ? `<div class="toast panel">Départ : ${esc(nameOf(from.type, catalog))} — cliquer l’arrivée</div>` : '';
   const message = s.boardMessage ? `<div class="toast panel ko">${esc(s.boardMessage)}</div>` : linkHint;
+  const tutorial = guide
+    ? `<div class="tutorial panel">${speech(guide.says, guide.real)}</div>`
+    : '';
   return `
+    ${tutorial}
     ${message}
     <div class="toolbar panel">
       <div class="group">${tools}</div>
       <div class="group palette">${palette}</div>
-      <button class="launch" data-action="play" ${validation.ok ? '' : 'disabled'} title="${esc(why)}">⚔️ Lancer la vague</button>
+      <button class="launch${hint(guide?.highlight?.tool === 'launch')}" data-action="play" ${validation.ok ? '' : 'disabled'} title="${esc(why)}">⚔️ Lancer la vague</button>
     </div>
     ${validation.ok ? '' : `<div class="errors panel">${validation.errors.map((e) => `<p>⚠ ${esc(e)}</p>`).join('')}</div>`}`;
 }
@@ -176,13 +199,25 @@ export function renderDialog(s: ViewState): string {
     finished ? '<button class="primary" data-action="reset-game">Nouvelle partie</button>' : '',
   ].join('');
   return `<div class="dialog panel ${r.won ? 'won' : 'lost'}">
-    <h2>${r.won ? '🏆 Vague tenue' : '💥 Vague perdue'}${a.played && r.won ? ` — +${fmt(a.score)} ⭐` : ''}${a.played ? '' : ' (essai)'}</h2>
-    ${finished ? `<p class="final">La cité a tenu toutes les vagues. Score final : <b>${fmt(totalScore(s))}</b> ⭐</p>` : ''}
+    <h2>${r.won ? '🏆 Vague tenue' : '💥 Vague perdue'}${a.played && r.won ? ` — +${fmt(a.score)} 🏅` : ''}${a.played ? '' : ' (essai)'}</h2>
+    ${attemptWave ? renderStars(a.stars, attemptWave) : ''}
+    ${finished ? `<p class="final">La cité a tenu toutes les vagues. <b>${totalStars(s)} / ${s.scenario.waves.length * 3}</b> ★, score final <b>${fmt(totalScore(s))}</b> 🏅</p>` : ''}
     ${r.lossReasons.length > 0 ? `<ul class="reasons">${r.lossReasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
     ${attemptWave ? renderFindings(analyzeWave(r, a.arch, attemptWave, s.catalog, theme)) : ''}
     ${a.played && !r.won && s.game.replays > 0 ? `<p class="muted">Chaque nouvel essai coûte 20 % des points de la vague. Si un choix plus ancien bloque, le menu ☰ permet de revenir à une vague antérieure.</p>` : ''}
     <p class="actions">${actions}</p>
   </div>`;
+}
+
+/** Les trois objectifs de la vague, chacun une étoile (décision E7). */
+function renderStars(stars: Stars, wave: Wave): string {
+  const n = Number(stars.held) + Number(stars.firstTry) + Number(stars.thrifty);
+  const line = (ok: boolean, label: string) => `<li class="${ok ? 'ok' : 'missed'}">${ok ? '★' : '☆'} ${esc(label)}</li>`;
+  return `<div class="stars-box"><span class="star-row">${starIcons(n)}</span><ul>
+    ${line(stars.held, 'Tenir la vague : SLA, budget et complexité respectés')}
+    ${line(stars.firstTry, 'Du premier coup, sans rejeu')}
+    ${line(stars.thrifty, `Économe : facture ≤ ${wave.thriftyCost ?? wave.budget}`)}
+  </ul></div>`;
 }
 
 /** Le tiroir du mode debug : essais, vue tableau, calibrage, détail chiffré des tentatives. */
@@ -213,13 +248,17 @@ function renderNodeCard(s: ViewState): string {
   const links = s.draft.links
     .map((l, i) => ({ l, i }))
     .filter(({ l }) => l.from === node.id || l.to === node.id)
-    .map(({ l, i }) => `<li><code>${esc(l.from)}</code> → <code>${esc(l.to)}</code> <button data-action="remove-link" data-link="${i}">retirer</button></li>`)
+    .map(({ l, i }) => `<li>${esc(linkEnd(l.from))} → ${esc(linkEnd(l.to))} <button data-action="remove-link" data-link="${i}">retirer</button></li>`)
     .join('');
   const source = def?.behavior === 'source';
+  function linkEnd(id: string): string {
+    const n = s.draft.nodes.find((x) => x.id === id);
+    return n ? `${s.catalog.components[n.type]?.techName ?? n.type} ${n.id}` : id;
+  }
   return `
     <section class="card panel">
       <button class="close" data-action="deselect" title="Fermer">✕</button>
-      <h3>${esc(theme.buildings[node.type]?.metaphor ?? node.type)} <small>${esc(def?.techName ?? '')} · ${esc(node.id)}</small></h3>
+      <h3>${esc(def?.techName ?? node.type)} <small>${esc(theme.buildings[node.type]?.metaphor ?? '')} · ${esc(node.id)}</small></h3>
       ${def ? `<p class="muted">cap. ${def.capacity}, ${def.latencyMs} ms, coût ${def.cost}, complexité ${def.complexity}</p>` : ''}
       <p>${upgradeSelects(node, s.catalog) || '<span class="muted">aucune évolution</span>'}</p>
       ${links ? `<ul>${links}</ul>` : '<p class="muted">Aucun chemin.</p>'}
@@ -253,8 +292,11 @@ function upgradeSelects(n: Architecture['nodes'][number], catalog: Catalog): str
 function renderBriefing(wave: Wave, s: ViewState): string {
   return `
     <section>
-      ${theme.narratives[wave.id] ? speech(theme.narratives[wave.id]!) : ''}
-      <p class="briefing">${esc(wave.briefing)}</p>
+      ${theme.narratives[wave.id] ? speech(theme.narratives[wave.id]!, wave.briefing) : `<p class="briefing">${esc(wave.briefing)}</p>`}
+      ${(wave.incidents ?? [])
+        .map((i) => `<p class="incident">⚡ <b>Incident annoncé :</b> ${esc(i.title)}, ticks ${i.from + 1} à ${i.until}. <i>${esc(nameOf(i.component, s.catalog))}</i></p>`)
+        .join('')}
+      <p>⭐ Objectifs : tenir · du premier coup · facture ≤ ${wave.thriftyCost ?? wave.budget}</p>
       <p>Budget ${wave.budget} · complexité max ${wave.complexityCap}
         · SLA : ${pct(wave.sla.maxFailureRate)} d'échecs, ${wave.sla.maxP95LatencyMs} ms p95 (approx.)
         ${s.game.replays > 0 ? ` · <b>${s.game.replays} rejeu(x)</b>, −${s.game.replays * 20} % au score` : ''}</p>
@@ -386,10 +428,14 @@ function renderAttempts(s: ViewState): string {
     </section>`;
 }
 
-/** Une réplique du narrateur, avec son portrait. */
-function speech(text: string): string {
+/**
+ * Double narration : le chambellan parle dans la métaphore, la ligne en italique dit la
+ * même chose en vrai, avec les termes d'entretien. La métaphore seule ne s'apprend pas.
+ */
+function speech(text: string, real?: string): string {
   return `<div class="speech"><span class="speaker">${theme.narrator.icon}</span>
-    <p><b>${esc(theme.narrator.name)} :</b> « ${esc(text)} »</p></div>`;
+    <div><p><b>${esc(theme.narrator.name)} :</b> « ${esc(text)} »</p>
+    ${real ? `<p class="real">${esc(real)}</p>` : ''}</div></div>`;
 }
 
 /** L'analyse du narrateur : ce qu'il dit, l'explication d'entretien, la parade, la notion à réviser. */
@@ -398,8 +444,7 @@ function renderFindings(findings: Finding[]): string {
   return `<div class="findings">${findings
     .map(
       (f, i) => `<div class="finding ${f.tone}">
-        ${i === 0 ? speech(f.says) : `<p class="says">« ${esc(f.says)} »</p>`}
-        ${f.tech ? `<p>${esc(f.tech)}</p>` : ''}
+        ${i === 0 ? speech(f.says, f.tech) : `<p class="says">« ${esc(f.says)} »</p>${f.tech ? `<p class="real">${esc(f.tech)}</p>` : ''}`}
         ${f.remedy ? `<p><b>Parade :</b> ${esc(f.remedy)}</p>` : ''}
         ${f.concept ? `<p class="muted">À réviser : ${esc(f.concept)}</p>` : ''}
       </div>`,
@@ -470,6 +515,10 @@ function describeEvent(e: SimEvent): string {
       return `t${e.tick} ${e.node} limite ${e.source} : ${fmt(e.rejectedRps)} req/s rejetées`;
     case 'queue-overflow':
       return `t${e.tick} ${e.node} déborde : ${fmt(e.lostRps)} messages perdus`;
+    case 'incident-start':
+      return `t${e.tick} incident ${e.incident}`;
+    case 'incident-end':
+      return `t${e.tick} fin de l'incident ${e.incident}`;
   }
 }
 

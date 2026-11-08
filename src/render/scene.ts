@@ -723,9 +723,12 @@ export class CityScene {
       const failed = n?.failed ?? 0;
       const shed = n?.shed ?? 0;
       b.label.innerHTML =
-        `<b>${escapeHtml(b.metaphor)}</b><span>${escapeHtml(b.techName)} · ${escapeHtml(id)}</span>` +
+        `<b>${escapeHtml(b.techName)}</b><span>${escapeHtml(b.metaphor)} · ${escapeHtml(id)}</span>` +
+        (n?.down ? `<em class="hot">⚡ ${n.down} instance${n.down > 1 ? 's' : ''} en panne</em>` : '') +
         // La charge n'apparaît que quand elle compte : moins d'étiquettes qui se chevauchent.
-        (u > 0.6 ? `<em class="${u > 1 ? 'hot' : ''}">charge ${Math.round(u * 100)} %</em>` : '') +
+        (n?.down && n.instances === 0
+          ? '<em class="hot">hors service</em>'
+          : u > 0.6 ? `<em class="${u > 1 ? 'hot' : ''}">charge ${Math.round(u * 100)} %</em>` : '') +
         (failed > 0 ? `<em class="hot">✕ ${Math.round(failed)} req/s en échec</em>` : '') +
         (shed > 0 ? `<em>🛡 ${Math.round(shed)} req/s abusives repoussées</em>` : '');
     }

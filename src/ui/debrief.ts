@@ -1,4 +1,4 @@
-import { reasonLessons, saturationLessons, type Lesson } from '../data/lessons.ts';
+import { incidentLessons, reasonLessons, saturationLessons, type Lesson } from '../data/lessons.ts';
 import { bill } from '../engine/budget.ts';
 import type { Architecture, Catalog, RequestKind, Wave, WaveResult } from '../engine/types.ts';
 import type { Theme } from '../render/theme.ts';
@@ -48,7 +48,8 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
   const typeOf = new Map(arch.nodes.map((n) => [n.id, n.type]));
   const name = (id: string) => {
     const type = typeOf.get(id) ?? '';
-    return `${theme.buildings[type]?.metaphor ?? id} (${catalog.components[type]?.techName ?? type})`;
+    const metaphor = theme.buildings[type]?.metaphor;
+    return `${catalog.components[type]?.techName ?? type}${metaphor ? ` (${metaphor})` : ''}`;
   };
   const out: Finding[] = [];
 
@@ -71,6 +72,16 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     if (lesson) out.push(fromLesson('bad', lesson, { name: theme.buildings[typeOf.get(id)!]?.metaphor ?? id }, id));
   }
 
+  // Incidents : ce qu'ils ont coûté, et ce qui les aurait encaissés.
+  for (const incident of wave.incidents ?? []) {
+    const during = result.ticks.slice(incident.from, incident.until);
+    const failed = Math.round(during.reduce((a, t) => a + t.failed, 0));
+    const hit = arch.nodes.some((n) => n.type === incident.component);
+    if (!hit) continue;
+    const lesson = incidentLessons[incident.effect.type];
+    out.push(fromLesson(failed > 0 ? 'bad' : 'good', failed > 0 ? lesson.hurt : lesson.held, { title: incident.title, failed: String(failed) }));
+  }
+
   if (result.failuresByReason['rate-limited'] > 0) out.push(fromLesson('bad', reasonLessons.legitLimited, {}));
   if (result.failuresByReason['lost-at-edge'] > 0) out.push(fromLesson('bad', reasonLessons.lostAtEdge, {}));
   for (const e of result.events) {
@@ -79,8 +90,13 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     }
   }
 
+  // Le seul serveur ou la seule base ne se retire pas, même peu chargé : sans lui, plus de chemin.
+  const behaviorOf = (id: string) => catalog.components[typeOf.get(id) ?? '']?.behavior;
+  const soleOfItsKind = (id: string) =>
+    (behaviorOf(id) === 'service' || behaviorOf(id) === 'database') &&
+    arch.nodes.filter((n) => catalog.components[n.type]?.behavior === behaviorOf(id)).length === 1;
   const idle = Object.entries(result.nodes)
-    .filter(([id, n]) => n.peakUtilization < IDLE && catalog.components[typeOf.get(id) ?? '']?.behavior !== 'source')
+    .filter(([id, n]) => n.peakUtilization < IDLE && behaviorOf(id) !== 'source' && !soleOfItsKind(id))
     .map(([id]) => id);
 
   const { cost, complexity, latency, failureRate } = result.gauges;

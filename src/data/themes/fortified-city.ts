@@ -11,7 +11,7 @@ export const fortifiedCity: Theme = {
   road: '#c9a46c',
   alert: '#d62828',
   failed: 'Requête en échec',
-  hostile: { metaphor: 'Pillards squelettes (scraper)', color: '#2b2d42', model: 'kaykit-chars/Skeleton_Warrior.glb' },
+  hostile: { metaphor: 'Scraper (pillards squelettes)', color: '#2b2d42', model: 'kaykit-chars/Skeleton_Warrior.glb' },
   buildings: {
     'traffic-source': { metaphor: 'Hameaux', icon: '🏘️', shape: 'hamlet', color: '#e8d5a8', accent: '#9c6b3f' },
     cdn: { metaphor: 'Avant-poste', icon: '🗼', shape: 'watchtower', color: '#b9b2a4', accent: '#3f7cac' },
@@ -36,8 +36,8 @@ export const fortifiedCity: Theme = {
   },
   vehicles: {
     // La hauteur des personnages est la deuxième valeur de `size`.
-    read: { metaphor: 'Messager (lecture)', color: '#3a86ff', size: [0.3, 0.55, 0.3], model: 'kaykit-chars/Rogue.glb' },
-    write: { metaphor: 'Porteur (écriture)', color: '#fb8500', size: [0.3, 0.6, 0.3], model: 'kaykit-chars/Barbarian.glb' },
-    async: { metaphor: 'Mage messager (async)', color: '#9b5de5', size: [0.3, 0.55, 0.3], model: 'kaykit-chars/Mage.glb' },
+    read: { metaphor: 'Lecture (messager)', color: '#3a86ff', size: [0.3, 0.55, 0.3], model: 'kaykit-chars/Rogue.glb' },
+    write: { metaphor: 'Écriture (porteur)', color: '#fb8500', size: [0.3, 0.6, 0.3], model: 'kaykit-chars/Barbarian.glb' },
+    async: { metaphor: 'Async (mage messager)', color: '#9b5de5', size: [0.3, 0.55, 0.3], model: 'kaykit-chars/Mage.glb' },
   },
 };

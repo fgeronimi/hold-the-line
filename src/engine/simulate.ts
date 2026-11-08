@@ -8,6 +8,7 @@ import type {
   ComponentDef,
   FailureReason,
   Gauge,
+  Incident,
   NodeSummary,
   NodeTick,
   RequestKind,
@@ -25,6 +26,14 @@ import { upgradeLevel, validateArchitecture } from './validate.ts';
  * échouent au lieu d'attendre indéfiniment. Plafonne le facteur à 1 / (1 - 0.95) = 20.
  */
 const MAX_UTILIZATION_FOR_LATENCY = 0.95;
+
+/** Charge affichée d'un composant sans aucune instance en service qui reçoit du trafic. */
+const OUTAGE_UTILIZATION = 10;
+
+function ratio(demand: number, capacity: number): number {
+  if (demand === 0) return 0;
+  return capacity > 0 ? demand / capacity : OUTAGE_UTILIZATION;
+}
 
 /**
  * Un flux élémentaire : des requêtes d'un type, d'une source, à un niveau de
@@ -129,8 +138,14 @@ export function simulateWave(
   const nodes = new Map(arch.nodes.map((n) => [n.id, n]));
   const defOf = (id: string): ComponentDef => catalog.components[nodes.get(id)!.type]!;
   const routes = routeTable(arch, catalog);
+  let active: Incident[] = [];
+  const down = (node: ArchNode): number =>
+    active.reduce((a, i) => a + (i.component === node.type && i.effect.type === 'instance-down' ? i.effect.count : 0), 0);
+  const hitFactor = (type: string, tick: number): number =>
+    active.reduce((f, i) => (i.component === type && i.effect.type === 'cold-cache' ? f * ((tick - i.from) / (i.until - i.from)) : f), 1);
   const hitRateAt = (nodeId: string, s: Stream): number =>
-    sourcesById.get(s.source)?.longTail ? 0 : (defOf(nodeId).hitRate ?? 0);
+    sourcesById.get(s.source)?.longTail ? 0 : (defOf(nodeId).hitRate ?? 0) * hitFactor(nodes.get(nodeId)!.type, currentTick);
+  let currentTick = 0;
 
   const sourcesById = new Map(wave.sources.map((s) => [s.id, s]));
   const backlogs = new Map<string, Flow>();
@@ -158,6 +173,11 @@ export function simulateWave(
 
   for (let tick = 0; tick < wave.ticks; tick++) {
     const factor = factorAt(wave, tick);
+    currentTick = tick;
+    const was = new Set(active.map((i) => i.id));
+    active = (wave.incidents ?? []).filter((i) => tick >= i.from && tick < i.until);
+    for (const i of active) if (!was.has(i.id)) events.push({ type: 'incident-start', tick, incident: i.id });
+    for (const id of was) if (!active.some((i) => i.id === id)) events.push({ type: 'incident-end', tick, incident: id });
     const nodeFailed = new Map<string, number>();
     const nodeShed = new Map<string, number>();
     const ctx: TickContext = { tick, failures, nodeFailed, nodeShed, events, shed };
@@ -188,6 +208,8 @@ export function simulateWave(
         sourcesById,
         backlogs,
         autoscalers,
+        down,
+        hitFactor: (type) => hitFactor(type, tick),
         consumers: consumersOf(routes.get(id)!).map((c) => ({ ...c, def: defOf(c.id), node: nodes.get(c.id)! })),
       });
       outcomes.set(id, outcome);
@@ -215,6 +237,7 @@ export function simulateWave(
         ...(backlogs.has(id) ? { backlog: sumRps(backlogs.get(id)!) } : {}),
         ...(outcome.instances !== undefined ? { instances: outcome.instances } : {}),
         ...(nodeShed.has(id) ? { shed: nodeShed.get(id)! } : {}),
+        ...(down(node) > 0 ? { down: down(node) } : {}),
       };
     }
 
@@ -235,10 +258,12 @@ export function simulateWave(
       avgLatencyMs: tickLatency,
       nodes: nodeTicks,
       links: linkTraffic(routed),
+      ...(active.length > 0 ? { incidents: active.map((i) => i.id) } : {}),
     });
   }
 
   for (const id of saturated) events.push({ type: 'saturation-end', tick: wave.ticks, node: id });
+  for (const i of active) events.push({ type: 'incident-end', tick: wave.ticks, incident: i.id });
 
   for (const a of autoscalers.values()) billed.autoscaling += (a.instanceTicks * a.instanceCost) / wave.ticks;
 
@@ -277,6 +302,10 @@ interface ProcessEnv {
   sourcesById: Map<string, TrafficSource>;
   backlogs: Map<string, Flow>;
   autoscalers: Map<string, AutoscaleState>;
+  /** Instances d'un nœud mises hors service par un incident en cours. */
+  down: (node: ArchNode) => number;
+  /** Facteur appliqué au taux de succès d'un type de composant (cache froid). */
+  hitFactor: (type: string) => number;
   consumers: { kinds: RequestKind[]; def: ComponentDef; node: ArchNode }[];
 }
 
@@ -303,12 +332,12 @@ function allForwarded(): Partial<Record<RequestKind, number>> {
   return { read: 1, write: 1, async: 1 };
 }
 
-function instancesOf(node: ArchNode, catalog: Catalog): number {
+function instancesOf(node: ArchNode, catalog: Catalog, down = 0): number {
   let extra = 0;
   for (const up of Object.values(catalog.upgrades)) {
     if (up.effect.type === 'instances' && up.appliesTo === node.type) extra += upgradeLevel(node, up.id);
   }
-  return 1 + extra;
+  return Math.max(0, 1 + extra - down);
 }
 
 /** Sert ce qui tient dans la capacité, fait échouer le reste à parts égales. */
@@ -335,11 +364,11 @@ function processBalancer(node: ArchNode, def: ComponentDef, incoming: Flow, env:
     if (limit === undefined) continue;
     flow = applyRateLimit(node.id, flow, limit, env);
   }
-  const capacity = def.capacity * instancesOf(node, env.catalog);
+  const capacity = def.capacity * instancesOf(node, env.catalog, env.down(node));
   const demand = work(flow, def);
   return {
     passed: serveWithin(node.id, flow, demand, capacity, env.ctx),
-    utilization: demand / capacity,
+    utilization: ratio(demand, capacity),
     syncForwardShare: allForwarded(),
   };
 }
@@ -375,7 +404,7 @@ function applyRateLimit(nodeId: string, flow: Flow, limitPerClient: number, env:
 }
 
 function processService(node: ArchNode, def: ComponentDef, incoming: Flow, env: ProcessEnv): NodeOutcome {
-  const base = instancesOf(node, env.catalog);
+  const base = instancesOf(node, env.catalog, env.down(node));
   const auto = autoscale(node, def, base, env);
   const instances = base + (auto?.active ?? 0);
   const capacity = def.capacity * instances;
@@ -383,7 +412,7 @@ function processService(node: ArchNode, def: ComponentDef, incoming: Flow, env: 
   auto?.plan(demand);
   return {
     passed: serveWithin(node.id, incoming, demand, capacity, env.ctx),
-    utilization: demand / capacity,
+    utilization: ratio(demand, capacity),
     syncForwardShare: allForwarded(),
     instances,
   };
@@ -434,7 +463,7 @@ function autoscale(node: ArchNode, def: ComponentDef, base: number, env: Process
  * déclenchées par ces lectures-là n'ont jamais lieu, puisque le serveur ne les voit pas.
  */
 function processEdge(node: ArchNode, def: ComponentDef, incoming: Flow, env: ProcessEnv): NodeOutcome {
-  const capacity = def.capacity * instancesOf(node, env.catalog);
+  const capacity = def.capacity * instancesOf(node, env.catalog, env.down(node));
   const demand = work(incoming, def);
   const served = serveWithin(node.id, incoming, demand, capacity, env.ctx);
   const passed: Flow = new Map();
@@ -451,7 +480,7 @@ function processEdge(node: ArchNode, def: ComponentDef, incoming: Flow, env: Pro
   }
   return {
     passed,
-    utilization: demand / capacity,
+    utilization: ratio(demand, capacity),
     syncForwardShare: { ...allForwarded(), read: readShare(served, passed) },
   };
 }
@@ -462,11 +491,11 @@ function processEdge(node: ArchNode, def: ComponentDef, incoming: Flow, env: Pro
  * dans sa charge, les consultations ratées sont négligées.
  */
 function processCache(node: ArchNode, def: ComponentDef, incoming: Flow, env: ProcessEnv): NodeOutcome {
-  const capacity = def.capacity * instancesOf(node, env.catalog);
+  const capacity = def.capacity * instancesOf(node, env.catalog, env.down(node));
   const demand = work(incoming, def);
   return {
     passed: serveWithin(node.id, incoming, demand, capacity, env.ctx),
-    utilization: demand / capacity,
+    utilization: ratio(demand, capacity),
     syncForwardShare: allForwarded(),
   };
 }
@@ -479,11 +508,11 @@ function readShare(served: Flow, passed: Flow): number {
 }
 
 function hitRateFor(s: Stream, def: ComponentDef, env: ProcessEnv): number {
-  return env.sourcesById.get(s.source)?.longTail ? 0 : (def.hitRate ?? 0);
+  return env.sourcesById.get(s.source)?.longTail ? 0 : (def.hitRate ?? 0) * env.hitFactor(def.id);
 }
 
 function processDatabase(node: ArchNode, def: ComponentDef, incoming: Flow, env: ProcessEnv): NodeOutcome {
-  const primary = def.capacity * instancesOf(node, env.catalog);
+  const primary = def.capacity * instancesOf(node, env.catalog, env.down(node));
   let replicaCapacity = 0;
   for (const up of Object.values(env.catalog.upgrades)) {
     if (up.effect.type === 'readReplicas' && up.appliesTo === node.type) {
@@ -514,8 +543,8 @@ function processDatabase(node: ArchNode, def: ComponentDef, incoming: Flow, env:
   for (const s of servedReads.values()) addStream(passed, s);
 
   const utilization = Math.max(
-    writeDemand / primary,
-    (writeDemand + readDemand) / (primary + replicaCapacity),
+    ratio(writeDemand, primary),
+    ratio(writeDemand + readDemand, primary + replicaCapacity),
   );
   return { passed, utilization, syncForwardShare: allForwarded() };
 }
@@ -536,7 +565,7 @@ function filterFlow(flow: Flow, pred: (s: Stream) => boolean): Flow {
  * peuvent absorber. Ce qui sort est découplé : l'amont n'attend pas l'aval.
  */
 function processQueue(node: ArchNode, def: ComponentDef, incoming: Flow, env: ProcessEnv): NodeOutcome {
-  const capacity = def.capacity * instancesOf(node, env.catalog);
+  const capacity = def.capacity * instancesOf(node, env.catalog, env.down(node));
   const demand = work(incoming, def);
   const accepted = serveWithin(node.id, incoming, demand, capacity, env.ctx);
 
@@ -570,7 +599,7 @@ function processQueue(node: ArchNode, def: ComponentDef, incoming: Flow, env: Pr
 
   return {
     passed,
-    utilization: demand / capacity,
+    utilization: ratio(demand, capacity),
     syncForwardShare: { read: 0, write: 0, async: 0 },
   };
 }
@@ -582,7 +611,7 @@ function drainCapacity(kind: RequestKind, batch: number, env: ProcessEnv): numbe
     if (!c.kinds.includes(kind)) continue;
     const perBatch = c.def.workPerRequest[kind] ?? 0;
     if (perBatch === 0) return Infinity;
-    total += ((c.def.capacity * instancesOf(c.node, env.catalog)) / perBatch) * batch;
+    total += ((c.def.capacity * instancesOf(c.node, env.catalog, env.down(c.node))) / perBatch) * batch;
   }
   return total;
 }

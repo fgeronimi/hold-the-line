@@ -132,6 +132,23 @@ export interface ProfileSegment {
   factor: number;
 }
 
+/**
+ * Panne annoncée au briefing, qui frappe tous les composants d'un type pendant
+ * `[from, until)` (décision X5) :
+ * - `instance-down` : `count` instances hors service ; à zéro, le composant ne sert plus rien ;
+ * - `cold-cache` : le taux de succès retombe à 0 à `from` et remonte linéairement jusqu'à `until`.
+ */
+export type IncidentEffect = { type: 'instance-down'; count: number } | { type: 'cold-cache' };
+
+export interface Incident {
+  id: string;
+  title: string;
+  component: string;
+  from: number;
+  until: number;
+  effect: IncidentEffect;
+}
+
 export interface Wave {
   id: string;
   title: string;
@@ -146,6 +163,12 @@ export interface Wave {
   conceptRef?: string;
   /** Vague à réponse unique assumée (décision B1) : exemptée du critère des deux stratégies. */
   singleStrategy?: boolean;
+  incidents?: Incident[];
+  /**
+   * Troisième étoile : facture au plus égale à ce seuil, calé sur la stratégie gagnante la
+   * moins chère (décision E7). Absent : le budget.
+   */
+  thriftyCost?: number;
 }
 
 export interface Scenario {
@@ -167,7 +190,9 @@ export type SimEvent =
   | { type: 'saturation-end'; tick: number; node: string }
   | { type: 'no-route'; tick: number; node: string; kind: RequestKind }
   | { type: 'rate-limited'; tick: number; node: string; source: string; rejectedRps: number }
-  | { type: 'queue-overflow'; tick: number; node: string; lostRps: number };
+  | { type: 'queue-overflow'; tick: number; node: string; lostRps: number }
+  | { type: 'incident-start'; tick: number; incident: string }
+  | { type: 'incident-end'; tick: number; incident: string };
 
 export interface NodeTick {
   utilization: number;
@@ -178,6 +203,8 @@ export interface NodeTick {
   instances?: number;
   /** Trafic abusif écarté ici par le rate limiting ce tick (req/s), hors échecs. */
   shed?: number;
+  /** Instances mises hors service par un incident ce tick. */
+  down?: number;
 }
 
 export interface TickMetrics {
@@ -188,6 +215,8 @@ export interface TickMetrics {
   nodes: Record<string, NodeTick>;
   /** Débit envoyé sur chaque lien (clé `from→to`) par type de requête : ce que le rendu anime. */
   links: Record<string, Partial<Record<RequestKind, number>>>;
+  /** Incidents en cours ce tick (ids). */
+  incidents?: string[];
 }
 
 export interface Gauge {

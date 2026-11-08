@@ -3,7 +3,7 @@ import { urlShortener } from '../data/scenarios/url-shortener.ts';
 import { scoring } from '../data/scoring.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { newGame, playWave, rewindTo } from '../engine/game.ts';
-import { scoreWave } from '../engine/score.ts';
+import { scoreWave, starsFor } from '../engine/score.ts';
 import { simulateWave } from '../engine/simulate.ts';
 import type { Architecture, BoardCell } from '../engine/types.ts';
 import type { CityScene } from '../render/scene.ts';
@@ -156,10 +156,11 @@ function onBoardClick(cell: BoardCell): void {
 }
 
 /** Les tentatives ne sont pas sauvegardées : un résultat ne vaut que pour la calibration du moment. */
-function record(attempt: Omit<Attempt, 'id' | 'settings' | 'arch'>): Partial<ViewState> & { current: number } {
+function record(attempt: Omit<Attempt, 'id' | 'settings' | 'arch' | 'stars'>, replays: number): Partial<ViewState> & { current: number } {
   const id = nextAttemptId++;
   const settings = changedSettings({ catalog: defaultCatalog, scenario: urlShortener }, state, attempt.waveIndex);
-  return { attempts: [...state.attempts, { ...attempt, id, settings, arch: state.draft }], selected: id, current: id };
+  const stars = starsFor(attempt.result, replays, state.scenario.waves[attempt.waveIndex]!);
+  return { attempts: [...state.attempts, { ...attempt, id, settings, arch: state.draft, stars }], selected: id, current: id };
 }
 
 /** Joue une tentative en direct sur le plateau, puis ouvre son debrief. */
@@ -249,11 +250,12 @@ const actions: Record<string, (el: HTMLElement) => void> = {
   play: () => {
     const waveIndex = state.game.waveIndex;
     const wave = state.scenario.waves[waveIndex]!;
+    const replays = state.game.replays;
     const { state: game, result, score } = playWave(state.game, state.scenario, state.draft, state.catalog, scoring);
     const label = `#${nextAttemptId} V${waveIndex + 1} ${describeDraft(state.draft)}`;
     // Le brouillon est gardé même perdu : on le corrige plutôt que de tout reposer.
     // La facture, elle, compte toujours depuis l'architecture validée.
-    const patch = record({ label: `${label}${result.won ? '' : ` (perdue : ${wave.title})`}`, waveIndex, result, score, played: true });
+    const patch = record({ label: `${label}${result.won ? '' : ` (perdue : ${wave.title})`}`, waveIndex, result, score, played: true }, replays);
     update({ game, ...patch });
     void playOnBoard(state.attempts.find((a) => a.id === patch.current)!);
   },
@@ -261,7 +263,7 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     const waveIndex = state.game.waveIndex;
     const result = simulateWave(state.draft, state.scenario.waves[waveIndex]!, state.catalog, state.game.committed);
     const label = `#${nextAttemptId} V${waveIndex + 1} essai ${describeDraft(state.draft)}`;
-    const patch = record({ label, waveIndex, result, score: scoreWave(result, state.game.replays, scoring), played: false });
+    const patch = record({ label, waveIndex, result, score: scoreWave(result, state.game.replays, scoring), played: false }, state.game.replays);
     update(patch);
     void playOnBoard(state.attempts.find((a) => a.id === patch.current)!);
   },

@@ -1,4 +1,4 @@
-import { scoreWave, type Scoring } from './score.ts';
+import { scoreWave, starCount, starsFor, type Scoring } from './score.ts';
 import { simulateWave } from './simulate.ts';
 import type { Architecture, Catalog, Scenario, WaveResult } from './types.ts';
 
@@ -11,13 +11,15 @@ export interface GameState {
   /** Vagues perdues sur la vague en cours. */
   replays: number;
   scores: number[];
+  /** Étoiles gagnées par vague tenue, de 1 à 3. */
+  stars: number[];
   finished: boolean;
 }
 
 const EMPTY: Architecture = { nodes: [], links: [] };
 
 export function newGame(): GameState {
-  return { waveIndex: 0, committed: EMPTY, history: [EMPTY], replays: 0, scores: [], finished: false };
+  return { waveIndex: 0, committed: EMPTY, history: [EMPTY], replays: 0, scores: [], stars: [], finished: false };
 }
 
 /**
@@ -35,6 +37,7 @@ export function rewindTo(state: GameState, waveIndex: number): GameState {
     history: state.history.slice(0, waveIndex + 1),
     replays: 1,
     scores: state.scores.slice(0, waveIndex),
+    stars: state.stars.slice(0, waveIndex),
     finished: false,
   };
 }
@@ -67,6 +70,7 @@ export function playWave(
       history: [...state.history, arch],
       replays: 0,
       scores: [...state.scores, score],
+      stars: [...state.stars, starCount(starsFor(result, state.replays, wave))],
       finished: waveIndex >= scenario.waves.length,
     },
     result,

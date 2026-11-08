@@ -96,3 +96,35 @@ export const reasonLessons = {
     concept: 'Latence et charge',
   },
 } satisfies Record<string, Lesson>;
+
+/** Incidents annoncés : `hurt` quand la panne a fait échouer des requêtes, `held` quand l'architecture l'a encaissée. */
+export const incidentLessons: Record<'instance-down' | 'cold-cache', { hurt: Lesson; held: Lesson }> = {
+  'instance-down': {
+    hurt: {
+      says: '« {title} » : {failed} voyageurs sont restés sans réponse le temps de la relève.',
+      tech: 'Une instance unique est un point de défaillance unique (SPOF) : quand elle tombe, tout ce qu’elle servait échoue.',
+      remedy: 'De la redondance : au moins deux instances derrière un load balancer, ou de l’autoscaling qui remplace l’instance perdue après son délai de démarrage.',
+      concept: 'Redondance, SPOF',
+    },
+    held: {
+      says: '« {title} » : la relève a suivi, personne n’a rien vu.',
+      tech: 'Les instances restantes ont absorbé la charge : la redondance a fait son travail.',
+      remedy: 'Garder assez de marge pour perdre une instance au pic (N+1).',
+      concept: 'Redondance, SPOF',
+    },
+  },
+  'cold-cache': {
+    hurt: {
+      says: '« {title} » : le carnet vide, tout le monde a couru aux archives, {failed} voyageurs n’ont pas eu de réponse.',
+      tech: 'Un cache vide renvoie toutes les lectures sur la base, qui sature le temps qu’il se remplisse (cache stampede).',
+      remedy: 'Une base qui tient seule le pic de lectures (réplica en lecture), un cache préchauffé, ou de la marge sur la base.',
+      concept: 'Cache stampede',
+    },
+    held: {
+      says: '« {title} » : les archives ont tenu le temps que le carnet se remplisse.',
+      tech: 'La base a encaissé les lectures que le cache ne servait plus pendant qu’il se réchauffait.',
+      remedy: 'Un cache est une optimisation : la base doit survivre à son absence, au moins un moment.',
+      concept: 'Cache stampede',
+    },
+  },
+};

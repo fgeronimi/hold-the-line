@@ -68,8 +68,19 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   scene.setMode('replay');
 
   const typeOf = new Map(o.arch.nodes.map((n) => [n.id, n.type]));
-  const metaphor = (id: string) => o.theme.buildings[typeOf.get(id) ?? '']?.metaphor ?? id;
+  const nameOf = (id: string) => {
+    const type = typeOf.get(id) ?? '';
+    const metaphor = o.theme.buildings[type]?.metaphor;
+    return `${o.catalog.components[type]?.techName ?? id}${metaphor ? ` (${metaphor})` : ''}`;
+  };
   const alerts = firstSaturations(o.result.events);
+  const incidents = o.result.events.flatMap((e) => {
+    if (e.type !== 'incident-start') return [];
+    const incident = o.wave.incidents?.find((i) => i.id === e.incident);
+    const node = incident && o.arch.nodes.find((n) => n.type === incident.component)?.id;
+    return incident ? [{ tick: e.tick, title: incident.title, node }] : [];
+  });
+  const shownIncidents = new Set<number>();
   const shown = new Set<string>();
   let slowFor = 0;
 
@@ -85,15 +96,27 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   };
 
   /** Le premier goulot : bandeau, caméra sur le bâtiment, ralenti. Une fois par bâtiment. */
+  // Un incident et le goulot qu'il provoque tombent souvent au même tick : un seul bandeau.
   const raiseAlerts = () => {
+    const messages: string[] = [];
+    let focus: string | undefined;
+    incidents.forEach((i, k) => {
+      if (i.tick > time || shownIncidents.has(k)) return;
+      shownIncidents.add(k);
+      messages.push(`⚡ Incident au tick ${i.tick + 1} : ${i.title}.`);
+      focus ??= i.node;
+    });
     for (const a of alerts) {
       if (a.tick > time || shown.has(a.node)) continue;
       shown.add(a.node);
-      alert.textContent = `⚠ ${metaphor(a.node)} sature au tick ${a.tick + 1} : les voyageurs s'entassent.`;
-      alert.hidden = false;
-      scene.focusOn(a.node);
-      slowFor = SLOW_MOTION.seconds;
+      messages.push(`⚠ ${nameOf(a.node)} sature au tick ${a.tick + 1}.`);
+      focus ??= a.node;
     }
+    if (messages.length === 0) return;
+    alert.textContent = messages.join(' ');
+    alert.hidden = false;
+    if (focus) scene.focusOn(focus);
+    slowFor = SLOW_MOTION.seconds;
   };
 
   const renderHud = () => {

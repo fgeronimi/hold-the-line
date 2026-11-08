@@ -51,4 +51,16 @@ describe('analyzeWave', () => {
     const findings = analyze(A.withCache, 'launch');
     expect(findings.some((f) => f.tone === 'tip' && f.says.includes('Carnet du scribe'))).toBe(true);
   });
+
+  it('raconte l’incident : un serveur unique qui tombe est un SPOF', () => {
+    const findings = analyze(A.withCdn(), 'marketing-peak');
+    expect(findings.some((f) => f.concept === 'Redondance, SPOF' && f.tone === 'bad')).toBe(true);
+    const redundant = analyze(A.scaled(3), 'marketing-peak');
+    expect(redundant.some((f) => f.concept === 'Redondance, SPOF' && f.tone === 'good')).toBe(true);
+  });
+
+  it('nomme les composants par leur nom technique d’abord', () => {
+    const findings = analyze(A.noDatabase, 'launch');
+    expect(findings[0]!.tech).toContain('Application server (Tour des scribes)');
+  });
 });

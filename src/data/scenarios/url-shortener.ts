@@ -20,7 +20,7 @@ export const urlShortener: Scenario = {
     {
       id: 'launch',
       title: 'Lancement',
-      briefing: 'Le service ouvre : 100 requêtes par seconde, 90 % de redirections.',
+      briefing: 'Le service ouvre : 100 requêtes par seconde, 90 % de lectures (les redirections) et 10 % d’écritures (les raccourcis créés). Un serveur d’application et une base de données suffisent.',
       ticks: TICKS,
       profile: flat,
       sources: [users({ read: 90, write: 10 })],
@@ -29,23 +29,27 @@ export const urlShortener: Scenario = {
       complexityCap: 4,
       // Vague tutoriel : poser les briques de base, il n'y a rien à arbitrer.
       singleStrategy: true,
+      thriftyCost: 70,
     },
     {
       id: 'read-surge',
       title: 'Les lectures explosent',
-      briefing: 'Les liens circulent : les redirections sont multipliées par 10.',
+      briefing: 'Les liens circulent : 900 lectures par seconde, toujours 10 écritures. Une base seule encaisse 600 requêtes par seconde.',
       ticks: TICKS,
       profile: flat,
       sources: [users({ read: 900, write: 10 })],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
       budget: 115,
       complexityCap: 7,
+      thriftyCost: 85,
+      // Sans danger pour un réplica ; un cache tient, mais on voit la base encaisser la ruée.
+      incidents: [{ id: 'cache-restart', title: 'Le cache redémarre à froid', component: 'cache', from: 30, until: 33, effect: { type: 'cold-cache' } }],
     },
     {
       id: 'marketing-peak',
       title: 'Campagne marketing',
       briefing:
-        'Une campagne est lancée : le trafic monte en quelques secondes jusqu’à 5 fois la normale, pendant un tiers de la vague.',
+        'Une campagne est lancée : le trafic monte en quelques secondes jusqu’à 5 fois la normale (4 500 lectures par seconde), pendant un tiers de la vague. Une instance de serveur d’application traite 1 500 requêtes par seconde.',
       ticks: TICKS,
       profile: [
         { until: 20, factor: 1 },
@@ -58,6 +62,9 @@ export const urlShortener: Scenario = {
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
       budget: 170,
       complexityCap: 9,
+      thriftyCost: 145,
+      // Après le pic : une cité à serveur unique perd quelques requêtes, pas la vague.
+      incidents: [{ id: 'server-crash', title: 'Une instance du serveur tombe', component: 'app-server', from: 45, until: 48, effect: { type: 'instance-down', count: 1 } }],
     },
     {
       id: 'noisy-client',
@@ -70,6 +77,7 @@ export const urlShortener: Scenario = {
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
       budget: 165,
       complexityCap: 9,
+      thriftyCost: 160,
       conceptRef: 'Rate Limiting',
     },
     {
@@ -84,6 +92,7 @@ export const urlShortener: Scenario = {
       budget: 225,
       complexityCap: 12,
       conceptRef: 'Backpressure',
+      thriftyCost: 205,
       // La file est la seule réponse ; un CDN posé en vague 3 y perd les clics des redirections en cache.
       singleStrategy: true,
     },
