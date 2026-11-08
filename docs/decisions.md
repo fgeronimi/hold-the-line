@@ -74,7 +74,8 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 
 ## Prochaines étapes
 
-1. Interface minimale et panneau de calibrage.
-2. Debrief : lignes « autoscaling » et « migration » de la facture (E3), lien vers la fiche
-   du calendrier.
+1. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
+   comprise (B4).
+2. Lien du debrief vers la fiche exacte du calendrier : il pointe vers le dépôt, faute
+   d'avoir lu `concepts.js` (repo voisin, `--add-dir` nécessaire).
 3. Corriger la spec : colonne MVP du CDN et de l'autoscaling, « or gagné » (E1).

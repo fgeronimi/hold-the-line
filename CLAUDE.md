@@ -14,7 +14,8 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
 - `npm run typecheck` : `tsc --noEmit` (TypeScript 7)
 - `npm run balance` : simulation en masse, ~17 000 architectures canoniques sur chaque
   vague, ~30 s (Node exécute le TypeScript nativement, sans build)
-- `npm run dev` / `npm run build` : Vite (pas encore d'`index.html`)
+- `npm run dev` : interface de jeu et de calibrage ; `npm run build` : site statique
+  dans `dist/`, chemins relatifs pour GitHub Pages
 
 ## Architecture
 
@@ -26,6 +27,9 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
   garde un arriéré d'un tick à l'autre. Pas d'aléa, donc pas de graine.
 - `src/engine/types.ts` : seul le `Behavior` d'un composant est codé dans le moteur ;
   capacités, coûts, poids et contraintes viennent des données.
+- `src/ui/` : interface brute de phase 1, TypeScript natif sans framework. `main.ts`
+  tient l'état et les actions (`data-action` délégués), `views.ts` rend tout en chaînes
+  HTML à chaque changement, `editor.ts` et `calibration.ts` sont purs et testés.
 - `src/balance/` : outillage d'équilibrage (énumération canonique, rapport par vague) ;
   hors moteur, il ne fait qu'appeler `simulateWave`.
 - `src/data/catalog.ts` : composants et évolutions. `src/data/scenarios/` : un fichier
@@ -49,6 +53,9 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
 - `tests/balance.test.ts` énumère un espace réduit qui doit contenir toutes les réponses
   attendues : si un recalibrage déplace une réponse hors de cet espace, l'agrandir.
 - Le MVP de la spec a été élargi au CDN et à l'autoscaling (`docs/decisions.md`, X1–X4).
+- Le calibrage et la partie sont gardés dans `localStorage` (clé `hold-the-line:v1`) :
+  après un changement de forme du catalogue, « Revenir aux valeurs du code » ou vider la clé.
+- Tout texte venant de l'état passe par `esc()` avant d'entrer dans le HTML.
 - Pas de cascade de pannes : un aval saturé ne ralentit pas l'amont (décision M3, V2).
 - Le travail d'un flux est divisé par sa taille de lot (`batch`), mais les échecs se
   comptent toujours en messages.
