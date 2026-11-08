@@ -109,6 +109,17 @@ describe('simulateWave', () => {
       expect(r.failed).toBe(0);
     });
 
+    it('enregistre le débit de chaque lien à chaque tick', () => {
+      const r = simulateWave(arch, wave([users({ read: 90, write: 5 })]), catalog);
+      const links = r.ticks[0]!.links;
+      const fromSource = Object.entries(links)
+        .filter(([key]) => key.startsWith('s→'))
+        .reduce((a, [, kinds]) => a + Object.values(kinds).reduce((x, y) => x + y, 0), 0);
+      expect(fromSource).toBeCloseTo(r.ticks[0]!.offered);
+      expect(links['a→c']).toEqual({ read: 72 });
+      expect(links['a→d']).toEqual({ read: 18, write: 5 });
+    });
+
     it('pondère la latence entre succès et absences', () => {
       const r = simulateWave(arch, wave([users({ read: 50 })]), catalog);
       const t = r.ticks[0]!.nodes;

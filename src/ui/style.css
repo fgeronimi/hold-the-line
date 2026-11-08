@@ -14,3 +14,17 @@ textarea { width: 100%; height: 200px; font-family: monospace; }
 .won h2 { color: #0a7a2f; }
 .lost h2 { color: #b00020; }
 .briefing { font-size: 16px; }
+
+/* Rejeu 3D : plein écran au-dessus de l'interface brute. */
+.replay { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; background: #e8eef3; }
+.replay-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px; background: #fff; border-bottom: 1px solid #ccc; }
+.replay-bar input[type=range] { flex: 1; min-width: 160px; }
+.replay-legend i { display: inline-block; width: 10px; height: 10px; margin: 0 4px 0 8px; border-radius: 2px; }
+.replay-stage { position: relative; flex: 1; overflow: hidden; }
+.city-labels { position: absolute; inset: 0; pointer-events: none; }
+.city-label { display: flex; flex-direction: column; align-items: center; padding: 2px 6px; border-radius: 4px;
+  background: rgba(255, 255, 255, .85); font-size: 11px; line-height: 1.2; text-align: center; white-space: nowrap; }
+.city-label span { color: #555; }
+.city-label em { font-style: normal; color: #333; }
+.city-label em.hot { color: #b00020; font-weight: bold; }
+.replay-loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: #555; }

@@ -15,7 +15,7 @@ const scraper: TrafficSource = { id: 'scraper', clients: 2, abusive: true, longT
 export const urlShortener: Scenario = {
   id: 'url-shortener',
   title: 'Raccourcisseur d’URL',
-  subtitle: 'Hold the Line : heure de pointe',
+  subtitle: 'Hold the Line : les portes de la cité',
   waves: [
     {
       id: 'launch',

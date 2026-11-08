@@ -101,6 +101,8 @@ interface TickContext {
   tick: number;
   failures: Record<FailureReason, number>;
   nodeFailed: Map<string, number>;
+  /** Trafic abusif écarté par nœud pendant le tick : voulu, donc hors échecs. */
+  nodeShed: Map<string, number>;
   events: SimEvent[];
   shed: { value: number };
 }
@@ -157,7 +159,8 @@ export function simulateWave(
   for (let tick = 0; tick < wave.ticks; tick++) {
     const factor = factorAt(wave, tick);
     const nodeFailed = new Map<string, number>();
-    const ctx: TickContext = { tick, failures, nodeFailed, events, shed };
+    const nodeShed = new Map<string, number>();
+    const ctx: TickContext = { tick, failures, nodeFailed, nodeShed, events, shed };
     const failedBefore = sumFailures(failures);
 
     const inbound = new Map<string, Flow>([...nodes.keys()].map((id) => [id, new Map()]));
@@ -211,6 +214,7 @@ export function simulateWave(
         failed: nodeFailed.get(id) ?? 0,
         ...(backlogs.has(id) ? { backlog: sumRps(backlogs.get(id)!) } : {}),
         ...(outcome.instances !== undefined ? { instances: outcome.instances } : {}),
+        ...(nodeShed.has(id) ? { shed: nodeShed.get(id)! } : {}),
       };
     }
 
@@ -230,6 +234,7 @@ export function simulateWave(
       failed: sumFailures(failures) - failedBefore,
       avgLatencyMs: tickLatency,
       nodes: nodeTicks,
+      links: linkTraffic(routed),
     });
   }
 
@@ -358,7 +363,10 @@ function applyRateLimit(nodeId: string, flow: Flow, limitPerClient: number, env:
     }
     const rejected = rps - allowed;
     keepShare.set(sourceId, allowed / rps);
-    if (src?.abusive) env.ctx.shed.value += rejected;
+    if (src?.abusive) {
+      env.ctx.shed.value += rejected;
+      env.ctx.nodeShed.set(nodeId, (env.ctx.nodeShed.get(nodeId) ?? 0) + rejected);
+    }
     else fail(env.ctx, nodeId, 'rate-limited', rejected);
     env.ctx.events.push({ type: 'rate-limited', tick: env.ctx.tick, node: nodeId, source: sourceId, rejectedRps: rejected });
   }
@@ -597,6 +605,16 @@ interface RouteEnv {
   reportedNoRoute: Set<string>;
   routed: Routed;
   hitRateAt: (nodeId: string, s: Stream) => number;
+}
+
+function linkTraffic(routed: Routed): TickMetrics['links'] {
+  const links: TickMetrics['links'] = {};
+  for (const [from, byKind] of routed) {
+    for (const [kind, byTo] of byKind) {
+      for (const [to, rps] of byTo) (links[`${from}→${to}`] ??= {})[kind] = rps;
+    }
+  }
+  return links;
 }
 
 function route(id: string, def: ComponentDef, passed: Flow, routes: NodeRoutes, env: RouteEnv): void {

@@ -166,6 +166,8 @@ export interface NodeTick {
   backlog?: number;
   /** Instances en service ce tick, pour un nœud qui en a plusieurs. */
   instances?: number;
+  /** Trafic abusif écarté ici par le rate limiting ce tick (req/s), hors échecs. */
+  shed?: number;
 }
 
 export interface TickMetrics {
@@ -174,6 +176,8 @@ export interface TickMetrics {
   failed: number;
   avgLatencyMs: number;
   nodes: Record<string, NodeTick>;
+  /** Débit envoyé sur chaque lien (clé `from→to`) par type de requête : ce que le rendu anime. */
+  links: Record<string, Partial<Record<RequestKind, number>>>;
 }
 
 export interface Gauge {

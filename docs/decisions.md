@@ -54,6 +54,15 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 | I3 | Le cache est en **cache-aside** : le serveur le consulte, et en cas d'absence lit lui-même la base. On relie serveur → cache et serveur → base ; un cache ne peut alimenter aucun composant. Le CDN reste en ligne, devant le serveur. | Le modèle précédent était un cache read-through (serveur → cache → base) : faux pour le pattern attendu en entretien, et contre-intuitif à câbler. Retour de jeu de François. | Fait ; équilibrage inchangé |
 | I2 | Pas de lien vers le calendrier dans le debrief. Le champ `conceptRef` des vagues reste : le contenu des fiches servira à écrire des explications dans le jeu. | Envoyer le joueur hors du jeu casse la boucle ; l'explication doit venir au moment où la vague casse. | Lien retiré ; explications à faire (lire `concepts.js`, repo voisin, `--add-dir` nécessaire) |
 
+## Phase 2 : rendu
+
+| # | Décision | Pourquoi | Statut |
+|---|---|---|---|
+| R1 | Rendu en **Three.js**, caméra orthographique en vue isométrique, low-poly. Chargé à la demande au premier rejeu (138 Ko gzip), l'interface de construction reste légère. | Ambiance 3D voulue par François ; le moteur TS reste tel quel. Godot aurait imposé de porter le moteur ; le template claude-code-game-studios n'apporte rien au web. | Fait (spike) |
+| R2 | Métaphore du raccourcisseur : **la cité fortifiée** (*Les portes de la cité*), qui remplace la ville à l'heure de pointe, jugée trop proche d'un plan de serveurs. Hameaux hors les murs = source, porte de la cité = load balancer (herse baissée = rate limiting), tours des scribes = serveurs (une tour par instance), carnet du scribe = cache, archives royales = base (annexes = réplicas), relais de poste = file, avant-poste = CDN. Messager = lecture, charrette = écriture, pigeon voyageur = async ; requête en échec = demi-tour rouge ; trafic abusif = pillards repoussés à la porte ; saturation = bâtiment qui rougit et file de messagers ralentis. Remparts autour de tout ce qui n'est pas une source, la porte dans le mur. Le nom technique reste affiché sous le nom de la métaphore. | Fait de Hold the Line un vrai tower defense (tenir les remparts, repousser les pillards) et le démarque nettement de Server Survival. Le thème est une donnée (`src/data/themes/fortified-city.ts`). | Fait |
+| R4 | Bâtiments, remparts et arbres en modèles Kenney CC0 (Castle Kit, Retro Fantasy Kit), dans `public/models/` : seuls les modèles utilisés et leurs textures, crédits dans `public/models/CREDITS.md`. Chargés par rejeu (environ 500 Ko). Les requêtes restent des formes simples, aucun kit n'ayant de charrettes ni de cavaliers. | Ambiance validée par François en formes simples ; les kits donnent les pièces exactes de la métaphore, herse comprise. | Fait |
+| R3 | Additions au moteur pour la phase 2, en sortie seulement : `TickMetrics.links` (débit par lien et par type à chaque tick) et `NodeTick.shed` (trafic abusif écarté par nœud). | Le rejeu doit savoir ce qui roule sur chaque route et qui est repoussé à la porte ; la simulation elle-même ne change pas. | Fait |
+
 ## Élargissement du MVP
 
 Sans lui, le raccourcisseur n'avait qu'une vague à vrai choix sur cinq : pour des lectures
@@ -83,6 +92,9 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 3 vagues sur 5 ont au moins deux stratégies.
 
 ## Prochaines étapes
+
+0. Phase 2 : scénariser les vagues dans la métaphore (briefings des marchands, des
+   pillards…), et remplacer les véhicules en formes simples si un kit adapté existe.
 
 1. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
    comprise (B4).

@@ -16,6 +16,8 @@ export interface Attempt {
   played: boolean;
   /** Réglages de calibrage différents du code au moment de la tentative. */
   settings: string[];
+  /** Architecture jouée, pour la rejouer en 3D. */
+  arch: Architecture;
 }
 
 export interface ViewState {
@@ -222,6 +224,7 @@ function renderDebrief(a: Attempt, s: ViewState): string {
   return `
     <section class="${r.won ? 'won' : 'lost'}">
       <h2>${esc(a.label)} : ${r.won ? 'tenue' : 'perdue'}${a.played && r.won ? ` — ${fmt(a.score)} points` : ''}</h2>
+      ${r.ticks.length > 0 ? `<p><button data-action="replay" data-attempt="${a.id}"><b>Voir la vague</b></button></p>` : ''}
       ${r.lossReasons.length > 0 ? `<ul>${r.lossReasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
       ${a.played && !r.won ? '<p>La vague se rejoue depuis l’architecture validée à la vague précédente. Si un choix plus ancien la rend impossible, revenir à une vague antérieure (en haut) : ça compte comme un rejeu.</p>' : ''}
       <div class="cols">

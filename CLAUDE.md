@@ -35,6 +35,12 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
 - `src/ui/` : interface brute de phase 1, TypeScript natif sans framework. `main.ts`
   tient l'état et les actions (`data-action` délégués), `views.ts` rend tout en chaînes
   HTML à chaque changement, `editor.ts` et `calibration.ts` sont purs et testés.
+- `src/render/` : rejeu 3D isométrique (Three.js), chargé à la demande depuis le debrief.
+  `layout.ts` et `traffic.ts` sont purs et testés ; `scene.ts` ne fait qu'afficher un tick
+  déjà calculé. La métaphore vient d'un thème en données (`src/data/themes/fortified-city.ts`).
+- `public/models/` : modèles Kenney (CC0) chargés par le rejeu. N'y copier que les modèles
+  utilisés, avec les textures qu'ils référencent (chemin `Textures/` conservé), et tenir
+  `CREDITS.md` à jour.
 - `src/balance/` : outillage d'équilibrage (énumération canonique, rapport par vague) ;
   hors moteur, il ne fait qu'appeler `simulateWave`.
 - `src/data/catalog.ts` : composants et évolutions. `src/data/scenarios/` : un fichier
@@ -60,7 +66,10 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
 - Le MVP de la spec a été élargi au CDN et à l'autoscaling (`docs/decisions.md`, X1–X4).
 - Le calibrage et la partie sont gardés dans `localStorage` (clé `hold-the-line:v4`) :
   changer la version de la clé dès que la forme de la partie ou du catalogue change.
-- Tout texte venant de l'état passe par `esc()` avant d'entrer dans le HTML.
+- Tout texte venant de l'état passe par `esc()` (interface) ou `escapeHtml()` (rendu)
+  avant d'entrer dans le HTML.
+- Le rendu ne simule rien : s'il faut une donnée de plus pour animer, elle s'ajoute aux
+  ticks du moteur, jamais recalculée dans `src/render/`.
 - Pas de cascade de pannes : un aval saturé ne ralentit pas l'amont (décision M3, V2).
 - Le travail d'un flux est divisé par sa taille de lot (`batch`), mais les échecs se
   comptent toujours en messages.

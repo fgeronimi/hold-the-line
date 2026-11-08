@@ -38,10 +38,30 @@ function update(patch: Partial<ViewState>): void {
 }
 
 /** Les tentatives ne sont pas sauvegardées : un résultat ne vaut que pour la calibration du moment. */
-function record(attempt: Omit<Attempt, 'id' | 'settings'>): Partial<ViewState> {
+function record(attempt: Omit<Attempt, 'id' | 'settings' | 'arch'>): Partial<ViewState> {
   const id = nextAttemptId++;
   const settings = changedSettings({ catalog: defaultCatalog, scenario: urlShortener }, state, attempt.waveIndex);
-  return { attempts: [...state.attempts, { ...attempt, id, settings }], selected: id };
+  return { attempts: [...state.attempts, { ...attempt, id, settings, arch: state.draft }], selected: id };
+}
+
+let closeReplay: (() => void) | undefined;
+
+/** Le rendu 3D n'est chargé qu'au premier rejeu : la construction reste légère. */
+async function replay(attempt: Attempt): Promise<void> {
+  const [{ openReplay }, { fortifiedCity: theme }] = await Promise.all([
+    import('../render/replay.ts'),
+    import('../data/themes/fortified-city.ts'),
+  ]);
+  closeReplay?.();
+  const wave = state.scenario.waves[attempt.waveIndex];
+  closeReplay = openReplay(document.body, {
+    title: `${theme.title} — vague ${attempt.waveIndex + 1}${wave ? ` : ${wave.title}` : ''}`,
+    arch: attempt.arch,
+    result: attempt.result,
+    catalog: state.catalog,
+    theme,
+    baseUrl: import.meta.env.BASE_URL,
+  });
 }
 
 function describeDraft(arch: Architecture): string {
@@ -88,6 +108,10 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     update(record({ label, waveIndex, result, score: scoreWave(result, state.game.replays, scoring), played: false }));
   },
   select: (el) => update({ selected: Number(el.dataset.attempt) }),
+  replay: (el) => {
+    const attempt = state.attempts.find((a) => a.id === Number(el.dataset.attempt));
+    if (attempt) void replay(attempt);
+  },
 
   calibrate: (el) => {
     const input = el as HTMLInputElement;
