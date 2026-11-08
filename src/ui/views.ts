@@ -5,7 +5,6 @@ import { linkFlows, type LinkFlows } from '../engine/routing.ts';
 import { validateArchitecture } from '../engine/validate.ts';
 import { calibrationGroups, formatField, getAt } from './calibration.ts';
 
-const CALENDAR_URL = 'https://github.com/fgeronimi/advent-of-system-design';
 
 export interface Attempt {
   id: number;
@@ -215,7 +214,6 @@ function renderAttempts(s: ViewState): string {
 
 function renderDebrief(a: Attempt, s: ViewState): string {
   const r = a.result;
-  const wave = s.scenario.waves[a.waveIndex];
   const nodes = Object.entries(r.nodes)
     .filter(([, n]) => n.peakUtilization > 0 || n.failed > 0)
     .sort(([, x], [, y]) => y.peakUtilization - x.peakUtilization);
@@ -240,7 +238,6 @@ function renderDebrief(a: Attempt, s: ViewState): string {
           <h3>Échecs</h3>
           <p>${reasons.length > 0 ? reasons.map(([k, v]) => `${esc(k)} : ${fmt(v)}`).join(' · ') : 'aucun'}
             ${r.shed > 0 ? ` · trafic abusif écarté : ${fmt(r.shed)}` : ''}</p>
-          ${wave?.conceptRef ? `<p>Pour aller plus loin : fiche <a href="${CALENDAR_URL}" target="_blank" rel="noopener">« ${esc(wave.conceptRef)} »</a> du calendrier.</p>` : ''}
         </div>
         <div>
           <h3>Composants</h3>

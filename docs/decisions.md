@@ -51,6 +51,8 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 |---|---|---|---|
 | I1 | Les liens ne portent plus de type de requête : le joueur relie des composants, le moteur déduit le chemin. Chaque composant déclare les types qu'il accepte ; un type va au voisin le plus spécialisé qui l'accepte (cache pour les lectures, file pour l'async), sinon au généraliste. Le schéma affiche ce qui circule réellement sur chaque lien. Les types restent dans le moteur. | Cocher read, write et async par lien n'offrait aucun vrai choix (personne n'envoie ses lectures en base à côté d'un cache) et alourdissait la construction. Sans les types dans le moteur, cache, réplicas, file et rate limiting perdraient leur sens. | Fait ; équilibrage inchangé |
 
+| I2 | Pas de lien vers le calendrier dans le debrief. Le champ `conceptRef` des vagues reste : le contenu des fiches servira à écrire des explications dans le jeu. | Envoyer le joueur hors du jeu casse la boucle ; l'explication doit venir au moment où la vague casse. | Lien retiré ; explications à faire (lire `concepts.js`, repo voisin, `--add-dir` nécessaire) |
+
 ## Élargissement du MVP
 
 Sans lui, le raccourcisseur n'avait qu'une vague à vrai choix sur cinq : pour des lectures
@@ -83,6 +85,7 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 
 1. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
    comprise (B4).
-2. Lien du debrief vers la fiche exacte du calendrier : il pointe vers le dépôt, faute
-   d'avoir lu `concepts.js` (repo voisin, `--add-dir` nécessaire).
-3. Corriger la spec : colonne MVP du CDN et de l'autoscaling, « or gagné » (E1).
+2. Faire jouer 2 ou 3 personnes de la cible : publier sur GitHub Pages (dépôt distant
+   et workflow de déploiement à créer).
+3. Explications en jeu tirées des fiches du calendrier (I2).
+4. Corriger la spec : colonne MVP du CDN et de l'autoscaling, « or gagné » (E1).

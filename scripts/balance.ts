@@ -38,3 +38,6 @@ for (const w of report.waves) {
 console.log('');
 console.log(`Architecture gagnant toutes les vagues : ${report.universalWinners.length === 0 ? 'aucune (ok)' : `${report.universalWinners.length} (KO)`}`);
 console.log(`Deux stratégies sur la majorité des vagues : ${report.majorityHasTwoStrategies ? 'oui (ok)' : 'non (KO)'}`);
+for (const o of report.overprovisioned) {
+  console.log(`Tout au maximum, ${o.waveId} : ${o.losesOnBudget ? 'perd (ok)' : 'KO'} — ${o.lossReasons.join(' ; ') || 'gagne'}`);
+}

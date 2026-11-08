@@ -106,6 +106,10 @@ describe('runMassSim sur le raccourcisseur', () => {
     expect(wave('noisy-client').strategies.every((s) => s.includes('rate limiting'))).toBe(true);
   });
 
+  it('l’architecture au maximum de tout perd chaque vague par le coût ou la complexité', () => {
+    expect(report.overprovisioned.filter((o) => !o.losesOnBudget)).toEqual([]);
+  });
+
   it('marque comme dominée une réponse connue alourdie d’un composant inutile', () => {
     expect(wave('launch').groups.find((g) => g.strategy === 'load balancer')?.dominatedBy).toBe('serveur + base');
   });

@@ -93,6 +93,21 @@ export function strategyName(parts: string[]): string {
   return parts.length > 0 ? parts.join(' + ') : 'serveur + base';
 }
 
+/** Tout au maximum : la réponse sur-dimensionnée type, qui doit perdre partout. */
+export function maxedChoice(space: SearchSpace): CanonicalChoice {
+  return {
+    cdn: true,
+    loadBalancer: true,
+    autoscaling: Math.max(...space.autoscalingLevels),
+    extraInstances: space.maxExtraInstances,
+    rateLimitTier: space.rateLimitTiers,
+    cache: true,
+    replicas: space.maxReplicas,
+    queue: true,
+    extraWorkers: space.maxExtraWorkers,
+  };
+}
+
 export function choiceKey(c: CanonicalChoice): string {
   return [c.cdn, c.loadBalancer, c.autoscaling, c.extraInstances, c.rateLimitTier, c.cache, c.replicas, c.queue, c.extraWorkers].join('|');
 }

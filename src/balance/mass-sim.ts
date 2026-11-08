@@ -1,7 +1,7 @@
 import { scoreWave, type Scoring } from '../engine/score.ts';
 import { simulateWave } from '../engine/simulate.ts';
 import type { Catalog, Scenario, WaveResult } from '../engine/types.ts';
-import { choiceKey, enumerate, reductions, strategyName, strategyParts, type CanonicalChoice, type SearchSpace } from './canonical.ts';
+import { buildCanonical, choiceKey, enumerate, maxedChoice, reductions, strategyName, strategyParts, type CanonicalChoice, type SearchSpace } from './canonical.ts';
 
 export interface StrategyGroup {
   strategy: string;
@@ -34,6 +34,8 @@ export interface MassSimReport {
   universalWinners: CanonicalChoice[];
   /** Critère B1 : au moins deux stratégies non dominées sur la majorité des vagues. */
   majorityHasTwoStrategies: boolean;
+  /** Critère de sortie : l'architecture au maximum de tout perd chaque vague par le coût ou la complexité. */
+  overprovisioned: { waveId: string; lossReasons: string[]; losesOnBudget: boolean }[];
 }
 
 /**
@@ -97,6 +99,14 @@ export function runMassSim(scenario: Scenario, catalog: Catalog, space: SearchSp
     waves,
     universalWinners: [...winsEverywhere].map((i) => candidates[i]!.choice),
     majorityHasTwoStrategies: withTwo > waves.length / 2,
+    overprovisioned: scenario.waves.map((wave) => {
+      const r = simulateWave(buildCanonical(maxedChoice(space)), wave, catalog);
+      return {
+        waveId: wave.id,
+        lossReasons: r.lossReasons,
+        losesOnBudget: !r.won && (r.gauges.cost.margin < 0 || r.gauges.complexity.margin < 0),
+      };
+    }),
   };
 }
 
