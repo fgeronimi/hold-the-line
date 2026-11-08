@@ -3,7 +3,7 @@ import { catalog } from '../src/data/catalog.ts';
 import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { calibrationGroups, changedSettings, getAt, parseField, setAt } from '../src/ui/calibration.ts';
-import { addLink, addNode, nextNodeId, removeLink, removeNode, setUpgrade, toggleLinkKind } from '../src/ui/editor.ts';
+import { addLink, addNode, nextNodeId, removeLink, removeNode, setUpgrade } from '../src/ui/editor.ts';
 
 describe('editor', () => {
   it('numérote les nœuds du même type', () => {
@@ -24,17 +24,10 @@ describe('editor', () => {
     expect(setUpgrade(up, 'db', 'read-replica', 0).nodes.find((n) => n.id === 'db')).toEqual({ id: 'db', type: 'database' });
   });
 
-  it('fusionne les types d’un lien existant et ignore les liens absurdes', () => {
-    const r = addLink(A.withCache, 'app', 'cache', ['write', 'read']);
-    expect(r.links.find((l) => l.from === 'app' && l.to === 'cache')!.kinds).toEqual(['read', 'write']);
-    expect(addLink(A.minimal, 'app', 'app', ['read'])).toBe(A.minimal);
-    expect(addLink(A.minimal, 'app', 'db', [])).toBe(A.minimal);
-  });
-
-  it('retirer le dernier type d’un lien retire le lien', () => {
-    const one = { nodes: A.minimal.nodes, links: [{ from: 'src', to: 'app', kinds: ['read' as const] }] };
-    expect(toggleLinkKind(one, 0, 'read').links).toEqual([]);
-    expect(toggleLinkKind(one, 0, 'write').links[0]!.kinds).toEqual(['read', 'write']);
+  it('ignore un lien déjà présent ou vers soi-même', () => {
+    expect(addLink(A.minimal, 'app', 'db')).toBe(A.minimal);
+    expect(addLink(A.minimal, 'app', 'app')).toBe(A.minimal);
+    expect(addLink(A.minimal, 'db', 'app').links).toHaveLength(3);
     expect(removeLink(A.minimal, 0).links).toEqual([A.minimal.links[1]]);
   });
 });

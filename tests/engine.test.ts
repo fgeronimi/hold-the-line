@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { simulateWave } from '../src/engine/simulate.ts';
-import type { ArchLink, Architecture, Catalog, RequestKind, TrafficSource, Wave } from '../src/engine/types.ts';
+import type { ArchLink, Architecture, Catalog, TrafficSource, Wave } from '../src/engine/types.ts';
 import { validateArchitecture } from '../src/engine/validate.ts';
 
 // Catalogue aux chiffres ronds, indépendant du calibrage du jeu.
 const catalog: Catalog = {
   components: {
-    src: { id: 'src', behavior: 'source', label: 'S', techName: 'S', cost: 0, complexity: 0, capacity: 1, latencyMs: 0, workPerRequest: {}, terminalFor: [] },
-    edge: { id: 'edge', behavior: 'edge', label: 'CDN', techName: 'CDN', cost: 30, complexity: 2, capacity: 10000, latencyMs: 1, workPerRequest: { read: 1 }, terminalFor: [], hitRate: 0.5 },
-    lb: { id: 'lb', behavior: 'balancer', label: 'LB', techName: 'LB', cost: 10, complexity: 1, capacity: 10000, latencyMs: 1, workPerRequest: { read: 1, write: 1, async: 1 }, terminalFor: [] },
-    app: { id: 'app', behavior: 'service', label: 'App', techName: 'App', cost: 20, complexity: 1, capacity: 100, latencyMs: 10, workPerRequest: { read: 1, write: 1, async: 1 }, terminalFor: [] },
-    cache: { id: 'cache', behavior: 'cache', label: 'Cache', techName: 'Cache', cost: 5, complexity: 2, capacity: 10000, latencyMs: 1, workPerRequest: { read: 1 }, terminalFor: [], hitRate: 0.8 },
-    db: { id: 'db', behavior: 'database', label: 'DB', techName: 'DB', cost: 50, complexity: 2, capacity: 100, latencyMs: 5, workPerRequest: { read: 1, write: 2, async: 2 }, terminalFor: ['read', 'write', 'async'] },
-    queue: { id: 'queue', behavior: 'queue', label: 'Q', techName: 'Q', cost: 25, complexity: 2, capacity: 10000, latencyMs: 2, workPerRequest: { async: 1 }, terminalFor: [], batchSize: 10, maxBacklog: 1000, allowedDownstream: ['app'] },
+    src: { id: 'src', behavior: 'source', label: 'S', techName: 'S', cost: 0, complexity: 0, capacity: 1, latencyMs: 0, workPerRequest: {}, terminalFor: [], accepts: [] },
+    edge: { id: 'edge', behavior: 'edge', label: 'CDN', techName: 'CDN', cost: 30, complexity: 2, capacity: 10000, latencyMs: 1, workPerRequest: { read: 1 }, terminalFor: [], accepts: ['read', 'write', 'async'], hitRate: 0.5 },
+    lb: { id: 'lb', behavior: 'balancer', label: 'LB', techName: 'LB', cost: 10, complexity: 1, capacity: 10000, latencyMs: 1, workPerRequest: { read: 1, write: 1, async: 1 }, terminalFor: [], accepts: ['read', 'write', 'async'] },
+    app: { id: 'app', behavior: 'service', label: 'App', techName: 'App', cost: 20, complexity: 1, capacity: 100, latencyMs: 10, workPerRequest: { read: 1, write: 1, async: 1 }, terminalFor: [], accepts: ['read', 'write', 'async'] },
+    cache: { id: 'cache', behavior: 'cache', label: 'Cache', techName: 'Cache', cost: 5, complexity: 2, capacity: 10000, latencyMs: 1, workPerRequest: { read: 1 }, terminalFor: [], accepts: ['read'], routingPriority: 1, hitRate: 0.8 },
+    db: { id: 'db', behavior: 'database', label: 'DB', techName: 'DB', cost: 50, complexity: 2, capacity: 100, latencyMs: 5, workPerRequest: { read: 1, write: 2, async: 2 }, terminalFor: ['read', 'write', 'async'], accepts: ['read', 'write', 'async'] },
+    queue: { id: 'queue', behavior: 'queue', label: 'Q', techName: 'Q', cost: 25, complexity: 2, capacity: 10000, latencyMs: 2, workPerRequest: { async: 1 }, terminalFor: [], accepts: ['async'], routingPriority: 1, batchSize: 10, maxBacklog: 1000, allowedDownstream: ['app'] },
   },
   upgrades: {
     scale: { id: 'scale', label: 'Scale', techName: 'Scale', appliesTo: 'app', maxLevel: 5, cost: { base: 0, perLevel: 20 }, complexity: { base: 1, perLevel: 0 }, requiresUpstream: ['lb', 'queue'], removalCost: 'free', effect: { type: 'instances' } },
@@ -22,7 +22,7 @@ const catalog: Catalog = {
   },
 };
 
-const l = (from: string, to: string, ...kinds: RequestKind[]): ArchLink => ({ from, to, kinds });
+const l = (from: string, to: string): ArchLink => ({ from, to });
 
 function wave(sources: TrafficSource[], overrides: Partial<Wave> = {}): Wave {
   return {
@@ -43,7 +43,7 @@ const users = (rps: TrafficSource['rps'], clients = 100): TrafficSource => ({ id
 
 const appToDb: Architecture = {
   nodes: [{ id: 's', type: 'src' }, { id: 'a', type: 'app' }, { id: 'd', type: 'db' }],
-  links: [l('s', 'a', 'read', 'write'), l('a', 'd', 'read', 'write')],
+  links: [l('s', 'a'), l('a', 'd')],
 };
 
 describe('simulateWave', () => {
@@ -82,7 +82,7 @@ describe('simulateWave', () => {
   it('fait échouer une requête qui n’a pas de route', () => {
     const arch: Architecture = {
       nodes: [{ id: 's', type: 'src' }, { id: 'a', type: 'app' }],
-      links: [l('s', 'a', 'read')],
+      links: [l('s', 'a')],
     };
     const r = simulateWave(arch, wave([users({ read: 10 })]), catalog);
     expect(r.gauges.failureRate.value).toBe(1);
@@ -98,7 +98,7 @@ describe('simulateWave', () => {
   it('le cache détourne sa part de lectures de la base', () => {
     const arch: Architecture = {
       nodes: [{ id: 's', type: 'src' }, { id: 'a', type: 'app' }, { id: 'c', type: 'cache' }, { id: 'd', type: 'db' }],
-      links: [l('s', 'a', 'read'), l('a', 'c', 'read'), l('c', 'd', 'read')],
+      links: [l('s', 'a'), l('a', 'c'), l('c', 'd')],
     };
     const r = simulateWave(arch, wave([users({ read: 90 })]), catalog);
     expect(r.ticks[0]!.nodes.d!.utilization).toBeCloseTo(0.18);
@@ -107,7 +107,7 @@ describe('simulateWave', () => {
   describe('CDN', () => {
     const arch: Architecture = {
       nodes: [{ id: 's', type: 'src' }, { id: 'e', type: 'edge' }, { id: 'a', type: 'app' }, { id: 'd', type: 'db' }],
-      links: [l('s', 'e', 'read', 'async'), l('e', 'a', 'read', 'async'), l('a', 'd', 'read', 'async')],
+      links: [l('s', 'e'), l('e', 'a'), l('a', 'd')],
     };
 
     it('sert une part des lectures en bordure', () => {
@@ -135,7 +135,7 @@ describe('simulateWave', () => {
         { id: 'a', type: 'app', upgrades: { auto: 3 } },
         { id: 'd', type: 'db', upgrades: { replica: 3 } },
       ],
-      links: [l('s', 'lb', 'read'), l('lb', 'a', 'read'), l('a', 'd', 'read')],
+      links: [l('s', 'lb'), l('lb', 'a'), l('a', 'd')],
     };
     // 40 req/s pendant 4 ticks, puis 200 req/s : il faut 3 instances de plus à 50 % de charge cible.
     const peak = wave([users({ read: 40 })], {
@@ -187,7 +187,7 @@ describe('simulateWave', () => {
         { id: 'a', type: 'app', upgrades: { scale: 1 } },
         { id: 'd', type: 'db', upgrades: { replica: 2 } },
       ],
-      links: [l('s', 'lb', 'read', 'async'), l('lb', 'a', 'read', 'async'), l('a', 'd', 'read', 'async')],
+      links: [l('s', 'lb'), l('lb', 'a'), l('a', 'd')],
     });
     const abuser: TrafficSource = { id: 'bot', clients: 1, abusive: true, rps: { read: 150 } };
 
@@ -230,10 +230,10 @@ describe('simulateWave', () => {
       ],
       // L'async entre directement dans la file pour isoler son comportement du serveur.
       links: [
-        l('s', 'a', 'read'),
-        l('a', 'd', 'read'),
-        l('s', 'q', 'async'),
-        ...(worker ? [l('q', 'w', 'async'), l('w', 'd', 'async')] : []),
+        l('s', 'a'),
+        l('a', 'd'),
+        l('s', 'q'),
+        ...(worker ? [l('q', 'w'), l('w', 'd')] : []),
       ],
     });
 
@@ -297,7 +297,7 @@ describe('simulateWave', () => {
   });
 
   it('renvoie une défaite expliquée pour une architecture invalide', () => {
-    const arch: Architecture = { ...appToDb, links: [...appToDb.links, l('d', 'a', 'read')] };
+    const arch: Architecture = { ...appToDb, links: [...appToDb.links, l('d', 'a')] };
     const r = simulateWave(arch, wave([users({ read: 10 })]), catalog);
     expect(r.won).toBe(false);
     expect(r.lossReasons).toEqual(['Architecture invalide : Le graphe contient un cycle']);
@@ -327,7 +327,7 @@ describe('validateArchitecture', () => {
   it('autorise le scaling d’un worker derrière une file', () => {
     const arch: Architecture = {
       nodes: [{ id: 's', type: 'src' }, { id: 'q', type: 'queue' }, { id: 'w', type: 'app', upgrades: { scale: 2 } }],
-      links: [l('s', 'q', 'async'), l('q', 'w', 'async')],
+      links: [l('s', 'q'), l('q', 'w')],
     };
     expect(errorsOf(arch)).toEqual([]);
   });
@@ -347,7 +347,7 @@ describe('validateArchitecture', () => {
   it('respecte les composants autorisés en aval', () => {
     const arch: Architecture = {
       nodes: [{ id: 's', type: 'src' }, { id: 'q', type: 'queue' }, { id: 'd', type: 'db' }],
-      links: [l('s', 'q', 'async'), l('q', 'd', 'async')],
+      links: [l('s', 'q'), l('q', 'd')],
     };
     expect(errorsOf(arch)).toEqual(['queue ne peut alimenter que app (q → d)']);
   });

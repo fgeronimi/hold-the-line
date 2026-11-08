@@ -2,7 +2,8 @@
  * Stockage local : le navigateur peut le refuser (navigation privée, données bloquées),
  * donc chaque accès est protégé et l'application tourne sans lui.
  */
-const KEY = 'hold-the-line:v1';
+// Changer la version dès que la forme sauvegardée change : une vieille sauvegarde est ignorée.
+const KEY = 'hold-the-line:v3';
 
 export function load<T>(): T | undefined {
   try {

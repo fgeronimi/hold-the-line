@@ -35,11 +35,14 @@ export function validateArchitecture(
     errors.push(`Il faut exactement une source de trafic (trouvé : ${sources.length})`);
   }
 
+  const seen = new Set<string>();
   for (const link of arch.links) {
+    const key = `${link.from}→${link.to}`;
+    if (seen.has(key)) errors.push(`Lien en double : ${link.from} → ${link.to}`);
+    seen.add(key);
     if (!byId.has(link.from)) errors.push(`Lien depuis un nœud inconnu : ${link.from}`);
     if (!byId.has(link.to)) errors.push(`Lien vers un nœud inconnu : ${link.to}`);
     if (link.from === link.to) errors.push(`Lien d'un nœud vers lui-même : ${link.from}`);
-    if (link.kinds.length === 0) errors.push(`Lien ${link.from} → ${link.to} sans type de requête`);
     const target = byId.get(link.to);
     const origin = byId.get(link.from);
     const allowed = origin && catalog.components[origin.type]?.allowedDownstream;

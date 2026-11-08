@@ -3,7 +3,7 @@ import { catalog } from '../src/data/catalog.ts';
 import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { migrationCost } from '../src/engine/budget.ts';
-import { newGame, playWave } from '../src/engine/game.ts';
+import { newGame, playWave, rewindTo } from '../src/engine/game.ts';
 import { scoreWave } from '../src/engine/score.ts';
 import type { Architecture, Gauge, WaveResult } from '../src/engine/types.ts';
 
@@ -120,5 +120,30 @@ describe('playWave', () => {
     expect(state.scores).toHaveLength(5);
     expect(state.scores.every((s) => s > 0)).toBe(true);
     expect(() => playWave(state, urlShortener, A.minimal, catalog, scoring)).toThrow();
+  });
+
+  it('revient à une vague antérieure avec son architecture, au prix d’un rejeu', () => {
+    // Parcours CDN : il gagne les vagues 3 et 4, puis la vague 5 est ingagnable depuis là.
+    const answers = [A.minimal, A.withCache, A.withCdn(), A.withCdn({ rateLimitTier: A.TIER_40 })];
+    let state = newGame();
+    for (const arch of answers) ({ state } = playWave(state, urlShortener, arch, catalog, scoring));
+    expect(state.waveIndex).toBe(4);
+
+    const back = rewindTo(state, 2);
+    expect(back.waveIndex).toBe(2);
+    expect(back.committed).toBe(A.withCache);
+    expect(back.scores).toEqual(state.scores.slice(0, 2));
+    expect(back.replays).toBe(1);
+
+    let replay = back;
+    for (const arch of [A.scaled(3), A.scaled(3, { rateLimitTier: A.TIER_40 }), A.queuedClicks(3)]) {
+      ({ state: replay } = playWave(replay, urlShortener, arch, catalog, scoring));
+    }
+    expect(replay.finished).toBe(true);
+    expect(replay.history).toHaveLength(6);
+  });
+
+  it('refuse de sauter à une vague pas encore atteinte', () => {
+    expect(() => rewindTo(newGame(), 1)).toThrow();
   });
 });

@@ -17,6 +17,7 @@ export const catalog: Catalog = {
       latencyMs: 0,
       workPerRequest: {},
       terminalFor: [],
+      accepts: [],
     },
     cdn: {
       id: 'cdn',
@@ -30,6 +31,7 @@ export const catalog: Catalog = {
       // Seules les lectures sont servies en bordure ; le reste traverse sans coût.
       workPerRequest: { read: 1 },
       terminalFor: [],
+      accepts: ['read', 'write', 'async'],
       hitRate: 0.8,
     },
     'load-balancer': {
@@ -43,6 +45,7 @@ export const catalog: Catalog = {
       latencyMs: 1,
       workPerRequest: { read: 1, write: 1, async: 1 },
       terminalFor: [],
+      accepts: ['read', 'write', 'async'],
     },
     'app-server': {
       id: 'app-server',
@@ -56,6 +59,7 @@ export const catalog: Catalog = {
       // Émettre un événement de clic ne coûte presque rien ; c'est son écriture en base qui pèse.
       workPerRequest: { read: 1, write: 2, async: 0.02 },
       terminalFor: [],
+      accepts: ['read', 'write', 'async'],
     },
     cache: {
       id: 'cache',
@@ -68,6 +72,8 @@ export const catalog: Catalog = {
       latencyMs: 1,
       workPerRequest: { read: 1 },
       terminalFor: [],
+      accepts: ['read'],
+      routingPriority: 1,
       hitRate: 0.95,
     },
     database: {
@@ -81,6 +87,7 @@ export const catalog: Catalog = {
       latencyMs: 5,
       workPerRequest: { read: 1, write: 3, async: 3 },
       terminalFor: ['read', 'write', 'async'],
+      accepts: ['read', 'write', 'async'],
     },
     'message-queue': {
       id: 'message-queue',
@@ -93,6 +100,8 @@ export const catalog: Catalog = {
       latencyMs: 2,
       workPerRequest: { read: 1, write: 1, async: 1 },
       terminalFor: [],
+      accepts: ['async'],
+      routingPriority: 1,
       batchSize: 100,
       maxBacklog: 200000,
       // Une base qui consomme directement une file n'existe pas : il faut un worker.

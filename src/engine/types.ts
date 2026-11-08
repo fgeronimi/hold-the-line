@@ -25,6 +25,13 @@ export interface ComponentDef {
   workPerRequest: Partial<Record<RequestKind, number>>;
   /** Types de requêtes dont le traitement s'arrête ici. */
   terminalFor: RequestKind[];
+  /** Types de requêtes que ce composant reçoit quand un voisin amont lui est relié. */
+  accepts: RequestKind[];
+  /**
+   * Un type va de préférence au voisin de plus haute priorité qui l'accepte : un cache
+   * (lectures) ou une file (async) passent avant la base, qui accepte tout.
+   */
+  routingPriority?: number;
   hitRate?: number;
   /** File : nombre de messages regroupés en un seul envoi vers l'aval. */
   batchSize?: number;
@@ -79,10 +86,10 @@ export interface ArchNode {
   upgrades?: Record<string, number>;
 }
 
+/** Un lien relie deux composants ; ce qui y circule est déduit par `routeTable`. */
 export interface ArchLink {
   from: string;
   to: string;
-  kinds: RequestKind[];
 }
 
 export interface Architecture {

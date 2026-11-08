@@ -1,4 +1,4 @@
-import type { ArchLink, ArchNode, Architecture, RequestKind } from '../engine/types.ts';
+import type { ArchLink, ArchNode, Architecture } from '../engine/types.ts';
 
 /**
  * Bornes de l'énumération (décision B3). Chaque composant a une place fixe dans le
@@ -33,24 +33,23 @@ export interface Candidate {
   parts: string[];
 }
 
-const link = (from: string, to: string, ...kinds: RequestKind[]): ArchLink => ({ from, to, kinds });
+const link = (from: string, to: string): ArchLink => ({ from, to });
 
 export function buildCanonical(c: CanonicalChoice): Architecture {
   const nodes: ArchNode[] = [{ id: 'src', type: 'traffic-source' }];
   const links: ArchLink[] = [];
-  const all: RequestKind[] = ['read', 'write', 'async'];
 
   let entry = 'src';
   if (c.cdn) {
     nodes.push({ id: 'cdn', type: 'cdn' });
-    links.push(link('src', 'cdn', ...all));
+    links.push(link('src', 'cdn'));
     entry = 'cdn';
   }
   if (c.loadBalancer) {
     nodes.push({ id: 'lb', type: 'load-balancer', upgrades: { 'rate-limiting': c.rateLimitTier } });
-    links.push(link(entry, 'lb', ...all), link('lb', 'app', ...all));
+    links.push(link(entry, 'lb'), link('lb', 'app'));
   } else {
-    links.push(link(entry, 'app', ...all));
+    links.push(link(entry, 'app'));
   }
   nodes.push({
     id: 'app',
@@ -59,22 +58,19 @@ export function buildCanonical(c: CanonicalChoice): Architecture {
   });
   nodes.push({ id: 'db', type: 'database', upgrades: { 'read-replica': c.replicas } });
 
+  // Le serveur est toujours relié à la base ; le routage envoie les lectures au cache
+  // et l'async à la file quand ils sont là.
+  links.push(link('app', 'db'));
   if (c.cache) {
     nodes.push({ id: 'cache', type: 'cache' });
-    links.push(link('app', 'cache', 'read'), link('cache', 'db', 'read'));
-  } else {
-    links.push(link('app', 'db', 'read'));
+    links.push(link('app', 'cache'), link('cache', 'db'));
   }
-  links.push(link('app', 'db', 'write'));
-
   if (c.queue) {
     nodes.push(
       { id: 'queue', type: 'message-queue' },
       { id: 'worker', type: 'app-server', upgrades: { 'horizontal-scaling': c.extraWorkers } },
     );
-    links.push(link('app', 'queue', 'async'), link('queue', 'worker', 'async'), link('worker', 'db', 'async'));
-  } else {
-    links.push(link('app', 'db', 'async'));
+    links.push(link('app', 'queue'), link('queue', 'worker'), link('worker', 'db'));
   }
 
   return { nodes, links };

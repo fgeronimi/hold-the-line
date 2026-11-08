@@ -1,4 +1,5 @@
 import { migrationCost, totals } from './budget.ts';
+import { routeTable, type RouteTable } from './routing.ts';
 import type {
   ArchLink,
   ArchNode,
@@ -125,8 +126,7 @@ export function simulateWave(
 
   const nodes = new Map(arch.nodes.map((n) => [n.id, n]));
   const defOf = (id: string): ComponentDef => catalog.components[nodes.get(id)!.type]!;
-  const outLinks = new Map<string, ArchLink[]>();
-  for (const id of nodes.keys()) outLinks.set(id, arch.links.filter((l) => l.from === id));
+  const routes = routeTable(arch, catalog);
 
   const sourcesById = new Map(wave.sources.map((s) => [s.id, s]));
   const backlogs = new Map<string, Flow>();
@@ -182,11 +182,11 @@ export function simulateWave(
         sourcesById,
         backlogs,
         autoscalers,
-        consumers: (outLinks.get(id) ?? []).map((l) => ({ link: l, def: defOf(l.to), node: nodes.get(l.to)! })),
+        consumers: consumersOf(routes.get(id)!).map((c) => ({ ...c, def: defOf(c.id), node: nodes.get(c.id)! })),
       });
       outcomes.set(id, outcome);
 
-      route(id, def, outcome.passed, outLinks.get(id) ?? [], inbound, ctx, reportedNoRoute);
+      route(id, def, outcome.passed, routes.get(id)!, inbound, ctx, reportedNoRoute);
 
       const isSaturated = outcome.utilization > 1;
       if (isSaturated && !saturated.has(id)) {
@@ -211,7 +211,7 @@ export function simulateWave(
       };
     }
 
-    const pathLatency = computePathLatencies(validation.order, outLinks, outcomes, nodeTicks);
+    const pathLatency = computePathLatencies(validation.order, routes, outcomes, nodeTicks);
     const injectedSync = SYNC_KINDS.map((k) => ({ k, rps: sumRps(injected, (s) => s.kind === k) }));
     const syncRps = injectedSync.reduce((a, x) => a + x.rps, 0);
     const tickLatency =
@@ -269,7 +269,7 @@ interface ProcessEnv {
   sourcesById: Map<string, TrafficSource>;
   backlogs: Map<string, Flow>;
   autoscalers: Map<string, AutoscaleState>;
-  consumers: { link: ArchLink; def: ComponentDef; node: ArchNode }[];
+  consumers: { kinds: RequestKind[]; def: ComponentDef; node: ArchNode }[];
 }
 
 function processNode(node: ArchNode, def: ComponentDef, incoming: Flow, env: ProcessEnv): NodeOutcome {
@@ -569,7 +569,7 @@ function processQueue(node: ArchNode, def: ComponentDef, incoming: Flow, env: Pr
 function drainCapacity(kind: RequestKind, batch: number, env: ProcessEnv): number {
   let total = 0;
   for (const c of env.consumers) {
-    if (!c.link.kinds.includes(kind)) continue;
+    if (!c.kinds.includes(kind)) continue;
     const perBatch = c.def.workPerRequest[kind] ?? 0;
     if (perBatch === 0) return Infinity;
     total += ((c.def.capacity * instancesOf(c.node, env.catalog)) / perBatch) * batch;
@@ -577,18 +577,25 @@ function drainCapacity(kind: RequestKind, batch: number, env: ProcessEnv): numbe
   return total;
 }
 
+/** Voisins aval d'un nœud, avec les types que le routage leur envoie. */
+function consumersOf(routes: Record<RequestKind, string[]>): { id: string; kinds: RequestKind[] }[] {
+  const byId = new Map<string, RequestKind[]>();
+  for (const kind of REQUEST_KINDS) for (const id of routes[kind]) byId.set(id, [...(byId.get(id) ?? []), kind]);
+  return [...byId].map(([id, kinds]) => ({ id, kinds }));
+}
+
 function route(
   id: string,
   def: ComponentDef,
   passed: Flow,
-  links: ArchLink[],
+  routes: Record<RequestKind, string[]>,
   inbound: Map<string, Flow>,
   ctx: TickContext,
   reportedNoRoute: Set<string>,
 ): void {
   for (const s of passed.values()) {
     if (def.terminalFor.includes(s.kind)) continue;
-    const targets = links.filter((l) => l.kinds.includes(s.kind));
+    const targets = routes[s.kind];
     if (targets.length === 0) {
       fail(ctx, id, 'no-route', s.rps);
       const key = `${id}|${s.kind}`;
@@ -598,14 +605,14 @@ function route(
       }
       continue;
     }
-    for (const l of targets) addStream(inbound.get(l.to)!, { ...s, rps: s.rps / targets.length });
+    for (const to of targets) addStream(inbound.get(to)!, { ...s, rps: s.rps / targets.length });
   }
 }
 
 /** Latence moyenne d'une requête depuis un nœud jusqu'au bout de son chemin synchrone. */
 function computePathLatencies(
   order: string[],
-  outLinks: Map<string, ArchLink[]>,
+  routes: RouteTable,
   outcomes: Map<string, NodeOutcome>,
   nodeTicks: Record<string, NodeTick>,
 ): (id: string, kind: RequestKind) => number {
@@ -614,10 +621,10 @@ function computePathLatencies(
     for (const kind of REQUEST_KINDS) {
       const own = nodeTicks[id]?.latencyMs ?? 0;
       const share = outcomes.get(id)?.syncForwardShare[kind] ?? 0;
-      const targets = (outLinks.get(id) ?? []).filter((l) => l.kinds.includes(kind));
+      const targets = routes.get(id)?.[kind] ?? [];
       const downstream =
         targets.length > 0
-          ? targets.reduce((a, l) => a + (memo.get(`${l.to}|${kind}`) ?? 0), 0) / targets.length
+          ? targets.reduce((a, to) => a + (memo.get(`${to}|${kind}`) ?? 0), 0) / targets.length
           : 0;
       memo.set(`${id}|${kind}`, own + share * downstream);
     }

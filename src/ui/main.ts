@@ -1,12 +1,12 @@
 import { catalog as defaultCatalog } from '../data/catalog.ts';
 import { urlShortener } from '../data/scenarios/url-shortener.ts';
 import { scoring } from '../data/scoring.ts';
-import { newGame, playWave } from '../engine/game.ts';
+import { newGame, playWave, rewindTo } from '../engine/game.ts';
 import { scoreWave } from '../engine/score.ts';
 import { simulateWave } from '../engine/simulate.ts';
-import type { Architecture, RequestKind } from '../engine/types.ts';
+import type { Architecture } from '../engine/types.ts';
 import { changedSettings, parseField, setAt } from './calibration.ts';
-import { addLink, addNode, removeLink, removeNode, setUpgrade, toggleLinkKind } from './editor.ts';
+import { addLink, addNode, removeLink, removeNode, setUpgrade } from './editor.ts';
 import { load, save } from './storage.ts';
 import { renderApp, type Attempt, type ViewState } from './views.ts';
 import './style.css';
@@ -64,12 +64,9 @@ const actions: Record<string, (el: HTMLElement) => void> = {
   'add-link': () => {
     const from = (document.getElementById('link-from') as HTMLSelectElement).value;
     const to = (document.getElementById('link-to') as HTMLSelectElement).value;
-    const kinds = [...document.querySelectorAll<HTMLInputElement>('.link-kind:checked')].map((i) => i.value as RequestKind);
-    update({ draft: addLink(state.draft, from, to, kinds) });
+    update({ draft: addLink(state.draft, from, to) });
   },
   'remove-link': (el) => update({ draft: removeLink(state.draft, Number(el.dataset.link)) }),
-  'toggle-kind': (el) =>
-    update({ draft: toggleLinkKind(state.draft, Number(el.dataset.link), el.dataset.kind as RequestKind) }),
   revert: () => update({ draft: state.game.committed.nodes.length > 0 ? state.game.committed : START }),
 
   play: () => {
@@ -105,6 +102,10 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     area.hidden = false;
     area.value = JSON.stringify({ catalog: state.catalog, scenario: state.scenario }, null, 2);
     area.select();
+  },
+  rewind: (el) => {
+    const game = rewindTo(state.game, Number(el.dataset.wave));
+    update({ game, draft: game.committed.nodes.length > 0 ? game.committed : START });
   },
   'reset-game': () => update({ game: newGame(), draft: START, attempts: [], selected: undefined }),
 };

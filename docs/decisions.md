@@ -23,6 +23,7 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 | E2 | Retirer ou remplacer un composant coûte une fois sa valeur d'achat. Réduire les instances est gratuit ; retirer un réplica ou désactiver le rate limiting coûte. Réglé par évolution dans les données (`removalCost`). | Sans friction, défaire ne coûte rien et le réflexe « anticiper le coût d'une décision passée » disparaît. | Fait |
 | E3 | Le coût de migration entre dans la facture de la vague, contre le même plafond ; le debrief l'affiche sur une ligne « migration ». | C'est la leçon : un choix de la vague 2 peut coûter la vague 3. | Fait (affichage debrief à faire) |
 | E4 | Une vague perdue se rejoue sans limite, depuis l'architecture de fin de la vague précédente. Pas de défaite définitive en phase 1. | Refaire les vagues déjà gagnées n'apprend rien. | Fait (`engine/game.ts`) |
+| E6 | On peut revenir au début de toute vague déjà atteinte, avec l'architecture validée à ce moment-là ; le retour compte comme un rejeu de la vague visée et efface les scores suivants. | Sans ça, un choix passé peut bloquer la partie : depuis le parcours CDN (vagues 3 et 4), aucune architecture ne gagne la vague 5, et le rejeu repartait toujours de la vague 4. | Fait |
 | E5 | Score d'une vague = 100 × moyenne des marges (coût, complexité, échecs, latence), bornée à [0, 1], moins 20 % par rejeu. Score de partie = somme des vagues. Coefficients en données. | Récompense la marge, comme le dit la spec, et pénalise les essais à l'aveugle. | Fait |
 
 ## Compromis
@@ -43,6 +44,12 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 | B2 | Deux architectures gagnantes sont des stratégies distinctes si leur ensemble de composants et d'évolutions activées diffère, niveaux ignorés. Seules comptent les stratégies **non dominées** : un groupe est dominé si chacune de ses architectures gagnantes gagne encore privée d'un de ses éléments (avec ce qui en dépend). | Sinon « 4 instances » et « 5 instances » comptent comme deux stratégies, et « LB posé pour rien » compte comme une alternative. Un premier essai, « sur-ensemble d'un groupe gagnant », écartait à tort l'autoscaling, qui ajoute un élément utile à « scaling + cache ». | Fait |
 | B3 | L'énumération porte sur une topologie canonique : présence de chaque composant, niveaux d'évolution, paliers de rate limiting. Les schémas exotiques se testent à la main. | Énumérer tous les graphes explose et produit surtout de l'absurde. | Fait : `npm run balance`, 2 928 architectures |
 | B4 | Durée cible : 15 minutes pour 5 vagues, environ 3 minutes par vague. Au-delà de 20 minutes en test, on retire des vagues plutôt que de raccourcir le debrief. | Ferme le dernier critère de sortie « à fixer » de la spec. | Cible |
+
+## Interface
+
+| # | Décision | Pourquoi | Statut |
+|---|---|---|---|
+| I1 | Les liens ne portent plus de type de requête : le joueur relie des composants, le moteur déduit le chemin. Chaque composant déclare les types qu'il accepte ; un type va au voisin le plus spécialisé qui l'accepte (cache pour les lectures, file pour l'async), sinon au généraliste. Le schéma affiche ce qui circule réellement sur chaque lien. Les types restent dans le moteur. | Cocher read, write et async par lien n'offrait aucun vrai choix (personne n'envoie ses lectures en base à côté d'un cache) et alourdissait la construction. Sans les types dans le moteur, cache, réplicas, file et rate limiting perdraient leur sens. | Fait ; équilibrage inchangé |
 
 ## Élargissement du MVP
 

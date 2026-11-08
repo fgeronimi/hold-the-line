@@ -1,7 +1,7 @@
 import { bill, migrationCost } from '../engine/budget.ts';
 import type { GameState } from '../engine/game.ts';
 import type { Architecture, Catalog, Gauge, Scenario, SimEvent, Wave, WaveResult } from '../engine/types.ts';
-import { REQUEST_KINDS } from '../engine/types.ts';
+import { linkFlows, type LinkFlows } from '../engine/routing.ts';
 import { validateArchitecture } from '../engine/validate.ts';
 import { calibrationGroups, formatField, getAt } from './calibration.ts';
 
@@ -42,7 +42,11 @@ export function renderApp(s: ViewState): string {
       <h1>${esc(s.scenario.subtitle)} <small>${esc(s.scenario.title)}</small></h1>
       <p>Score : <b>${fmt(s.game.scores.reduce((a, x) => a + x, 0))}</b>
         · vagues gagnées : ${s.game.scores.length} / ${s.scenario.waves.length}
-        · <button data-action="reset-game">Nouvelle partie</button></p>
+        · <button data-action="reset-game">Nouvelle partie</button>
+        ${s.game.history
+          .slice(0, s.game.waveIndex)
+          .map((_, i) => `<button data-action="rewind" data-wave="${i}">Revenir à la vague ${i + 1}</button>`)
+          .join(' ')}</p>
       <nav>
         <button data-action="tab" data-tab="build" ${s.tab === 'build' ? 'disabled' : ''}>Construction</button>
         <button data-action="tab" data-tab="calibrate" ${s.tab === 'calibrate' ? 'disabled' : ''}>Calibrage</button>
@@ -75,6 +79,7 @@ function renderBuild(s: ViewState, wave: Wave): string {
   const fixed = lines.reduce((a, l) => a + l.cost, 0);
   const complexity = lines.reduce((a, l) => a + l.complexity, 0);
   const migration = migrationCost(s.game.committed, draft, catalog);
+  const flows = linkFlows(draft, catalog);
 
   const nodeRows = draft.nodes
     .map((n) => {
@@ -116,7 +121,7 @@ function renderBuild(s: ViewState, wave: Wave): string {
     .map(
       (l, i) => `<tr>
         <td><code>${esc(l.from)}</code> → <code>${esc(l.to)}</code></td>
-        <td>${REQUEST_KINDS.map((k) => `<label><input type="checkbox" data-action="toggle-kind" data-link="${i}" data-kind="${k}" ${l.kinds.includes(k) ? 'checked' : ''}> ${k}</label>`).join(' ')}</td>
+        <td class="muted">${describeKinds(flows.get(`${l.from}→${l.to}`) ?? [])}</td>
         <td><button data-action="remove-link" data-link="${i}">retirer</button></td>
       </tr>`,
     )
@@ -135,13 +140,14 @@ function renderBuild(s: ViewState, wave: Wave): string {
         <p>
           <select id="link-from">${nodeOptions}</select> →
           <select id="link-to">${nodeOptions}</select>
-          ${REQUEST_KINDS.map((k) => `<label><input type="checkbox" class="link-kind" value="${k}" checked> ${k}</label>`).join(' ')}
           <button data-action="add-link">Relier</button>
         </p>
+        <p class="muted">Ce qui circule sur un lien est déduit : les lectures vont au cache s'il est relié,
+          l'async à la file, le reste au composant suivant.</p>
       </div>
       <div>
         <h3>Schéma</h3>
-        <pre>${esc(renderSchema(draft, validation.ok ? validation.order : draft.nodes.map((n) => n.id)))}</pre>
+        <pre>${esc(renderSchema(draft, flows, validation.ok ? validation.order : draft.nodes.map((n) => n.id)))}</pre>
         <h3>Facture prévue</h3>
         <p><span${over(fixed + migration, wave.budget)}>coût ${fmt(fixed)}${migration > 0 ? ` + ${fmt(migration)} de migration` : ''} / ${wave.budget}</span>
           (hors autoscaling, connu après la vague) ·
@@ -157,13 +163,19 @@ function renderBuild(s: ViewState, wave: Wave): string {
 }
 
 /** Schéma minimal : chaque nœud dans l'ordre du trafic, avec ce qu'il envoie à qui. */
-function renderSchema(arch: Architecture, order: string[]): string {
+function renderSchema(arch: Architecture, flows: LinkFlows, order: string[]): string {
   return order
     .map((id) => {
-      const out = arch.links.filter((l) => l.from === id).map((l) => `${l.to} [${l.kinds.join(',')}]`);
+      const out = arch.links
+        .filter((l) => l.from === id)
+        .map((l) => `${l.to} [${(flows.get(`${l.from}→${l.to}`) ?? []).join(',') || 'rien'}]`);
       return out.length > 0 ? `${id} → ${out.join('  ')}` : id;
     })
     .join('\n');
+}
+
+function describeKinds(kinds: string[]): string {
+  return kinds.length > 0 ? kinds.join(', ') : 'rien ne passe par ce lien';
 }
 
 function renderCalibration(s: ViewState): string {
@@ -212,7 +224,7 @@ function renderDebrief(a: Attempt, s: ViewState): string {
     <section class="${r.won ? 'won' : 'lost'}">
       <h2>${esc(a.label)} : ${r.won ? 'tenue' : 'perdue'}${a.played && r.won ? ` — ${fmt(a.score)} points` : ''}</h2>
       ${r.lossReasons.length > 0 ? `<ul>${r.lossReasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-      ${a.played && !r.won ? '<p>La vague se rejoue depuis l’architecture validée à la vague précédente.</p>' : ''}
+      ${a.played && !r.won ? '<p>La vague se rejoue depuis l’architecture validée à la vague précédente. Si un choix plus ancien la rend impossible, revenir à une vague antérieure (en haut) : ça compte comme un rejeu.</p>' : ''}
       <div class="cols">
         <div>
           <h3>Jauges</h3>
