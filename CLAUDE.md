@@ -29,7 +29,9 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
   capacités, coûts, poids et contraintes viennent des données.
 - `src/engine/routing.ts` : les liens ne sont pas typés. Chaque composant déclare
   `accepts` et `routingPriority` ; un type de requête va au voisin le plus spécialisé
-  qui l'accepte. `linkFlows` donne ce qui circule vraiment, pour l'affichage.
+  qui l'accepte. Un composant `lookaside` (le cache) est consulté, pas traversé : il sert
+  sa part et le reste repart du nœud qui l'a consulté (cache-aside). `linkFlows` donne
+  ce qui circule vraiment, pour l'affichage.
 - `src/ui/` : interface brute de phase 1, TypeScript natif sans framework. `main.ts`
   tient l'état et les actions (`data-action` délégués), `views.ts` rend tout en chaînes
   HTML à chaque changement, `editor.ts` et `calibration.ts` sont purs et testés.
@@ -56,7 +58,7 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
 - `tests/balance.test.ts` énumère un espace réduit qui doit contenir toutes les réponses
   attendues : si un recalibrage déplace une réponse hors de cet espace, l'agrandir.
 - Le MVP de la spec a été élargi au CDN et à l'autoscaling (`docs/decisions.md`, X1–X4).
-- Le calibrage et la partie sont gardés dans `localStorage` (clé `hold-the-line:v3`) :
+- Le calibrage et la partie sont gardés dans `localStorage` (clé `hold-the-line:v4`) :
   changer la version de la clé dès que la forme de la partie ou du catalogue change.
 - Tout texte venant de l'état passe par `esc()` avant d'entrer dans le HTML.
 - Pas de cascade de pannes : un aval saturé ne ralentit pas l'amont (décision M3, V2).

@@ -32,6 +32,11 @@ export interface ComponentDef {
    * (lectures) ou une file (async) passent avant la base, qui accepte tout.
    */
   routingPriority?: number;
+  /**
+   * Composant consulté plutôt que traversé (cache-aside) : il sert une part des requêtes
+   * (`hitRate`), le reste repart du nœud qui l'a consulté vers ses autres voisins.
+   */
+  lookaside?: boolean;
   hitRate?: number;
   /** File : nombre de messages regroupés en un seul envoi vers l'aval. */
   batchSize?: number;

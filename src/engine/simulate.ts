@@ -1,5 +1,5 @@
 import { migrationCost, totals } from './budget.ts';
-import { routeTable, type RouteTable } from './routing.ts';
+import { routeTable, type NodeRoutes, type RouteTable } from './routing.ts';
 import type {
   ArchLink,
   ArchNode,
@@ -127,6 +127,8 @@ export function simulateWave(
   const nodes = new Map(arch.nodes.map((n) => [n.id, n]));
   const defOf = (id: string): ComponentDef => catalog.components[nodes.get(id)!.type]!;
   const routes = routeTable(arch, catalog);
+  const hitRateAt = (nodeId: string, s: Stream): number =>
+    sourcesById.get(s.source)?.longTail ? 0 : (defOf(nodeId).hitRate ?? 0);
 
   const sourcesById = new Map(wave.sources.map((s) => [s.id, s]));
   const backlogs = new Map<string, Flow>();
@@ -171,6 +173,7 @@ export function simulateWave(
 
     const outcomes = new Map<string, NodeOutcome>();
     const nodeTicks: Record<string, NodeTick> = {};
+    const routed: Routed = new Map();
 
     for (const id of validation.order) {
       const node = nodes.get(id)!;
@@ -186,7 +189,7 @@ export function simulateWave(
       });
       outcomes.set(id, outcome);
 
-      route(id, def, outcome.passed, routes.get(id)!, inbound, ctx, reportedNoRoute);
+      route(id, def, outcome.passed, routes.get(id)!, { inbound, ctx, reportedNoRoute, routed, hitRateAt });
 
       const isSaturated = outcome.utilization > 1;
       if (isSaturated && !saturated.has(id)) {
@@ -211,7 +214,7 @@ export function simulateWave(
       };
     }
 
-    const pathLatency = computePathLatencies(validation.order, routes, outcomes, nodeTicks);
+    const pathLatency = computePathLatencies(validation.order, routes, routed, outcomes, nodeTicks);
     const injectedSync = SYNC_KINDS.map((k) => ({ k, rps: sumRps(injected, (s) => s.kind === k) }));
     const syncRps = injectedSync.reduce((a, x) => a + x.rps, 0);
     const tickLatency =
@@ -445,19 +448,18 @@ function processEdge(node: ArchNode, def: ComponentDef, incoming: Flow, env: Pro
   };
 }
 
+/**
+ * Cache-aside : le routage ne lui envoie que les lectures qu'il sert, il n'a donc qu'à
+ * tenir la charge. Les absences ne passent jamais par lui ; seuls les succès comptent
+ * dans sa charge, les consultations ratées sont négligées.
+ */
 function processCache(node: ArchNode, def: ComponentDef, incoming: Flow, env: ProcessEnv): NodeOutcome {
   const capacity = def.capacity * instancesOf(node, env.catalog);
   const demand = work(incoming, def);
-  const served = serveWithin(node.id, incoming, demand, capacity, env.ctx);
-  const passed: Flow = new Map();
-  for (const s of served.values()) {
-    const hitRate = hitRateFor(s, def, env);
-    addStream(passed, s.kind === 'read' ? { ...s, rps: s.rps * (1 - hitRate) } : s);
-  }
   return {
-    passed,
+    passed: serveWithin(node.id, incoming, demand, capacity, env.ctx),
     utilization: demand / capacity,
-    syncForwardShare: { ...allForwarded(), read: readShare(served, passed) },
+    syncForwardShare: allForwarded(),
   };
 }
 
@@ -577,35 +579,61 @@ function drainCapacity(kind: RequestKind, batch: number, env: ProcessEnv): numbe
   return total;
 }
 
-/** Voisins aval d'un nœud, avec les types que le routage leur envoie. */
-function consumersOf(routes: Record<RequestKind, string[]>): { id: string; kinds: RequestKind[] }[] {
+/** Voisins transmis d'un nœud, avec les types que le routage leur envoie. */
+function consumersOf(routes: NodeRoutes): { id: string; kinds: RequestKind[] }[] {
   const byId = new Map<string, RequestKind[]>();
-  for (const kind of REQUEST_KINDS) for (const id of routes[kind]) byId.set(id, [...(byId.get(id) ?? []), kind]);
+  for (const kind of REQUEST_KINDS) {
+    for (const id of routes.forward[kind]) byId.set(id, [...(byId.get(id) ?? []), kind]);
+  }
   return [...byId].map(([id, kinds]) => ({ id, kinds }));
 }
 
-function route(
-  id: string,
-  def: ComponentDef,
-  passed: Flow,
-  routes: Record<RequestKind, string[]>,
-  inbound: Map<string, Flow>,
-  ctx: TickContext,
-  reportedNoRoute: Set<string>,
-): void {
+/** Débit envoyé par nœud, par type et par voisin pendant le tick : pondère les latences. */
+type Routed = Map<string, Map<RequestKind, Map<string, number>>>;
+
+interface RouteEnv {
+  inbound: Map<string, Flow>;
+  ctx: TickContext;
+  reportedNoRoute: Set<string>;
+  routed: Routed;
+  hitRateAt: (nodeId: string, s: Stream) => number;
+}
+
+function route(id: string, def: ComponentDef, passed: Flow, routes: NodeRoutes, env: RouteEnv): void {
+  const send = (to: string, s: Stream, rps: number) => {
+    if (rps <= 0) return;
+    addStream(env.inbound.get(to)!, { ...s, rps });
+    const byKind = env.routed.get(id) ?? new Map<RequestKind, Map<string, number>>();
+    const byTo = byKind.get(s.kind) ?? new Map<string, number>();
+    byTo.set(to, (byTo.get(to) ?? 0) + rps);
+    byKind.set(s.kind, byTo);
+    env.routed.set(id, byKind);
+  };
+
   for (const s of passed.values()) {
     if (def.terminalFor.includes(s.kind)) continue;
-    const targets = routes[s.kind];
+
+    // Cache-aside : chaque cache consulté sert sa part, le reste repart d'ici.
+    let remaining = s.rps;
+    const lookups = routes.lookup[s.kind];
+    for (const cache of lookups) {
+      const consulted = s.rps / lookups.length;
+      const hits = consulted * env.hitRateAt(cache, s);
+      send(cache, s, hits);
+      remaining -= hits;
+    }
+
+    const targets = routes.forward[s.kind];
     if (targets.length === 0) {
-      fail(ctx, id, 'no-route', s.rps);
+      fail(env.ctx, id, 'no-route', remaining);
       const key = `${id}|${s.kind}`;
-      if (!reportedNoRoute.has(key)) {
-        reportedNoRoute.add(key);
-        ctx.events.push({ type: 'no-route', tick: ctx.tick, node: id, kind: s.kind });
+      if (remaining > 0 && !env.reportedNoRoute.has(key)) {
+        env.reportedNoRoute.add(key);
+        env.ctx.events.push({ type: 'no-route', tick: env.ctx.tick, node: id, kind: s.kind });
       }
       continue;
     }
-    for (const to of targets) addStream(inbound.get(to)!, { ...s, rps: s.rps / targets.length });
+    for (const to of targets) send(to, s, remaining / targets.length);
   }
 }
 
@@ -613,6 +641,7 @@ function route(
 function computePathLatencies(
   order: string[],
   routes: RouteTable,
+  routed: Routed,
   outcomes: Map<string, NodeOutcome>,
   nodeTicks: Record<string, NodeTick>,
 ): (id: string, kind: RequestKind) => number {
@@ -621,11 +650,18 @@ function computePathLatencies(
     for (const kind of REQUEST_KINDS) {
       const own = nodeTicks[id]?.latencyMs ?? 0;
       const share = outcomes.get(id)?.syncForwardShare[kind] ?? 0;
-      const targets = routes.get(id)?.[kind] ?? [];
-      const downstream =
-        targets.length > 0
-          ? targets.reduce((a, to) => a + (memo.get(`${to}|${kind}`) ?? 0), 0) / targets.length
-          : 0;
+      const sent = routed.get(id)?.get(kind);
+      const total = sent ? [...sent.values()].reduce((a, x) => a + x, 0) : 0;
+      let downstream = 0;
+      if (sent && total > 0) {
+        for (const [to, rps] of sent) downstream += (rps / total) * (memo.get(`${to}|${kind}`) ?? 0);
+      } else {
+        // Pas de trafic ce tick : on suppose une répartition égale, pour que la latence reste définie.
+        const targets = routes.get(id)?.forward[kind] ?? [];
+        if (targets.length > 0) {
+          downstream = targets.reduce((a, to) => a + (memo.get(`${to}|${kind}`) ?? 0), 0) / targets.length;
+        }
+      }
       memo.set(`${id}|${kind}`, own + share * downstream);
     }
   }

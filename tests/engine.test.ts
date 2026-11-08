@@ -10,7 +10,7 @@ const catalog: Catalog = {
     edge: { id: 'edge', behavior: 'edge', label: 'CDN', techName: 'CDN', cost: 30, complexity: 2, capacity: 10000, latencyMs: 1, workPerRequest: { read: 1 }, terminalFor: [], accepts: ['read', 'write', 'async'], hitRate: 0.5 },
     lb: { id: 'lb', behavior: 'balancer', label: 'LB', techName: 'LB', cost: 10, complexity: 1, capacity: 10000, latencyMs: 1, workPerRequest: { read: 1, write: 1, async: 1 }, terminalFor: [], accepts: ['read', 'write', 'async'] },
     app: { id: 'app', behavior: 'service', label: 'App', techName: 'App', cost: 20, complexity: 1, capacity: 100, latencyMs: 10, workPerRequest: { read: 1, write: 1, async: 1 }, terminalFor: [], accepts: ['read', 'write', 'async'] },
-    cache: { id: 'cache', behavior: 'cache', label: 'Cache', techName: 'Cache', cost: 5, complexity: 2, capacity: 10000, latencyMs: 1, workPerRequest: { read: 1 }, terminalFor: [], accepts: ['read'], routingPriority: 1, hitRate: 0.8 },
+    cache: { id: 'cache', behavior: 'cache', label: 'Cache', techName: 'Cache', cost: 5, complexity: 2, capacity: 10000, latencyMs: 1, workPerRequest: { read: 1 }, terminalFor: ['read'], accepts: ['read'], lookaside: true, allowedDownstream: [], hitRate: 0.8 },
     db: { id: 'db', behavior: 'database', label: 'DB', techName: 'DB', cost: 50, complexity: 2, capacity: 100, latencyMs: 5, workPerRequest: { read: 1, write: 2, async: 2 }, terminalFor: ['read', 'write', 'async'], accepts: ['read', 'write', 'async'] },
     queue: { id: 'queue', behavior: 'queue', label: 'Q', techName: 'Q', cost: 25, complexity: 2, capacity: 10000, latencyMs: 2, workPerRequest: { async: 1 }, terminalFor: [], accepts: ['async'], routingPriority: 1, batchSize: 10, maxBacklog: 1000, allowedDownstream: ['app'] },
   },
@@ -95,13 +95,31 @@ describe('simulateWave', () => {
     expect(high.gauges.latency.value).toBeGreaterThan(low.gauges.latency.value * 3);
   });
 
-  it('le cache détourne sa part de lectures de la base', () => {
+  describe('cache-aside', () => {
     const arch: Architecture = {
       nodes: [{ id: 's', type: 'src' }, { id: 'a', type: 'app' }, { id: 'c', type: 'cache' }, { id: 'd', type: 'db' }],
-      links: [l('s', 'a'), l('a', 'c'), l('c', 'd')],
+      links: [l('s', 'a'), l('a', 'c'), l('a', 'd')],
     };
-    const r = simulateWave(arch, wave([users({ read: 90 })]), catalog);
-    expect(r.ticks[0]!.nodes.d!.utilization).toBeCloseTo(0.18);
+
+    it('le serveur consulte le cache et ne lit la base qu’en cas d’absence', () => {
+      const r = simulateWave(arch, wave([users({ read: 90, write: 5 })]), catalog);
+      // 18 lectures ratées + 5 écritures × 2 : la base ne voit que les absences et les écritures.
+      expect(r.ticks[0]!.nodes.d!.utilization).toBeCloseTo(0.28);
+      expect(r.ticks[0]!.nodes.c!.utilization).toBeCloseTo(72 / 10000);
+      expect(r.failed).toBe(0);
+    });
+
+    it('pondère la latence entre succès et absences', () => {
+      const r = simulateWave(arch, wave([users({ read: 50 })]), catalog);
+      const t = r.ticks[0]!.nodes;
+      expect(r.ticks[0]!.avgLatencyMs).toBeCloseTo(t.a!.latencyMs + 0.8 * t.c!.latencyMs + 0.2 * t.d!.latencyMs);
+    });
+
+    it('sans base reliée, les absences n’ont pas de route', () => {
+      const noDb: Architecture = { nodes: arch.nodes.slice(0, 3), links: [l('s', 'a'), l('a', 'c')] };
+      const r = simulateWave(noDb, wave([users({ read: 50 })]), catalog);
+      expect(r.failuresByReason['no-route']).toBeCloseTo(10 * 10);
+    });
   });
 
   describe('CDN', () => {
@@ -350,6 +368,14 @@ describe('validateArchitecture', () => {
       links: [l('s', 'q'), l('q', 'd')],
     };
     expect(errorsOf(arch)).toEqual(['queue ne peut alimenter que app (q → d)']);
+  });
+
+  it('refuse un cache qui alimente la base', () => {
+    const arch: Architecture = {
+      nodes: [{ id: 's', type: 'src' }, { id: 'a', type: 'app' }, { id: 'c', type: 'cache' }, { id: 'd', type: 'db' }],
+      links: [l('s', 'a'), l('a', 'c'), l('c', 'd')],
+    };
+    expect(errorsOf(arch)).toEqual(['cache ne transmet rien : il est consulté, pas traversé (c → d)']);
   });
 
   it('donne un ordre topologique stable', () => {

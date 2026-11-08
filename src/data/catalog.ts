@@ -71,9 +71,11 @@ export const catalog: Catalog = {
       capacity: 10000,
       latencyMs: 1,
       workPerRequest: { read: 1 },
-      terminalFor: [],
+      terminalFor: ['read'],
       accepts: ['read'],
-      routingPriority: 1,
+      lookaside: true,
+      // Le serveur le consulte, puis lit lui-même la base en cas d'absence.
+      allowedDownstream: [],
       hitRate: 0.95,
     },
     database: {

@@ -3,7 +3,7 @@
  * donc chaque accès est protégé et l'application tourne sans lui.
  */
 // Changer la version dès que la forme sauvegardée change : une vieille sauvegarde est ignorée.
-const KEY = 'hold-the-line:v3';
+const KEY = 'hold-the-line:v4';
 
 export function load<T>(): T | undefined {
   try {

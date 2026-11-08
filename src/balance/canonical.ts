@@ -58,12 +58,12 @@ export function buildCanonical(c: CanonicalChoice): Architecture {
   });
   nodes.push({ id: 'db', type: 'database', upgrades: { 'read-replica': c.replicas } });
 
-  // Le serveur est toujours relié à la base ; le routage envoie les lectures au cache
-  // et l'async à la file quand ils sont là.
+  // Le serveur est toujours relié à la base ; il consulte le cache quand il est là, et
+  // le routage envoie l'async à la file quand elle est là.
   links.push(link('app', 'db'));
   if (c.cache) {
     nodes.push({ id: 'cache', type: 'cache' });
-    links.push(link('app', 'cache'), link('cache', 'db'));
+    links.push(link('app', 'cache'));
   }
   if (c.queue) {
     nodes.push(

@@ -25,7 +25,6 @@ export const withCache: Architecture = {
   links: [
     link('src', 'app'),
     link('app', 'cache'),
-    link('cache', 'db'),
     link('app', 'db'),
   ],
 };
@@ -49,8 +48,7 @@ export function scaled(extraInstances: number, opts: { rateLimitTier?: number } 
       link('src', 'lb'),
       link('lb', 'app'),
       link('app', 'cache'),
-      link('cache', 'db'),
-      link('app', 'db'),
+        link('app', 'db'),
     ],
   };
 }
@@ -88,7 +86,7 @@ export function withCdn(opts: { rateLimitTier?: number; queue?: boolean } = {}):
   } else {
     links.push(link('cdn', 'app'));
   }
-  links.push(link('app', 'cache'), link('cache', 'db'), link('app', 'db'));
+  links.push(link('app', 'cache'), link('app', 'db'));
 
   if (opts.queue) {
     nodes.push({ id: 'queue', type: 'message-queue' }, { id: 'worker', type: 'app-server' });

@@ -141,8 +141,9 @@ function renderBuild(s: ViewState, wave: Wave): string {
           <select id="link-to">${nodeOptions}</select>
           <button data-action="add-link">Relier</button>
         </p>
-        <p class="muted">Ce qui circule sur un lien est déduit : les lectures vont au cache s'il est relié,
-          l'async à la file, le reste au composant suivant.</p>
+        <p class="muted">Ce qui circule sur un lien est déduit. Un serveur relié à un cache le consulte
+          pour chaque lecture, puis lit lui-même la base en cas d'absence : relier serveur → cache et
+          serveur → base. L'async va à la file si elle est reliée, sinon à la base.</p>
       </div>
       <div>
         <h3>Schéma</h3>

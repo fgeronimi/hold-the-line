@@ -47,7 +47,11 @@ export function validateArchitecture(
     const origin = byId.get(link.from);
     const allowed = origin && catalog.components[origin.type]?.allowedDownstream;
     if (allowed && target && !allowed.includes(target.type)) {
-      errors.push(`${origin.type} ne peut alimenter que ${allowed.join(', ')} (${link.from} → ${link.to})`);
+      errors.push(
+        allowed.length === 0
+          ? `${origin.type} ne transmet rien : il est consulté, pas traversé (${link.from} → ${link.to})`
+          : `${origin.type} ne peut alimenter que ${allowed.join(', ')} (${link.from} → ${link.to})`,
+      );
     }
     if (target && catalog.components[target.type]?.behavior === 'source') {
       errors.push(`Aucun lien ne peut entrer dans la source (${link.from} → ${link.to})`);

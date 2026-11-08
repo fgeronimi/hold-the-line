@@ -1,13 +1,20 @@
 import type { Architecture, Catalog, RequestKind } from './types.ts';
 import { REQUEST_KINDS } from './types.ts';
 
-/** Pour chaque nœud et chaque type de requête, les nœuds vers lesquels il l'envoie. */
-export type RouteTable = Map<string, Record<RequestKind, string[]>>;
+export interface NodeRoutes {
+  /** Voisins consultés d'abord (cache-aside) : ils servent une part, le reste repart d'ici. */
+  lookup: Record<RequestKind, string[]>;
+  /** Voisins vers lesquels le type est transmis, une fois les consultations faites. */
+  forward: Record<RequestKind, string[]>;
+}
+
+export type RouteTable = Map<string, NodeRoutes>;
 
 /**
  * Les liens ne portent pas de type : le joueur relie des composants, le moteur en déduit
- * le chemin. Un type va vers les voisins qui l'acceptent, en préférant le plus spécialisé
- * (le cache pour les lectures, la file pour l'async) ; à égalité, il est réparti également.
+ * le chemin. Un type est d'abord présenté aux voisins consultés qui l'acceptent (un cache
+ * pour les lectures) ; ce qu'ils ne servent pas va au voisin transmis le plus spécialisé
+ * qui l'accepte (la file avant la base pour l'async). À égalité, réparti également.
  */
 export function routeTable(arch: Architecture, catalog: Catalog): RouteTable {
   const typeOf = new Map(arch.nodes.map((n) => [n.id, n.type]));
@@ -16,13 +23,16 @@ export function routeTable(arch: Architecture, catalog: Catalog): RouteTable {
     const neighbours = arch.links
       .filter((l) => l.from === node.id)
       .map((l) => ({ id: l.to, def: catalog.components[typeOf.get(l.to) ?? ''] }));
-    const routes = {} as Record<RequestKind, string[]>;
+    const lookup = {} as Record<RequestKind, string[]>;
+    const forward = {} as Record<RequestKind, string[]>;
     for (const kind of REQUEST_KINDS) {
       const accepting = neighbours.filter((n) => n.def?.accepts.includes(kind));
-      const best = Math.max(...accepting.map((n) => n.def?.routingPriority ?? 0));
-      routes[kind] = accepting.filter((n) => (n.def?.routingPriority ?? 0) === best).map((n) => n.id);
+      lookup[kind] = accepting.filter((n) => n.def?.lookaside).map((n) => n.id);
+      const direct = accepting.filter((n) => !n.def?.lookaside);
+      const best = Math.max(...direct.map((n) => n.def?.routingPriority ?? 0));
+      forward[kind] = direct.filter((n) => (n.def?.routingPriority ?? 0) === best).map((n) => n.id);
     }
-    table.set(node.id, routes);
+    table.set(node.id, { lookup, forward });
   }
   return table;
 }
@@ -31,8 +41,7 @@ export type LinkFlows = Map<string, RequestKind[]>;
 
 /**
  * Les types qui circulent réellement sur chaque lien (clé `from→to`) : un nœud ne
- * transmet que ce qu'il reçoit, et la source émet tout. Sert à l'affichage ; un cache
- * relié à la base n'y envoie donc que des lectures.
+ * transmet que ce qu'il reçoit, et la source émet tout. Sert à l'affichage.
  */
 export function linkFlows(arch: Architecture, catalog: Catalog, table = routeTable(arch, catalog)): LinkFlows {
   const typeOf = new Map(arch.nodes.map((n) => [n.id, n.type]));
@@ -46,8 +55,12 @@ export function linkFlows(arch: Architecture, catalog: Catalog, table = routeTab
     let changed = false;
     for (const l of arch.links) {
       const terminal = catalog.components[typeOf.get(l.from) ?? '']?.terminalFor ?? [];
+      const routes = table.get(l.from);
       const kinds = REQUEST_KINDS.filter(
-        (k) => received.get(l.from)?.has(k) && !terminal.includes(k) && table.get(l.from)?.[k].includes(l.to),
+        (k) =>
+          received.get(l.from)?.has(k) &&
+          !terminal.includes(k) &&
+          (routes?.lookup[k].includes(l.to) || routes?.forward[k].includes(l.to)),
       );
       flows.set(`${l.from}→${l.to}`, kinds);
       const target = received.get(l.to);
