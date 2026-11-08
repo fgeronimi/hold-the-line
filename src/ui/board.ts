@@ -1,6 +1,6 @@
 import { BOARD } from '../data/board.ts';
 import type { Architecture, ArchLink, ArchNode, BoardCell } from '../engine/types.ts';
-import { findPath, hexCenter, hexKey } from '../render/hex.ts';
+import { findPath, hexDistance, hexKey } from '../render/hex.ts';
 import { layoutArchitecture } from '../render/layout.ts';
 import { nextNodeId } from './editor.ts';
 
@@ -11,8 +11,7 @@ import { nextNodeId } from './editor.ts';
 export type BoardResult = { ok: true; arch: Architecture } | { ok: false; reason: string };
 
 export function insideBoard(h: BoardCell): boolean {
-  const { x } = hexCenter(h);
-  return h.r >= BOARD.minRow && h.r <= BOARD.maxRow && x >= BOARD.minX && x <= BOARD.maxX;
+  return hexDistance(h, BOARD.center) <= BOARD.radius;
 }
 
 /** Cases occupées par un bâtiment, et le bâtiment qui l'occupe. */
@@ -81,18 +80,26 @@ export function connect(arch: Architecture, from: string, to: string): BoardResu
 }
 
 /**
- * Donne une case à chaque bâtiment qui n'en a pas (placement automatique actuel) et un
- * chemin à chaque lien qui n'en a pas. Sert aux brouillons d'avant le plateau. Sans effet
- * sur une architecture déjà entièrement placée.
+ * Donne une case à chaque bâtiment qui n'en a pas, ou dont la case est sortie du plateau
+ * (sauvegarde d'avant le plateau hexagonal), et un chemin à chaque lien qui n'en a pas ou
+ * qui touche un bâtiment replacé. Sans effet sur une architecture déjà bien placée.
  */
 export function autoPlace(arch: Architecture): Architecture {
-  const missingCell = arch.nodes.some((n) => !n.cell);
-  const missingPath = arch.links.some((l) => !l.path);
-  if (!missingCell && !missingPath) return arch;
-  const layout = layoutArchitecture(arch);
-  const placed: Architecture = {
+  const misplaced = new Set(arch.nodes.filter((n) => !n.cell || !insideBoard(n.cell)).map((n) => n.id));
+  const strays = (l: ArchLink) => !l.path || misplaced.has(l.from) || misplaced.has(l.to) || l.path.some((c) => !insideBoard(c));
+  if (misplaced.size === 0 && !arch.links.some(strays)) return arch;
+  const kept: Architecture = {
     ...arch,
-    nodes: arch.nodes.map((n) => (n.cell ? n : { ...n, cell: layout.cells[n.id]! })),
+    nodes: arch.nodes.map((n): ArchNode => {
+      if (!misplaced.has(n.id)) return n;
+      const { cell: _dropped, ...rest } = n;
+      return rest;
+    }),
   };
-  return reroute(placed, (l) => !l.path);
+  const layout = layoutArchitecture(kept);
+  const placed: Architecture = {
+    ...kept,
+    nodes: kept.nodes.map((n) => (n.cell ? n : { ...n, cell: layout.cells[n.id]! })),
+  };
+  return reroute(placed, strays);
 }

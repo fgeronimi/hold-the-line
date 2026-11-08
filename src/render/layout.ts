@@ -1,6 +1,6 @@
 import { BOARD } from '../data/board.ts';
 import type { Architecture } from '../engine/types.ts';
-import { HEX_ROW, hexAt, hexCenter, hexKey, hexLine, nearestFree, type Hex } from './hex.ts';
+import { HEX_ROW, HEX_WIDTH, hexAt, hexCenter, hexKey, hexLine, nearestFree, type Hex } from './hex.ts';
 
 export interface Point {
   x: number;
@@ -92,16 +92,17 @@ export function layoutArchitecture(arch: Architecture): Layout {
 
   const xs = Object.values(nodes).map((p) => p.x);
   const zs = Object.values(nodes).map((p) => p.z);
+  const center = hexCenter(BOARD.center);
   return {
     nodes,
     cells,
     roads,
     // Le cadre couvre tout le plateau jouable, pour que la vue ne saute pas à chaque construction.
     bounds: {
-      minX: Math.min(BOARD.minX, ...xs),
-      maxX: Math.max(BOARD.maxX, ...xs),
-      minZ: Math.min(BOARD.minRow * HEX_ROW, ...zs),
-      maxZ: Math.max(BOARD.maxRow * HEX_ROW, ...zs),
+      minX: Math.min(center.x - BOARD.radius * HEX_WIDTH, ...xs),
+      maxX: Math.max(center.x + BOARD.radius * HEX_WIDTH, ...xs),
+      minZ: Math.min(center.z - BOARD.radius * HEX_ROW, ...zs),
+      maxZ: Math.max(center.z + BOARD.radius * HEX_ROW, ...zs),
     },
   };
 }

@@ -1,14 +1,22 @@
 import { incidentLessons, reasonLessons, saturationLessons, type Lesson } from '../data/lessons.ts';
 import { bill } from '../engine/budget.ts';
-import type { Architecture, Catalog, RequestKind, Wave, WaveResult } from '../engine/types.ts';
+import { simulateWave } from '../engine/simulate.ts';
+import type { Architecture, Catalog, RequestKind, TickMetrics, Wave, WaveResult } from '../engine/types.ts';
 import type { Theme } from '../render/theme.ts';
+import { removeNode } from './editor.ts';
 
-/** Un constat du chambellan après une vague. */
+/**
+ * Un constat du chambellan après une vague.
+ * - `good` : ce qui a marché ;
+ * - `warn` : ce qui a failli casser, sur une vague tenue ;
+ * - `bad` : ce qui a fait perdre la vague ;
+ * - `tip` : ce qu'on pourrait alléger.
+ */
 export interface Finding {
-  tone: 'bad' | 'good' | 'tip';
+  tone: 'bad' | 'warn' | 'good' | 'tip';
   /** Dit dans la métaphore. */
   says: string;
-  /** L'explication d'entretien. */
+  /** La même chose en vrai, avec les mots d'entretien. */
   tech?: string;
   remedy?: string;
   concept?: string;
@@ -17,9 +25,7 @@ export interface Finding {
 
 const KIND_NAMES: Record<RequestKind, string> = { read: 'lecture', write: 'écriture', async: 'async' };
 
-/** Au-dessous de ce pic de charge, un bâtiment ne sert presque à rien cette vague. */
-const IDLE = 0.3;
-/** Au-delà, il est trop près de sa capacité pour que la latence reste basse. */
+/** Au-delà, un bâtiment est trop près de sa capacité pour encaisser la prochaine affluence. */
 const HOT = 0.8;
 
 function fill(text: string, vars: Record<string, string>): string {
@@ -39,65 +45,92 @@ function fromLesson(tone: Finding['tone'], lesson: Lesson, vars: Record<string, 
 }
 
 const pct = (n: number) => `${Math.round(n * 100)} %`;
+const sum = (xs: number[]) => xs.reduce((a, x) => a + x, 0);
+
+/** Débit d'un type sur les liens qui partent d'un nœud (`from`) ou y arrivent (`to`), sur toute la vague. */
+function flow(ticks: TickMetrics[], kind: RequestKind, end: 'from' | 'to', id: string): number {
+  const side = end === 'from' ? 0 : 1;
+  return sum(
+    ticks.flatMap((t) =>
+      Object.entries(t.links)
+        .filter(([key]) => key.split('→')[side] === id)
+        .map(([, k]) => k[kind] ?? 0),
+    ),
+  );
+}
 
 /**
- * Pourquoi la vague a tenu ou cassé, du plus grave au moins grave : ce que le chambellan
- * dit, l'explication d'entretien, et la parade. Pur : se teste sans interface.
+ * Le debrief raconte la vague en trois temps : ce qui a marché, ce qui a failli casser
+ * (dans l'ordre où c'est arrivé), et ce qu'on pourrait alléger. Le rouge est réservé à
+ * ce qui a fait perdre la vague : un incident encaissé est une alerte, pas un échec.
+ * Pur : se teste sans interface.
  */
 export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, catalog: Catalog, theme: Theme): Finding[] {
   const typeOf = new Map(arch.nodes.map((n) => [n.id, n.type]));
+  const metaphor = (id: string) => theme.buildings[typeOf.get(id) ?? '']?.metaphor ?? id;
   const name = (id: string) => {
     const type = typeOf.get(id) ?? '';
-    const metaphor = theme.buildings[type]?.metaphor;
-    return `${catalog.components[type]?.techName ?? type}${metaphor ? ` (${metaphor})` : ''}`;
+    const m = theme.buildings[type]?.metaphor;
+    return `${catalog.components[type]?.techName ?? type}${m ? ` (${m})` : ''}`;
   };
-  const out: Finding[] = [];
+  const behaviorOf = (id: string) => catalog.components[typeOf.get(id) ?? '']?.behavior;
+  const ofBehavior = (b: string) => arch.nodes.filter((n) => catalog.components[n.type]?.behavior === b).map((n) => n.id);
+  const won = result.won;
+  const problem: Finding['tone'] = won ? 'warn' : 'bad';
+
+  // Les ticks d'incident : ce qui y déborde est raconté par l'incident, pas comme un goulot.
+  const incidents = (wave.incidents ?? []).filter((i) => arch.nodes.some((n) => n.type === i.component));
+  const inIncident = (tick: number) => incidents.some((i) => tick >= i.from && tick < i.until);
+  const calm = result.ticks.filter((t) => !inIncident(t.tick));
+
+  const story: { tick: number; finding: Finding }[] = [];
+  const tell = (tick: number, finding: Finding) => story.push({ tick, finding });
 
   // Requêtes sans route : un lien manque.
-  const noRoute = new Map<string, Set<RequestKind>>();
+  const noRoute = new Map<string, { tick: number; kinds: Set<RequestKind> }>();
   for (const e of result.events) {
-    if (e.type === 'no-route') noRoute.set(e.node, (noRoute.get(e.node) ?? new Set()).add(e.kind));
+    if (e.type !== 'no-route') continue;
+    const entry = noRoute.get(e.node) ?? { tick: e.tick, kinds: new Set<RequestKind>() };
+    entry.kinds.add(e.kind);
+    noRoute.set(e.node, entry);
   }
-  for (const [node, kinds] of noRoute) {
+  for (const [node, { tick, kinds }] of noRoute) {
     const kind = [...kinds].map((k) => KIND_NAMES[k]).join(', ');
-    out.push(fromLesson('bad', reasonLessons.noRoute, { name: name(node), kind }, node));
+    tell(tick, fromLesson('bad', reasonLessons.noRoute, { name: name(node), kind }, node));
   }
 
-  // Goulots : les bâtiments saturés, du plus d'échecs au moins.
-  const saturated = Object.entries(result.nodes)
-    .filter(([id, n]) => n.peakUtilization > 1 && !noRoute.has(id))
-    .sort(([, a], [, b]) => b.failed - a.failed || b.peakUtilization - a.peakUtilization);
-  for (const [id] of saturated.slice(0, 2)) {
-    const lesson = saturationLessons[typeOf.get(id) ?? ''];
-    if (lesson) out.push(fromLesson('bad', lesson, { name: theme.buildings[typeOf.get(id)!]?.metaphor ?? id }, id));
-  }
-
-  // Incidents : ce qu'ils ont coûté, et ce qui les aurait encaissés.
-  for (const incident of wave.incidents ?? []) {
-    const during = result.ticks.slice(incident.from, incident.until);
-    const failed = Math.round(during.reduce((a, t) => a + t.failed, 0));
-    const hit = arch.nodes.some((n) => n.type === incident.component);
-    if (!hit) continue;
+  // Incidents : ce qu'ils ont coûté, ou comment la cité les a encaissés.
+  for (const incident of incidents) {
+    const failed = Math.round(sum(result.ticks.slice(incident.from, incident.until).map((t) => t.failed)));
     const lesson = incidentLessons[incident.effect.type];
-    out.push(fromLesson(failed > 0 ? 'bad' : 'good', failed > 0 ? lesson.hurt : lesson.held, { title: incident.title, failed: String(failed) }));
+    const vars = { title: incident.title, failed: String(failed) };
+    tell(incident.from, fromLesson(failed > 0 ? problem : 'good', failed > 0 ? lesson.hurt : lesson.held, vars));
   }
 
-  if (result.failuresByReason['rate-limited'] > 0) out.push(fromLesson('bad', reasonLessons.legitLimited, {}));
-  if (result.failuresByReason['lost-at-edge'] > 0) out.push(fromLesson('bad', reasonLessons.lostAtEdge, {}));
+  // Goulots hors incident, du plus d'échecs au moins.
+  const saturated = Object.keys(result.nodes)
+    .filter((id) => !noRoute.has(id))
+    .map((id) => {
+      const hot = calm.filter((t) => (t.nodes[id]?.utilization ?? 0) > 1);
+      return { id, first: hot[0]?.tick, failed: sum(hot.map((t) => t.nodes[id]?.failed ?? 0)) };
+    })
+    .filter((s): s is { id: string; first: number; failed: number } => s.first !== undefined)
+    .sort((a, b) => b.failed - a.failed)
+    .slice(0, 2);
+  for (const s of saturated) {
+    const lesson = saturationLessons[typeOf.get(s.id) ?? ''];
+    if (lesson) tell(s.first, fromLesson(problem, lesson, { name: metaphor(s.id) }, s.id));
+  }
+
+  const limited = result.events.find((e) => e.type === 'rate-limited');
+  if (result.failuresByReason['rate-limited'] > 0) tell(limited?.type === 'rate-limited' ? limited.tick : 0, fromLesson(problem, reasonLessons.legitLimited, {}));
+  if (result.failuresByReason['lost-at-edge'] > 0) tell(0, fromLesson(problem, reasonLessons.lostAtEdge, {}));
+  const overflowed = new Set<string>();
   for (const e of result.events) {
-    if (e.type === 'queue-overflow' && !out.some((f) => f.node === e.node && f.concept === 'Backpressure')) {
-      out.push(fromLesson('bad', reasonLessons.queueOverflow, { name: name(e.node) }, e.node));
-    }
+    if (e.type !== 'queue-overflow' || overflowed.has(e.node)) continue;
+    overflowed.add(e.node);
+    tell(e.tick, fromLesson(problem, reasonLessons.queueOverflow, { name: name(e.node) }, e.node));
   }
-
-  // Le seul serveur ou la seule base ne se retire pas, même peu chargé : sans lui, plus de chemin.
-  const behaviorOf = (id: string) => catalog.components[typeOf.get(id) ?? '']?.behavior;
-  const soleOfItsKind = (id: string) =>
-    (behaviorOf(id) === 'service' || behaviorOf(id) === 'database') &&
-    arch.nodes.filter((n) => catalog.components[n.type]?.behavior === behaviorOf(id)).length === 1;
-  const idle = Object.entries(result.nodes)
-    .filter(([id, n]) => n.peakUtilization < IDLE && behaviorOf(id) !== 'source' && !soleOfItsKind(id))
-    .map(([id]) => id);
 
   const { cost, complexity, latency, failureRate } = result.gauges;
   if (cost.value > cost.limit) {
@@ -107,42 +140,131 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
       .slice(0, 2)
       .map((l) => `${name(l.node)} : ${l.cost}`)
       .join(', ');
-    finding.remedy += ` Les plus chers : ${priciest}.${idle.length > 0 ? ` Peu utilisés : ${idle.map(name).join(', ')}.` : ''}`;
-    out.push(finding);
+    finding.remedy += ` Les plus chers : ${priciest}.`;
+    tell(Infinity, finding);
   }
   if (complexity.value > complexity.limit) {
-    out.push(fromLesson('bad', reasonLessons.overComplexity, { complexity: String(complexity.value), cap: String(complexity.limit) }));
+    tell(Infinity, fromLesson('bad', reasonLessons.overComplexity, { complexity: String(complexity.value), cap: String(complexity.limit) }));
   }
 
-  const hottest = Object.entries(result.nodes).sort(([, a], [, b]) => b.peakUtilization - a.peakUtilization)[0];
+  // Le bâtiment le plus chargé hors incident : la cause d'une latence trop haute, ou le
+  // prochain à céder sur une vague tenue.
+  const hottest = Object.keys(result.nodes)
+    .filter((id) => behaviorOf(id) !== 'source')
+    .map((id) => ({ id, peak: Math.max(0, ...calm.map((t) => t.nodes[id]?.utilization ?? 0)) }))
+    .sort((a, b) => b.peak - a.peak)[0];
   if (latency.value > latency.limit && failureRate.value <= failureRate.limit && hottest) {
-    out.push(fromLesson('bad', reasonLessons.slow, { name: name(hottest[0]), load: pct(hottest[1].peakUtilization) }, hottest[0]));
+    tell(Infinity, fromLesson('bad', reasonLessons.slow, { name: name(hottest.id), load: pct(hottest.peak) }, hottest.id));
+  } else if (won && hottest && hottest.peak > HOT && !saturated.some((s) => s.id === hottest.id)) {
+    tell(Infinity, {
+      tone: 'warn',
+      says: `${metaphor(hottest.id)} : presque plein au plus fort de la vague. À la prochaine affluence, c’est là que ça cédera.`,
+      tech: `${name(hottest.id)} a tourné jusqu’à ${pct(hottest.peak)} de sa capacité : peu de marge.`,
+      node: hottest.id,
+    });
   }
 
-  if (result.won) {
-    out.unshift({
-      tone: 'good',
-      says: `La cité a tenu, Sire. ${wave.title} : défi relevé.`,
-      ...(hottest
-        ? {
-            tech: `Le goulot le plus proche : ${name(hottest[0])}, à ${pct(hottest[1].peakUtilization)} de charge au pic.${hottest[1].peakUtilization > HOT ? ' Peu de marge : la prochaine relance le fera céder.' : ''}`,
-            node: hottest[0],
-          }
-        : {}),
-    });
-    if (result.shed > 0) {
-      out.push({ tone: 'good', says: `La garde a repoussé ${Math.round(result.shed)} pillards.`, concept: 'Rate Limiting' });
-    }
-  }
-  // Un bâtiment à vide est le premier à retirer : utile après une victoire comme quand le
-  // trésor ou la complexité débordent.
+  const out = [won ? openingWon() : openingLost(), ...story.sort((a, b) => a.tick - b.tick).map((s) => s.finding)];
+
+  // Ce qu'on pourrait alléger : seulement si la vague a tenu, ou si le trésor ou la
+  // complexité débordent (c'est alors la première chose à retirer).
   const overspent = cost.value > cost.limit || complexity.value > complexity.limit;
-  if (idle.length > 0 && (result.won || overspent)) {
+  const superfluous = won || overspent ? superfluousNodes() : [];
+  if (superfluous.length > 0) {
+    const plural = superfluous.length > 1;
     out.push({
       tone: 'tip',
-      says: `Certains bâtiments ont peu servi : ${idle.map(name).join(', ')}.`,
-      tech: 'Un composant qui tourne à vide coûte et complexifie sans rien apporter cette vague. En entretien : justifier chaque composant par un besoin précis.',
+      says: `Sans ${superfluous.map(metaphor).join(', ')}, la cité aurait tenu quand même : ${plural ? 'ils coûtent' : 'il coûte'} sans rien apporter cette vague.`,
+      tech: `${superfluous.map(name).join(', ')} : la vague rejouée sans ${plural ? 'eux' : 'lui'} respecte toujours le SLA. En entretien, justifier chaque composant par un besoin précis.`,
+      remedy: 'Le retirer, ou le garder en connaissance de cause pour une vague à venir.',
+      concept: 'Over-engineering',
     });
   }
   return out;
+
+  function openingWon(): Finding {
+    const worked = contributions();
+    return {
+      tone: 'good',
+      says: `La cité a tenu, Sire. ${worked.length > 0 ? worked.map((w) => w.says).join(' ') : `${wave.title} : défi relevé.`}`,
+      ...(worked.length > 0 ? { tech: worked.map((w) => w.tech).join(' ') } : {}),
+    };
+  }
+
+  function openingLost(): Finding {
+    return { tone: 'bad', says: 'La cité est tombée, Sire. Voici ce qui s’est passé.', tech: `${result.lossReasons.join('. ')}.` };
+  }
+
+  /** Ce que chaque bâtiment a apporté, chiffré : ce qui a fait tenir la vague. */
+  function contributions(): { says: string; tech: string }[] {
+    const worked: { says: string; tech: string }[] = [];
+    const reads = sum(ofBehavior('source').map((s) => flow(result.ticks, 'read', 'from', s)));
+
+    for (const id of ofBehavior('edge')) {
+      const served = flow(result.ticks, 'read', 'to', id) - flow(result.ticks, 'read', 'from', id);
+      if (reads > 0 && served > 0) {
+        worked.push({
+          says: `Votre ${metaphor(id)} a renvoyé ${Math.round((served / reads) * 100)} voyageurs sur 100 sans même les faire entrer en ville.`,
+          tech: `Le CDN a servi ${pct(served / reads)} des lectures en bordure : le serveur ne les a jamais vues.`,
+        });
+      }
+    }
+    for (const id of ofBehavior('cache')) {
+      const hits = flow(result.ticks, 'read', 'to', id);
+      if (reads > 0 && hits > 0) {
+        worked.push({
+          says: `Votre ${metaphor(id)} a fait le travail : ${Math.round((hits / reads) * 100)} voyageurs sur 100 y ont trouvé leur réponse sans déranger les archives.`,
+          tech: `Le cache a servi ${pct(hits / reads)} des lectures ; la base n’a vu que le reste.`,
+        });
+      }
+    }
+    for (const id of ofBehavior('service')) {
+      const peak = Math.max(0, ...result.ticks.map((t) => t.nodes[id]?.instances ?? 1));
+      if (peak > 1) {
+        worked.push({
+          says: `${peak} tours de scribes se sont partagé la foule.`,
+          tech: `Jusqu’à ${peak} instances du serveur derrière le load balancer : la charge est répartie (scaling horizontal).`,
+        });
+      }
+    }
+    for (const n of arch.nodes) {
+      const replicas = n.upgrades?.['read-replica'] ?? 0;
+      if (replicas > 0) {
+        worked.push({
+          says: `${replicas > 1 ? `Les ${replicas} copies des archives ont` : 'La copie des archives a'} répondu aux lectures que les archives seules n’auraient pas tenues.`,
+          tech: `${replicas} réplica${replicas > 1 ? 's' : ''} en lecture : les lectures se répartissent, le primaire garde les écritures.`,
+        });
+      }
+    }
+    if (result.shed > 0 && result.failuresByReason['rate-limited'] === 0) {
+      worked.push({
+        says: 'La garde de la porte a refoulé les pillards sans gêner un seul marchand honnête.',
+        tech: `Le rate limiting a écarté ${Math.round(result.shed)} requêtes abusives du scraper, et aucune requête légitime.`,
+      });
+    }
+    for (const id of ofBehavior('queue')) {
+      if (flow(result.ticks, 'async', 'to', id) > 0) {
+        worked.push({
+          says: `Votre ${metaphor(id)} a emporté les comptes de passages sans faire attendre un seul voyageur.`,
+          tech: 'La file sort le comptage des clics du chemin critique : la redirection répond tout de suite, un worker écrit en base à son rythme.',
+        });
+      }
+    }
+    return worked;
+  }
+
+  /**
+   * Un bâtiment est superflu si la vague, rejouée sans lui, respecte encore le SLA. On ne
+   * juge pas sur sa charge : un cache peu chargé peut servir 95 % des lectures.
+   */
+  function superfluousNodes(): string[] {
+    return arch.nodes
+      .filter((n) => catalog.components[n.type]?.behavior !== 'source')
+      .filter((n) => {
+        const r = simulateWave(removeNode(arch, n.id), wave, catalog);
+        const valid = !r.events.some((e) => e.type === 'invalid') && r.failuresByReason['no-route'] === 0;
+        return valid && r.gauges.failureRate.margin >= 0 && r.gauges.latency.margin >= 0;
+      })
+      .map((n) => n.id);
+  }
 }

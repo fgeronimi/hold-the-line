@@ -107,6 +107,24 @@ describe('plateau', () => {
     expect(autoPlace(placed)).toBe(placed);
   });
 
+  it('le plateau est un hexagone dont les clients occupent la pointe gauche', () => {
+    expect(insideBoard({ q: 0, r: 0 })).toBe(true);
+    expect(insideBoard({ q: -1, r: 0 })).toBe(false);
+    expect(insideBoard({ q: 18, r: 0 })).toBe(true);
+    expect(insideBoard({ q: 9, r: -9 })).toBe(true);
+    expect(insideBoard({ q: 0, r: -1 })).toBe(false);
+  });
+
+  it('replace un bâtiment resté hors du plateau, et retrace ses chemins', () => {
+    let arch = ok(placeNode(start, 'app-server', { q: 3, r: 0 }));
+    arch = ok(connect(arch, 'src', 'app-server'));
+    const stray: Architecture = { ...arch, nodes: arch.nodes.map((n) => (n.id === 'app-server' ? { ...n, cell: { q: 0, r: -5 } } : n)) };
+    const fixed = autoPlace(stray);
+    expect(fixed.nodes.every((n) => insideBoard(n.cell!))).toBe(true);
+    expect(fixed.links[0]!.path!.every(insideBoard)).toBe(true);
+    expect(adjacent(fixed.links[0]!.path!)).toBe(true);
+  });
+
   it('la mise en page respecte les cases et les chemins posés', () => {
     let arch = ok(placeNode(start, 'app-server', { q: 5, r: -2 }));
     arch = ok(connect(arch, 'src', 'app-server'));

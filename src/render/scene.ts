@@ -16,7 +16,6 @@ import {
   OrthographicCamera,
   PCFSoftShadowMap,
   Plane,
-  PlaneGeometry,
   Raycaster,
   Scene,
   Vector2,
@@ -28,7 +27,8 @@ import { MapControls } from 'three/examples/jsm/controls/MapControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import type { Architecture, ArchNode, Catalog, RequestKind, TickMetrics } from '../engine/types.ts';
 import { REQUEST_KINDS } from '../engine/types.ts';
-import { HEX_ROW, HEX_SIZE, HEX_WIDTH, hexAt, hexCenter, hexKey, type Hex } from './hex.ts';
+import { BOARD } from '../data/board.ts';
+import { HEX_SIZE, HEX_WIDTH, hexAt, hexCenter, hexDistance, hexKey, type Hex } from './hex.ts';
 import { escapeHtml } from './html.ts';
 import { layoutArchitecture, pointAlong, type Layout, type Road } from './layout.ts';
 import { ModelLibrary, type ModelId } from './models.ts';
@@ -66,7 +66,11 @@ const SHAPE_MODELS: Record<Shape, ModelId[]> = {
   keep: ['building_castle_blue', 'building_tower_base_blue'].map(K),
   stables: ['building_tavern_blue', 'fence_wood_straight', 'crate_A_small', 'sack'].map(K),
 };
-const SCENERY_MODELS: ModelId[] = ['hex_grass', 'trees_A_medium', 'trees_A_small', 'tree_single_B', 'rock_single_A'].map(K);
+/** Décor du bord du plateau : reliefs et grands bois, pour fermer le paysage. */
+const EDGE_DECOR = ['mountain_A_grass_trees', 'hills_A_trees', 'trees_A_large', 'trees_B_medium', 'hill_single_A', 'trees_A_medium'];
+/** Décor de l'intérieur, plus discret, pour laisser de la place à bâtir. */
+const INNER_DECOR = ['trees_A_small', 'trees_B_small', 'tree_single_A', 'tree_single_B', 'rock_single_A', 'rock_single_B', 'rock_single_C', 'hill_single_A'];
+const SCENERY_MODELS: ModelId[] = ['hex_grass', ...new Set([...EDGE_DECOR, ...INNER_DECOR])].map(K);
 
 interface Building {
   node: ArchNode;
@@ -415,13 +419,14 @@ export class CityScene {
     this.scene.add(sun, sun.target);
   }
 
-  /** Cases du sol : le plateau jouable et une bordure autour. */
+  /** Cases du sol : exactement le plateau jouable, un grand hexagone. */
   private groundCells(): Hex[] {
-    const { minX, maxX, minZ, maxZ } = this.layout.bounds;
-    const [x0, x1, z0, z1] = [minX - 8, maxX + 8, minZ - 7, maxZ + 7];
+    const { center, radius } = BOARD;
     const cells: Hex[] = [];
-    for (let r = Math.floor(z0 / HEX_ROW); r <= Math.ceil(z1 / HEX_ROW); r++) {
-      for (let q = Math.ceil(x0 / HEX_WIDTH - r / 2); q <= Math.floor(x1 / HEX_WIDTH - r / 2); q++) cells.push({ q, r });
+    for (let dq = -radius; dq <= radius; dq++) {
+      for (let dr = Math.max(-radius, -dq - radius); dr <= Math.min(radius, -dq + radius); dr++) {
+        cells.push({ q: center.q + dq, r: center.r + dr });
+      }
     }
     return cells;
   }
@@ -445,16 +450,6 @@ export class CityScene {
     this.dummy.scale.set(1, 1, 1);
     tiles.receiveShadow = true;
     this.scene.add(tiles);
-
-    const { minX, maxX, minZ, maxZ } = this.layout.bounds;
-    // Sous les tuiles, un fond sombre : il remplit les joints et les fait ressortir.
-    const under = new Mesh(
-      new PlaneGeometry(maxX - minX + 20, maxZ - minZ + 18),
-      new MeshLambertMaterial({ color: this.theme.ground }),
-    );
-    under.rotation.x = -Math.PI / 2;
-    under.position.set((minX + maxX) / 2, -0.3, (minZ + maxZ) / 2);
-    this.scene.add(under);
   }
 
   /** Vide la partie variable. Les géométries des modèles sont partagées : on ne libère que ce qui est propre. */
@@ -649,22 +644,27 @@ export class CityScene {
   }
 
   /**
-   * Bosquets et rochers, une chance par case, toujours la même : le paysage ne change pas
-   * d'un rejeu à l'autre. Jamais sur un bâtiment ni sur un chemin, et plus rares sur le
-   * plateau jouable, pour laisser de la place à bâtir.
+   * Le décor, une chance par case, toujours la même : le paysage ne change pas d'un rejeu
+   * à l'autre. Reliefs et grands bois sur les deux rangées du bord, quelques arbres et
+   * rochers à l'intérieur. Jamais sur un bâtiment ni sur un chemin, ni près des clients,
+   * pour que l'entrée du trafic reste dégagée.
    */
   private addTrees(): void {
     const taken = new Set([...Object.values(this.layout.cells).map(hexKey), ...this.layout.roads.flatMap((r) => r.cells.map(hexKey))]);
-    const { minX, maxX, minZ, maxZ } = this.layout.bounds;
-    const kinds = ['trees_A_medium', 'trees_A_small', 'tree_single_B', 'rock_single_A'];
+    const sources = Object.entries(this.layout.cells)
+      .filter(([id]) => this.buildings.get(id)?.node.type === 'traffic-source')
+      .map(([, c]) => c);
     for (const cell of this.groundCells()) {
-      if (taken.has(hexKey(cell))) continue;
-      const p = hexCenter(cell);
-      const onBoard = p.x >= minX && p.x <= maxX && p.z >= minZ && p.z <= maxZ;
+      if (taken.has(hexKey(cell)) || sources.some((s) => hexDistance(s, cell) <= 1)) continue;
+      const edge = hexDistance(cell, BOARD.center) >= BOARD.radius - 1;
       const roll = hash(cell.q * 73.1 + cell.r * 37.7);
-      if (roll > (onBoard ? 0.05 : 0.3)) continue;
+      if (roll > (edge ? 0.45 : 0.08)) continue;
+      const kinds = edge ? EDGE_DECOR : INNER_DECOR;
       const pick = Math.floor(hash(cell.q * 11.3 - cell.r * 5.9) * kinds.length);
-      this.put(this.dynamic, K(kinds[pick]!), { x: p.x, z: p.z, rotate: roll * 40 });
+      const p = hexCenter(cell);
+      // Les reliefs gardent l'orientation de la grille ; les arbres tournent librement.
+      const rotate = kinds[pick]!.includes('hill') || kinds[pick]!.includes('mountain') ? Math.floor(roll * 60) * (Math.PI / 3) : roll * 40;
+      this.put(this.dynamic, K(kinds[pick]!), { x: p.x, z: p.z, rotate });
     }
   }
 
@@ -723,7 +723,7 @@ export class CityScene {
       const failed = n?.failed ?? 0;
       const shed = n?.shed ?? 0;
       b.label.innerHTML =
-        `<b>${escapeHtml(b.techName)}</b><span>${escapeHtml(b.metaphor)} · ${escapeHtml(id)}</span>` +
+        `<b>${escapeHtml(b.techName)}</b><span>${escapeHtml(b.metaphor)}</span>` +
         (n?.down ? `<em class="hot">⚡ ${n.down} instance${n.down > 1 ? 's' : ''} en panne</em>` : '') +
         // La charge n'apparaît que quand elle compte : moins d'étiquettes qui se chevauchent.
         (n?.down && n.instances === 0

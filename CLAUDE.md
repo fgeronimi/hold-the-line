@@ -81,6 +81,7 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
   avant d'entrer dans le HTML.
 - Le rendu ne simule rien : s'il faut une donnée de plus pour animer, elle s'ajoute aux
   ticks du moteur, jamais recalculée dans `src/render/`.
+- Le plateau est un hexagone (`src/data/board.ts`), les clients à sa pointe gauche (0, 0).
 - `ArchNode.cell` et `ArchLink.path` sont de la mise en scène : la simulation les ignore.
   Tout brouillon passe par `autoPlace` dans `update()`, pour qu'un bâtiment ajouté sans
   case (vue tableau, ancienne sauvegarde) en reçoive une.

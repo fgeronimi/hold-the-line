@@ -9,6 +9,8 @@ export type Shape = 'hamlet' | 'watchtower' | 'gatehouse' | 'tower' | 'lectern' 
 export interface BuildingStyle {
   /** Nom dans la métaphore ; le nom technique du catalogue est toujours affiché à côté. */
   metaphor: string;
+  /** À quoi sert le bâtiment : dans la métaphore (`says`), puis en vrai (`real`). */
+  role: { says: string; real: string };
   /** Icône de la barre de construction. */
   icon: string;
   shape: Shape;
@@ -29,7 +31,6 @@ export interface VehicleStyle {
 export interface Theme {
   id: string;
   title: string;
-  ground: string;
   road: string;
   /** Teinte d'un bâtiment saturé, et des requêtes en échec. */
   alert: string;

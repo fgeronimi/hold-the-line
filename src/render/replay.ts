@@ -92,6 +92,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   const finish = () => {
     if (ended) return;
     ended = true;
+    alert.hidden = true;
     o.onEnd();
   };
 

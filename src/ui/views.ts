@@ -147,7 +147,7 @@ export function renderToolbar(s: ViewState): string {
       const on = tool.kind === 'place' && tool.type === d.id;
       const guided = guide?.highlight?.tool === 'place' && guide.highlight.type === d.id;
       return `<button class="tool build${active(on)}${hint(guided)}" data-action="tool" data-tool="place" data-type="${esc(d.id)}"
-        title="${esc(`${d.techName}${style ? ` — ${style.metaphor}` : ''}. Coût ${d.cost}, complexité ${d.complexity}`)}">
+        title="${esc(`${d.techName}${style ? ` — ${style.metaphor}` : ''}. ${style?.role.real ?? ''} Coût ${d.cost}, complexité ${d.complexity}.`)}">
         <span class="icon">${style?.icon ?? '🏠'}</span><span>${esc(d.techName)}</span><small>${esc(style?.metaphor ?? '')}</small><small>💰 ${d.cost}</small></button>`;
     })
     .join('');
@@ -202,7 +202,6 @@ export function renderDialog(s: ViewState): string {
     <h2>${r.won ? '🏆 Vague tenue' : '💥 Vague perdue'}${a.played && r.won ? ` — +${fmt(a.score)} 🏅` : ''}${a.played ? '' : ' (essai)'}</h2>
     ${attemptWave ? renderStars(a.stars, attemptWave) : ''}
     ${finished ? `<p class="final">La cité a tenu toutes les vagues. <b>${totalStars(s)} / ${s.scenario.waves.length * 3}</b> ★, score final <b>${fmt(totalScore(s))}</b> 🏅</p>` : ''}
-    ${r.lossReasons.length > 0 ? `<ul class="reasons">${r.lossReasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
     ${attemptWave ? renderFindings(analyzeWave(r, a.arch, attemptWave, s.catalog, theme)) : ''}
     ${a.played && !r.won && s.game.replays > 0 ? `<p class="muted">Chaque nouvel essai coûte 20 % des points de la vague. Si un choix plus ancien bloque, le menu ☰ permet de revenir à une vague antérieure.</p>` : ''}
     <p class="actions">${actions}</p>
@@ -253,12 +252,16 @@ function renderNodeCard(s: ViewState): string {
   const source = def?.behavior === 'source';
   function linkEnd(id: string): string {
     const n = s.draft.nodes.find((x) => x.id === id);
-    return n ? `${s.catalog.components[n.type]?.techName ?? n.type} ${n.id}` : id;
+    if (!n) return id;
+    const tech = s.catalog.components[n.type]?.techName ?? n.type;
+    // L'identifiant ne sert qu'à distinguer deux bâtiments du même type.
+    return s.draft.nodes.filter((x) => x.type === n.type).length > 1 ? `${tech} (${n.id})` : tech;
   }
   return `
     <section class="card panel">
       <button class="close" data-action="deselect" title="Fermer">✕</button>
-      <h3>${esc(def?.techName ?? node.type)} <small>${esc(theme.buildings[node.type]?.metaphor ?? '')} · ${esc(node.id)}</small></h3>
+      <h3>${esc(def?.techName ?? node.type)} <small>${esc(theme.buildings[node.type]?.metaphor ?? '')}</small></h3>
+      ${theme.buildings[node.type] ? speech(theme.buildings[node.type]!.role.says, theme.buildings[node.type]!.role.real) : ''}
       ${def ? `<p class="muted">cap. ${def.capacity}, ${def.latencyMs} ms, coût ${def.cost}, complexité ${def.complexity}</p>` : ''}
       <p>${upgradeSelects(node, s.catalog) || '<span class="muted">aucune évolution</span>'}</p>
       ${links ? `<ul>${links}</ul>` : '<p class="muted">Aucun chemin.</p>'}
@@ -438,14 +441,16 @@ function speech(text: string, real?: string): string {
     ${real ? `<p class="real">${esc(real)}</p>` : ''}</div></div>`;
 }
 
+const TONE_ICONS: Record<Finding['tone'], string> = { good: '✅', warn: '⚡', bad: '❌', tip: '💡' };
+
 /** L'analyse du narrateur : ce qu'il dit, l'explication d'entretien, la parade, la notion à réviser. */
 function renderFindings(findings: Finding[]): string {
   if (findings.length === 0) return '';
   return `<div class="findings">${findings
     .map(
       (f, i) => `<div class="finding ${f.tone}">
-        ${i === 0 ? speech(f.says, f.tech) : `<p class="says">« ${esc(f.says)} »</p>${f.tech ? `<p class="real">${esc(f.tech)}</p>` : ''}`}
-        ${f.remedy ? `<p><b>Parade :</b> ${esc(f.remedy)}</p>` : ''}
+        ${i === 0 ? speech(f.says, f.tech) : `<p class="says">${TONE_ICONS[f.tone]} « ${esc(f.says)} »</p>${f.tech ? `<p class="real">${esc(f.tech)}</p>` : ''}`}
+        ${f.remedy ? `<p>💡 <b>Parade :</b> ${esc(f.remedy)}</p>` : ''}
         ${f.concept ? `<p class="muted">À réviser : ${esc(f.concept)}</p>` : ''}
       </div>`,
     )

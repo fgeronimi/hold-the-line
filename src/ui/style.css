@@ -86,7 +86,8 @@ button.primary:hover { background: var(--wood-dark); }
 .finding .says { font-style: italic; }
 .finding.bad { border-color: var(--ko); }
 .finding.good { border-color: var(--ok); }
-.finding.tip { border-color: #e9a23b; }
+.finding.warn { border-color: #e9a23b; }
+.finding.tip { border-color: #3a86ff; }
 
 /* Barre de la vague (pendant qu'elle se joue), en bas, et alerte de goulot. */
 .replay-bar { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 2; width: min(980px, calc(100vw - 20px)); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; background: var(--parchment); border: 2px solid var(--wood); border-radius: 10px; box-shadow: var(--shadow); font-size: 12px; }
@@ -153,3 +154,5 @@ button.primary:hover { background: var(--wood-dark); }
 @keyframes hint { 50% { box-shadow: 0 0 0 6px rgba(233, 162, 59, 0.35); } }
 @media (prefers-reduced-motion: reduce) { .hint { animation: none; } }
 .speech p.real { background: none; border: none; border-left: 3px solid #b9a77f; border-radius: 0; padding: 0 8px; font-size: 13px; }
+.card .speech .speaker { font-size: 22px; }
+.card .speech p { font-size: 13px; }

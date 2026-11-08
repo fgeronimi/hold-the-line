@@ -14,31 +14,31 @@ export interface Lesson {
 /** Composant saturé, par type du catalogue. */
 export const saturationLessons: Record<string, Lesson> = {
   'app-server': {
-    says: 'Débordement à {name} : les voyageurs s’entassent devant les scribes.',
+    says: 'Débordement à {name} : plus de voyageurs que de scribes pour les recevoir, les derniers arrivés sont repartis sans réponse.',
     tech: 'Le serveur d’application est le goulot : sa capacité est dépassée, les requêtes en trop échouent et la latence explose.',
     remedy: 'Ajouter des instances derrière un load balancer (scaling horizontal), ou de l’autoscaling si le pic est court ; un CDN si ce sont des lectures de contenu stable.',
     concept: 'Scalabilité horizontale',
   },
   database: {
-    says: 'Engorgement à {name} : les demandes s’accumulent plus vite qu’on n’y répond.',
+    says: 'Engorgement à {name} : chaque voyageur y venait chercher sa réponse, plus vite qu’on ne pouvait les servir.',
     tech: 'La base est le goulot classique. En lecture, on la soulage par un cache ou des réplicas ; en écriture, par une file et un traitement par lots.',
     remedy: 'Lectures : poser un cache consulté par le serveur, ou un réplica en lecture. Écritures massives : passer par une file de messages.',
     concept: 'Cache, réplication',
   },
   cache: {
-    says: 'Débordement à {name} : trop de consultations à la fois.',
+    says: 'Débordement à {name} : même le carnet ne suffisait plus à tant de consultations.',
     tech: 'Le cache lui-même sature : c’est rare, signe d’un volume de lectures très élevé.',
     remedy: 'Un CDN en amont pour servir une partie des lectures avant même le serveur.',
     concept: 'Cache',
   },
   'load-balancer': {
-    says: 'Bouchon à {name} : tout le monde passe par là.',
+    says: 'Bouchon à {name} : tout le monde passe par là, et la porte n’est pas assez large.',
     tech: 'Le load balancer sature : tout le trafic passe par lui.',
     remedy: 'Écarter le trafic abusif avec du rate limiting, ou servir une partie des lectures en bordure (CDN).',
     concept: 'Load balancing',
   },
   'message-queue': {
-    says: 'Débordement à {name} : les colis s’entassent plus vite qu’on ne les livre.',
+    says: 'Débordement à {name} : les colis arrivent plus vite que les coursiers ne les livrent.',
     tech: 'La file grossit : le consommateur ne suit pas le producteur, l’arriéré monte jusqu’à perdre des messages.',
     remedy: 'Plus de workers derrière la file, ou des lots plus gros.',
     concept: 'Backpressure',
@@ -101,13 +101,13 @@ export const reasonLessons = {
 export const incidentLessons: Record<'instance-down' | 'cold-cache', { hurt: Lesson; held: Lesson }> = {
   'instance-down': {
     hurt: {
-      says: '« {title} » : {failed} voyageurs sont restés sans réponse le temps de la relève.',
+      says: '{title} : {failed} voyageurs sont restés sans réponse, faute de relève.',
       tech: 'Une instance unique est un point de défaillance unique (SPOF) : quand elle tombe, tout ce qu’elle servait échoue.',
       remedy: 'De la redondance : au moins deux instances derrière un load balancer, ou de l’autoscaling qui remplace l’instance perdue après son délai de démarrage.',
       concept: 'Redondance, SPOF',
     },
     held: {
-      says: '« {title} » : la relève a suivi, personne n’a rien vu.',
+      says: '{title} : les autres tours ont pris le relais, personne n’a rien vu.',
       tech: 'Les instances restantes ont absorbé la charge : la redondance a fait son travail.',
       remedy: 'Garder assez de marge pour perdre une instance au pic (N+1).',
       concept: 'Redondance, SPOF',
@@ -115,13 +115,13 @@ export const incidentLessons: Record<'instance-down' | 'cold-cache', { hurt: Les
   },
   'cold-cache': {
     hurt: {
-      says: '« {title} » : le carnet vide, tout le monde a couru aux archives, {failed} voyageurs n’ont pas eu de réponse.',
-      tech: 'Un cache vide renvoie toutes les lectures sur la base, qui sature le temps qu’il se remplisse (cache stampede).',
+      says: '{title}. Le carnet perdu, tout le monde a couru aux archives en même temps : elles ont débordé quelques instants et {failed} voyageurs sont repartis sans réponse.',
+      tech: 'Un cache vidé renvoie d’un coup toutes les lectures sur la base, qui sature le temps qu’il se remplisse : c’est le cache stampede.',
       remedy: 'Une base qui tient seule le pic de lectures (réplica en lecture), un cache préchauffé, ou de la marge sur la base.',
       concept: 'Cache stampede',
     },
     held: {
-      says: '« {title} » : les archives ont tenu le temps que le carnet se remplisse.',
+      says: '{title} : les archives ont tenu seules le temps que le carnet se remplisse.',
       tech: 'La base a encaissé les lectures que le cache ne servait plus pendant qu’il se réchauffait.',
       remedy: 'Un cache est une optimisation : la base doit survivre à son absence, au moins un moment.',
       concept: 'Cache stampede',
