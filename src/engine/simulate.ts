@@ -45,12 +45,17 @@ interface Stream {
   source: string;
   batch: number;
   rps: number;
+  /** Copie livrée une seconde fois par un incident : elle ne compte jamais comme livrée. */
+  duplicate?: boolean;
 }
+
+/** Un événement async original : ce qu'un service attend de recevoir. */
+const isEvent = (s: Stream) => s.kind === 'async' && !s.duplicate;
 
 type Flow = Map<string, Stream>;
 
-function streamKey(s: Pick<Stream, 'kind' | 'source' | 'batch'>): string {
-  return `${s.kind}|${s.source}|${s.batch}`;
+function streamKey(s: Pick<Stream, 'kind' | 'source' | 'batch' | 'duplicate'>): string {
+  return `${s.kind}|${s.source}|${s.batch}${s.duplicate ? '|dup' : ''}`;
 }
 
 function addStream(flow: Flow, s: Stream): void {
@@ -114,6 +119,8 @@ interface TickContext {
   nodeShed: Map<string, number>;
   events: SimEvent[];
   shed: { value: number };
+  /** Cumul de la vague : événements async en échec, et copies arrivées au bout de leur chemin. */
+  asyncTally: { failed: number; delivered: number };
 }
 
 const P95 = 0.95;
@@ -146,6 +153,10 @@ export function simulateWave(
   const hitRateAt = (nodeId: string, s: Stream): number =>
     sourcesById.get(s.source)?.longTail ? 0 : (defOf(nodeId).hitRate ?? 0) * hitFactor(nodes.get(nodeId)!.type, currentTick);
   let currentTick = 0;
+  /** Part d'un incident de messagerie en cours sur ce type de composant. */
+  const incidentShare = (type: string, effect: 'duplicate-delivery' | 'publish-loss'): number =>
+    active.reduce((a, i) => a + (i.component === type && i.effect.type === effect ? i.effect.share : 0), 0);
+  const roles = new Map(arch.nodes.map((n) => [n.id, messagingRoles(n, nodes, catalog, routes)]));
 
   const sourcesById = new Map(wave.sources.map((s) => [s.id, s]));
   const backlogs = new Map<string, Flow>();
@@ -155,15 +166,13 @@ export function simulateWave(
     [...nodes.keys()].map((id) => [id, { peakUtilization: 0, failed: 0, saturatedTicks: 0 }]),
   );
 
-  const failures: Record<FailureReason, number> = {
-    saturation: 0,
-    'no-route': 0,
-    'rate-limited': 0,
-    'queue-overflow': 0,
-    'lost-at-edge': 0,
-  };
+  const failures = noFailures();
   const events: SimEvent[] = [];
   const shed = { value: 0 };
+  const asyncTally = { failed: 0, delivered: 0 };
+  const fanOut = wave.fanOut ?? 1;
+  let asyncInjected = 0;
+  let undeliveredSoFar = 0;
   const ticks: TickMetrics[] = [];
   const reportedNoRoute = new Set<string>();
 
@@ -180,7 +189,7 @@ export function simulateWave(
     for (const id of was) if (!active.some((i) => i.id === id)) events.push({ type: 'incident-end', tick, incident: id });
     const nodeFailed = new Map<string, number>();
     const nodeShed = new Map<string, number>();
-    const ctx: TickContext = { tick, failures, nodeFailed, nodeShed, events, shed };
+    const ctx: TickContext = { tick, failures, nodeFailed, nodeShed, events, shed, asyncTally };
     const failedBefore = sumFailures(failures);
 
     const inbound = new Map<string, Flow>([...nodes.keys()].map((id) => [id, new Map()]));
@@ -191,6 +200,7 @@ export function simulateWave(
       }
     }
     inbound.set(validation.sourceId, injected);
+    asyncInjected += sumRps(injected, isEvent);
     const offered = sumRps(injected);
     offeredTotal += offered;
 
@@ -214,7 +224,15 @@ export function simulateWave(
       });
       outcomes.set(id, outcome);
 
-      route(id, def, outcome.passed, routes.get(id)!, { inbound, ctx, reportedNoRoute, routed, hitRateAt });
+      route(id, def, outcome.passed, routes.get(id)!, {
+        inbound,
+        ctx,
+        reportedNoRoute,
+        routed,
+        hitRateAt,
+        roles: roles.get(id)!,
+        incidentShare: (effect) => incidentShare(node.type, effect),
+      });
 
       const isSaturated = outcome.utilization > 1;
       if (isSaturated && !saturated.has(id)) {
@@ -250,6 +268,18 @@ export function simulateWave(
         : 0;
     syncWeightedLatency += tickLatency * syncRps;
     syncOffered += syncRps;
+
+    // Ce qui manque aux abonnés attendus, une fois retirés les échecs déjà comptés et ce
+    // qui attend encore en file : compté au fil des ticks, pour que le rejeu le montre.
+    if (fanOut > 1) {
+      // Seul ce qui attend dans une file vidée par un consommateur arrivera un jour.
+      const waiting = [...backlogs]
+        .filter(([id]) => routes.get(id)!.forward.async.length > 0)
+        .reduce((a, [, b]) => a + sumRps(b, isEvent), 0);
+      const missing = Math.max(0, asyncInjected * fanOut - asyncTally.delivered - asyncTally.failed - waiting);
+      if (missing > undeliveredSoFar) failures.undelivered += missing - undeliveredSoFar;
+      undeliveredSoFar = Math.max(undeliveredSoFar, missing);
+    }
 
     ticks.push({
       tick,
@@ -290,6 +320,7 @@ export function simulateWave(
     failed,
     failuresByReason: failures,
     shed: shed.value,
+    ...(fanOut > 1 ? { delivery: { expected: asyncInjected * fanOut, delivered: asyncTally.delivered } } : {}),
     nodes: Object.fromEntries(summaries),
     ticks,
     events,
@@ -325,6 +356,8 @@ function processNode(node: ArchNode, def: ComponentDef, incoming: Flow, env: Pro
       return processDatabase(node, def, incoming, env);
     case 'queue':
       return processQueue(node, def, incoming, env);
+    case 'pubsub':
+      return processCache(node, def, incoming, env);
   }
 }
 
@@ -340,19 +373,34 @@ function instancesOf(node: ArchNode, catalog: Catalog, down = 0): number {
   return Math.max(0, 1 + extra - down);
 }
 
+function noFailures(): Record<FailureReason, number> {
+  return {
+    saturation: 0,
+    'no-route': 0,
+    'rate-limited': 0,
+    'queue-overflow': 0,
+    'lost-at-edge': 0,
+    duplicate: 0,
+    'lost-event': 0,
+    undelivered: 0,
+  };
+}
+
 /** Sert ce qui tient dans la capacité, fait échouer le reste à parts égales. */
 function serveWithin(nodeId: string, flow: Flow, demand: number, capacity: number, ctx: TickContext): Flow {
   if (demand <= capacity || demand === 0) return flow;
   const servedShare = capacity / demand;
-  const lost = sumRps(flow) * (1 - servedShare);
-  fail(ctx, nodeId, 'saturation', lost);
+  const lostShare = 1 - servedShare;
+  fail(ctx, nodeId, 'saturation', sumRps(flow) * lostShare, sumRps(flow, isEvent) * lostShare);
   return scaleFlow(flow, servedShare);
 }
 
-function fail(ctx: TickContext, nodeId: string, reason: FailureReason, rps: number): void {
+/** `events` : la part de ces échecs qui sont des événements async, pour compter ce qui reste à livrer. */
+function fail(ctx: TickContext, nodeId: string, reason: FailureReason, rps: number, events = 0): void {
   if (rps <= 0) return;
   ctx.failures[reason] += rps;
   ctx.nodeFailed.set(nodeId, (ctx.nodeFailed.get(nodeId) ?? 0) + rps);
+  ctx.asyncTally.failed += events;
 }
 
 function processBalancer(node: ArchNode, def: ComponentDef, incoming: Flow, env: ProcessEnv): NodeOutcome {
@@ -472,7 +520,7 @@ function processEdge(node: ArchNode, def: ComponentDef, incoming: Flow, env: Pro
     if (s.kind === 'read') {
       addStream(passed, { ...s, rps: s.rps * (1 - hitRate) });
     } else if (s.kind === 'async') {
-      fail(env.ctx, node.id, 'lost-at-edge', s.rps * hitRate);
+      fail(env.ctx, node.id, 'lost-at-edge', s.rps * hitRate, s.duplicate ? 0 : s.rps * hitRate);
       addStream(passed, { ...s, rps: s.rps * (1 - hitRate) });
     } else {
       addStream(passed, s);
@@ -550,7 +598,7 @@ function processDatabase(node: ArchNode, def: ComponentDef, incoming: Flow, env:
 }
 
 function failAll(nodeId: string, flow: Flow, ctx: TickContext): Flow {
-  fail(ctx, nodeId, 'saturation', sumRps(flow));
+  fail(ctx, nodeId, 'saturation', sumRps(flow), sumRps(flow, isEvent));
   return new Map();
 }
 
@@ -590,7 +638,7 @@ function processQueue(node: ArchNode, def: ComponentDef, incoming: Flow, env: Pr
   const waiting = sumRps(backlog);
   if (waiting > maxBacklog) {
     const lost = waiting - maxBacklog;
-    fail(env.ctx, node.id, 'queue-overflow', lost);
+    fail(env.ctx, node.id, 'queue-overflow', lost, (lost * sumRps(backlog, isEvent)) / waiting);
     env.ctx.events.push({ type: 'queue-overflow', tick: env.ctx.tick, node: node.id, lostRps: lost });
     for (const s of backlog.values()) s.rps *= maxBacklog / waiting;
   }
@@ -634,6 +682,41 @@ interface RouteEnv {
   reportedNoRoute: Set<string>;
   routed: Routed;
   hitRateAt: (nodeId: string, s: Stream) => number;
+  roles: MessagingRoles;
+  incidentShare: (effect: 'duplicate-delivery' | 'publish-loss') => number;
+}
+
+/** Ce qu'un nœud fait des événements async : les publier, les consommer, avec quelles protections. */
+interface MessagingRoles {
+  /** Serveur qui publie vers une file ou un pub/sub : exposé à la perte à la publication. */
+  publisher: boolean;
+  /** Base à outbox où ce serveur écrit : ses événements passent par elle et ne se perdent plus. */
+  outbox?: string;
+  /** Serveur consommateur idempotent : il écarte les doublons, une écriture par message. */
+  idempotent: boolean;
+  /** Bases où ce nœud écrit : destination des écritures ajoutées (clés, outbox). */
+  writeTargets: string[];
+}
+
+function messagingRoles(
+  node: ArchNode,
+  nodes: Map<string, ArchNode>,
+  catalog: Catalog,
+  routes: RouteTable,
+): MessagingRoles {
+  const own = routes.get(node.id)!;
+  const behaviorOf = (id: string) => catalog.components[nodes.get(id)?.type ?? '']?.behavior;
+  const hasEffect = (n: ArchNode | undefined, effect: string) =>
+    !!n && Object.values(catalog.upgrades).some((u) => u.appliesTo === n.type && u.effect.type === effect && upgradeLevel(n, u.id) > 0);
+  const service = catalog.components[node.type]?.behavior === 'service';
+  const writeTargets = own.forward.write.filter((id) => behaviorOf(id) === 'database');
+  const outbox = writeTargets.find((id) => hasEffect(nodes.get(id), 'outbox'));
+  return {
+    publisher: service && own.forward.async.some((id) => behaviorOf(id) === 'queue' || behaviorOf(id) === 'pubsub'),
+    ...(outbox ? { outbox } : {}),
+    idempotent: service && hasEffect(node, 'idempotence'),
+    writeTargets,
+  };
 }
 
 function linkTraffic(routed: Routed): TickMetrics['links'] {
@@ -657,8 +740,41 @@ function route(id: string, def: ComponentDef, passed: Flow, routes: NodeRoutes, 
     env.routed.set(id, byKind);
   };
 
-  for (const s of passed.values()) {
-    if (def.terminalFor.includes(s.kind)) continue;
+  // Les écritures que l'idempotence ou l'outbox ajoutent : une par message, vers la base.
+  const extraWrite = (s: Stream, rps: number) => {
+    const to = env.roles.writeTargets;
+    for (const db of to) send(db, { ...s, kind: 'write', duplicate: false }, rps / to.length);
+  };
+  const { roles } = env;
+
+  for (const original of passed.values()) {
+    let s = original;
+    if (def.terminalFor.includes(s.kind)) {
+      if (isEvent(s)) env.ctx.asyncTally.delivered += s.rps;
+      continue;
+    }
+
+    if (s.kind === 'async' && def.behavior === 'service') {
+      if (s.duplicate) {
+        // Un doublon reconnu est écarté ; sinon il est traité une seconde fois, et c'est l'erreur.
+        if (roles.idempotent) {
+          extraWrite(s, s.rps);
+          continue;
+        }
+        fail(env.ctx, id, 'duplicate', s.rps);
+      } else {
+        if (roles.idempotent) extraWrite(s, s.rps);
+        if (roles.publisher && roles.outbox) {
+          send(roles.outbox, { ...s, kind: 'write' }, s.rps);
+        } else if (roles.publisher) {
+          const lost = s.rps * Math.min(1, env.incidentShare('publish-loss'));
+          if (lost > 0) {
+            fail(env.ctx, id, 'lost-event', lost, lost);
+            s = { ...s, rps: s.rps - lost };
+          }
+        }
+      }
+    }
 
     // Cache-aside : chaque cache consulté sert sa part, le reste repart d'ici.
     let remaining = s.rps;
@@ -672,7 +788,7 @@ function route(id: string, def: ComponentDef, passed: Flow, routes: NodeRoutes, 
 
     const targets = routes.forward[s.kind];
     if (targets.length === 0) {
-      fail(env.ctx, id, 'no-route', remaining);
+      fail(env.ctx, id, 'no-route', remaining, isEvent(s) ? remaining : 0);
       const key = `${id}|${s.kind}`;
       if (remaining > 0 && !env.reportedNoRoute.has(key)) {
         env.reportedNoRoute.add(key);
@@ -680,7 +796,13 @@ function route(id: string, def: ComponentDef, passed: Flow, routes: NodeRoutes, 
       }
       continue;
     }
-    for (const to of targets) send(to, s, remaining / targets.length);
+    // Une file partage les messages entre ses voisins ; un pub/sub les copie à chacun.
+    const each = def.fanOut ? remaining : remaining / targets.length;
+    const duplicated = s.kind === 'async' && !s.duplicate ? Math.min(1, env.incidentShare('duplicate-delivery')) : 0;
+    for (const to of targets) {
+      send(to, s, each);
+      if (duplicated > 0) send(to, { ...s, duplicate: true }, each * duplicated);
+    }
   }
 }
 
@@ -716,7 +838,7 @@ function computePathLatencies(
 }
 
 function sumFailures(f: Record<FailureReason, number>): number {
-  return f.saturation + f['no-route'] + f['rate-limited'] + f['queue-overflow'] + f['lost-at-edge'];
+  return Object.values(f).reduce((a, x) => a + x, 0);
 }
 
 function gauge(value: number, limit: number): Gauge {
@@ -771,7 +893,7 @@ function invalidResult(
     },
     offered: 0,
     failed: 0,
-    failuresByReason: { saturation: 0, 'no-route': 0, 'rate-limited': 0, 'queue-overflow': 0, 'lost-at-edge': 0 },
+    failuresByReason: noFailures(),
     shed: 0,
     nodes: {},
     ticks: [],

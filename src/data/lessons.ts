@@ -1,3 +1,5 @@
+import type { IncidentEffect } from '../engine/types.ts';
+
 /**
  * Ce que le chambellan explique après une vague : par composant qui sature, et par cause
  * d'échec. `says` est dit dans la métaphore (`{name}` : le nom du bâtiment, placé pour que la
@@ -42,6 +44,12 @@ export const saturationLessons: Record<string, Lesson> = {
     tech: 'La file grossit : le consommateur ne suit pas le producteur, l’arriéré monte jusqu’à perdre des messages.',
     remedy: 'Plus de workers derrière la file, ou des lots plus gros.',
     concept: 'Backpressure',
+  },
+  pubsub: {
+    says: 'Débordement à {name} : il ne peut pas crier plus vite.',
+    tech: 'Le pub/sub sature : il reçoit plus d’événements qu’il ne peut en diffuser.',
+    remedy: 'Rare ; vérifier que seuls les événements passent par lui.',
+    concept: 'Pub/sub',
   },
   cdn: {
     says: 'Débordement à {name}.',
@@ -95,10 +103,28 @@ export const reasonLessons = {
     remedy: 'Garder de la marge : au-delà de 80 % de charge, l’attente grimpe vite.',
     concept: 'Latence et charge',
   },
+  duplicate: {
+    says: 'Des clients ont été servis deux fois, et débités deux fois.',
+    tech: 'Des messages livrés deux fois ont été traités deux fois par {name} : la livraison « au moins une fois » des files et des bus impose des consommateurs idempotents.',
+    remedy: 'Rendre le consommateur idempotent : il garde la clé de chaque message traité et ignore ceux qu’il a déjà vus.',
+    concept: 'Idempotence',
+  },
+  lostEvent: {
+    says: 'Des commandes payées n’ont jamais été annoncées : personne ne les préparera.',
+    tech: '{name} est tombé entre l’écriture de la commande en base et la publication de l’événement : la commande existe, l’événement est perdu.',
+    remedy: 'Une outbox : écrire l’événement dans la même transaction que la commande, puis le relayer vers le bus.',
+    concept: 'Transactional outbox',
+  },
+  undelivered: {
+    says: 'Certains corps de métier n’ont jamais entendu parler des commandes.',
+    tech: 'Chaque événement devait atteindre {fanOut} services, mais en moyenne seuls {reached} l’ont reçu. Une file partage les messages entre ses consommateurs : chacun n’en voit qu’une part.',
+    remedy: 'Un pub/sub copie chaque événement à chacun de ses abonnés ; chaque service a son abonnement.',
+    concept: 'Pub/sub',
+  },
 } satisfies Record<string, Lesson>;
 
 /** Incidents annoncés : `hurt` quand la panne a fait échouer des requêtes, `held` quand l'architecture l'a encaissée. */
-export const incidentLessons: Record<'instance-down' | 'cold-cache', { hurt: Lesson; held: Lesson }> = {
+export const incidentLessons: Record<IncidentEffect['type'], { hurt: Lesson; held: Lesson }> = {
   'instance-down': {
     hurt: {
       says: '{title} : {failed} voyageurs sont restés sans réponse, faute de relève.',
@@ -125,6 +151,34 @@ export const incidentLessons: Record<'instance-down' | 'cold-cache', { hurt: Les
       tech: 'La base a encaissé les lectures que le cache ne servait plus pendant qu’il se réchauffait.',
       remedy: 'Un cache est une optimisation : la base doit survivre à son absence, au moins un moment.',
       concept: 'Cache stampede',
+    },
+  },
+  'duplicate-delivery': {
+    hurt: {
+      says: '{title} : {failed} commandes ont été traitées deux fois.',
+      tech: 'Pendant l’incident, une part des messages est livrée deux fois ; un consommateur qui ne reconnaît pas un message déjà traité le traite à nouveau.',
+      remedy: 'L’idempotence sur les consommateurs : une écriture en base par message pour garder sa clé.',
+      concept: 'Idempotence',
+    },
+    held: {
+      says: '{title} : les doublons ont été reconnus et écartés.',
+      tech: 'Les consommateurs idempotents ont ignoré les messages déjà traités.',
+      remedy: 'L’idempotence a un coût : une écriture par message. La base doit suivre.',
+      concept: 'Idempotence',
+    },
+  },
+  'publish-loss': {
+    hurt: {
+      says: '{title} : {failed} commandes payées sont restées sans suite.',
+      tech: 'Le serveur écrit la commande puis publie l’événement : s’il tombe entre les deux, l’événement est perdu (le problème de la double écriture).',
+      remedy: 'Une outbox : l’événement est écrit dans la même transaction que la commande, puis relayé.',
+      concept: 'Transactional outbox',
+    },
+    held: {
+      says: '{title} : aucune commande perdue, tout était consigné au grand livre.',
+      tech: 'L’outbox a gardé chaque événement avec sa commande ; le relais les a publiés.',
+      remedy: 'L’outbox coûte une écriture de plus par commande.',
+      concept: 'Transactional outbox',
     },
   },
 };

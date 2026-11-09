@@ -9,7 +9,7 @@ export const SYNC_KINDS: readonly RequestKind[] = ['read', 'write'];
  * coûts, poids) vient des données. Un nouveau composant qui réutilise un comportement
  * existant ne demande donc aucun changement de code.
  */
-export type Behavior = 'source' | 'edge' | 'balancer' | 'service' | 'cache' | 'database' | 'queue';
+export type Behavior = 'source' | 'edge' | 'balancer' | 'service' | 'cache' | 'database' | 'queue' | 'pubsub';
 
 export interface ComponentDef {
   id: string;
@@ -44,6 +44,11 @@ export interface ComponentDef {
   maxBacklog?: number;
   /** Types de composants autorisés en aval ; absent = tous. */
   allowedDownstream?: string[];
+  /**
+   * Diffusion (pub/sub) : chaque message est copié vers chacun des voisins qui l'acceptent,
+   * au lieu d'être partagé entre eux comme le fait une file.
+   */
+  fanOut?: boolean;
 }
 
 export type UpgradeEffect =
@@ -55,7 +60,11 @@ export type UpgradeEffect =
    * Le niveau est le nombre maximal d'instances ajoutées à la demande. Une instance
    * demandée ne sert qu'après `startupTicks` ; elle est facturée au prorata des ticks actifs.
    */
-  | { type: 'autoscaling'; instanceCost: number; startupTicks: number; targetUtilization: number };
+  | { type: 'autoscaling'; instanceCost: number; startupTicks: number; targetUtilization: number }
+  /** Consommateur qui reconnaît un message déjà traité : une écriture en base par message. */
+  | { type: 'idempotence' }
+  /** Événement écrit dans la transaction de la commande, puis relayé : une écriture de plus. */
+  | { type: 'outbox' };
 
 /**
  * Ce que coûte une baisse de niveau (décision E2) :
@@ -136,9 +145,16 @@ export interface ProfileSegment {
  * Panne annoncée au briefing, qui frappe tous les composants d'un type pendant
  * `[from, until)` (décision X5) :
  * - `instance-down` : `count` instances hors service ; à zéro, le composant ne sert plus rien ;
- * - `cold-cache` : le taux de succès retombe à 0 à `from` et remonte linéairement jusqu'à `until`.
+ * - `cold-cache` : le taux de succès retombe à 0 à `from` et remonte linéairement jusqu'à `until` ;
+ * - `duplicate-delivery`, `publish-loss` : voir les effets (décisions S5, S6).
  */
-export type IncidentEffect = { type: 'instance-down'; count: number } | { type: 'cold-cache' };
+export type IncidentEffect =
+  | { type: 'instance-down'; count: number }
+  | { type: 'cold-cache' }
+  /** Une part `share` des messages qui sortent du composant est livrée deux fois. */
+  | { type: 'duplicate-delivery'; share: number }
+  /** Le serveur tombe entre l'écriture en base et la publication : une part `share` des événements est perdue. */
+  | { type: 'publish-loss'; share: number };
 
 export interface Incident {
   id: string;
@@ -165,6 +181,11 @@ export interface Wave {
   singleStrategy?: boolean;
   incidents?: Incident[];
   /**
+   * Nombre de services qui doivent recevoir chaque événement async (décision S4). Ce qui
+   * n'en atteint pas autant compte en échec « non livré ». Absent : 1, sans contrôle.
+   */
+  fanOut?: number;
+  /**
    * Troisième étoile : facture au plus égale à ce seuil, calé sur la stratégie gagnante la
    * moins chère (décision E7). Absent : le budget.
    */
@@ -182,7 +203,18 @@ export interface Scenario {
  * `lost-at-edge` : tâche async jamais déclenchée parce que sa requête a été servie en
  * bordure sans atteindre le serveur (un clic non compté sur une redirection en cache CDN).
  */
-export type FailureReason = 'saturation' | 'no-route' | 'rate-limited' | 'queue-overflow' | 'lost-at-edge';
+export type FailureReason =
+  | 'saturation'
+  | 'no-route'
+  | 'rate-limited'
+  | 'queue-overflow'
+  | 'lost-at-edge'
+  /** Message traité deux fois par un consommateur sans idempotence. */
+  | 'duplicate'
+  /** Événement perdu entre l'écriture en base et la publication. */
+  | 'lost-event'
+  /** Copie d'événement qu'un service attendait et n'a jamais reçue. */
+  | 'undelivered';
 
 export type SimEvent =
   | { type: 'invalid'; message: string }
@@ -253,6 +285,8 @@ export interface WaveResult {
   failuresByReason: Record<FailureReason, number>;
   /** Requêtes abusives écartées par le rate limiting : voulu, donc hors échecs. */
   shed: number;
+  /** Quand une vague exige plusieurs abonnés (`fanOut`) : copies attendues et reçues. */
+  delivery?: { expected: number; delivered: number };
   nodes: Record<string, NodeSummary>;
   ticks: TickMetrics[];
   events: SimEvent[];

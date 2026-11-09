@@ -109,6 +109,24 @@ export const catalog: Catalog = {
       // Une base qui consomme directement une file n'existe pas : il faut un worker.
       allowedDownstream: ['app-server'],
     },
+    pubsub: {
+      id: 'pubsub',
+      behavior: 'pubsub',
+      label: 'Bus d’événements',
+      techName: 'Pub/sub',
+      cost: 30,
+      complexity: 3,
+      capacity: 20000,
+      latencyMs: 2,
+      workPerRequest: { async: 1 },
+      terminalFor: [],
+      accepts: ['async'],
+      // Relié à côté d'une file, c'est lui qui reçoit les événements à diffuser.
+      routingPriority: 2,
+      fanOut: true,
+      // Ses abonnés : des files (un service, une file) ou directement des serveurs.
+      allowedDownstream: ['message-queue', 'app-server'],
+    },
   },
   upgrades: {
     'horizontal-scaling': {
@@ -146,6 +164,28 @@ export const catalog: Catalog = {
       complexity: { base: 0, perLevel: 1 },
       removalCost: 'per-level',
       effect: { type: 'readReplicas', capacityPerReplica: 600 },
+    },
+    idempotence: {
+      id: 'idempotence',
+      label: 'Messages traités une seule fois',
+      techName: 'Idempotence',
+      appliesTo: 'app-server',
+      maxLevel: 1,
+      cost: { base: 10, perLevel: 0 },
+      complexity: { base: 1, perLevel: 0 },
+      removalCost: 'on-disable',
+      effect: { type: 'idempotence' },
+    },
+    outbox: {
+      id: 'outbox',
+      label: 'Événements écrits avec la commande',
+      techName: 'Transactional outbox',
+      appliesTo: 'database',
+      maxLevel: 1,
+      cost: { base: 15, perLevel: 0 },
+      complexity: { base: 2, perLevel: 0 },
+      removalCost: 'on-disable',
+      effect: { type: 'outbox' },
     },
     'rate-limiting': {
       id: 'rate-limiting',
