@@ -1,4 +1,5 @@
 import { attachChart, chartModel, renderChart } from './charts.ts';
+import { nodeNames } from './theme.ts';
 import type { Architecture, Catalog, Wave, WaveResult } from '../engine/types.ts';
 import { escapeHtml } from './html.ts';
 import { firstSaturations, replayStats } from './hud.ts';
@@ -84,9 +85,10 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
 
   const typeOf = new Map(o.arch.nodes.map((n) => [n.id, n.type]));
   const nameOf = (id: string) => {
-    const type = typeOf.get(id) ?? '';
-    const metaphor = o.theme.buildings[type]?.metaphor;
-    return `${o.catalog.components[type]?.techName ?? id}${metaphor ? ` (${metaphor})` : ''}`;
+    const node = o.arch.nodes.find((n) => n.id === id);
+    if (!node) return id;
+    const { tech, metaphor } = nodeNames(node, o.catalog, o.theme);
+    return `${tech}${metaphor ? ` (${metaphor})` : ''}`;
   };
   const alerts = firstSaturations(o.result.events);
   const incidents = o.result.events.flatMap((e) => {

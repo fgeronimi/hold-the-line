@@ -2,7 +2,7 @@ import { incidentLessons, reasonLessons, saturationLessons, type Lesson } from '
 import { bill } from '../engine/budget.ts';
 import { simulateWave } from '../engine/simulate.ts';
 import type { Architecture, Catalog, RequestKind, TickMetrics, Wave, WaveResult } from '../engine/types.ts';
-import type { Theme } from '../render/theme.ts';
+import { nodeNames, type Theme } from '../render/theme.ts';
 import { removeNode } from './editor.ts';
 
 /**
@@ -67,11 +67,14 @@ function flow(ticks: TickMetrics[], kind: RequestKind, end: 'from' | 'to', id: s
  */
 export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, catalog: Catalog, theme: Theme): Finding[] {
   const typeOf = new Map(arch.nodes.map((n) => [n.id, n.type]));
-  const metaphor = (id: string) => theme.buildings[typeOf.get(id) ?? '']?.metaphor ?? id;
+  const names = (id: string) => {
+    const node = arch.nodes.find((n) => n.id === id);
+    return node ? nodeNames(node, catalog, theme) : { tech: id, metaphor: '' };
+  };
+  const metaphor = (id: string) => names(id).metaphor || id;
   const name = (id: string) => {
-    const type = typeOf.get(id) ?? '';
-    const m = theme.buildings[type]?.metaphor;
-    return `${catalog.components[type]?.techName ?? type}${m ? ` (${m})` : ''}`;
+    const { tech, metaphor: m } = names(id);
+    return `${tech}${m ? ` (${m})` : ''}`;
   };
   const behaviorOf = (id: string) => catalog.components[typeOf.get(id) ?? '']?.behavior;
   const ofBehavior = (b: string) => arch.nodes.filter((n) => catalog.components[n.type]?.behavior === b).map((n) => n.id);
@@ -134,9 +137,10 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
   if (result.failuresByReason['lost-event'] > 0 && !told('publish-loss')) {
     tell(0, fromLesson(problem, reasonLessons.lostEvent, { name: name(firstFailing('serveur')) }));
   }
-  if (result.failuresByReason.undelivered > 0 && result.delivery && wave.fanOut) {
-    const reached = (result.delivery.delivered / result.delivery.expected) * wave.fanOut;
-    tell(0, fromLesson(problem, reasonLessons.undelivered, { fanOut: String(wave.fanOut), reached: reached.toFixed(1).replace('.', ',') }));
+  const expected = wave.consumers?.length ?? 0;
+  if (result.failuresByReason.undelivered > 0 && result.delivery && expected > 0) {
+    const reached = (result.delivery.delivered / result.delivery.expected) * expected;
+    tell(0, fromLesson(problem, reasonLessons.undelivered, { fanOut: String(expected), reached: reached.toFixed(1).replace('.', ',') }));
   }
 
   const overflowed = new Set<string>();
@@ -294,7 +298,8 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
    */
   function superfluousNodes(): string[] {
     return arch.nodes
-      .filter((n) => catalog.components[n.type]?.behavior !== 'source')
+      // La source et les services déjà en place ne se retirent pas.
+      .filter((n) => catalog.components[n.type]?.behavior !== 'source' && !n.fixed)
       .filter((n) => {
         const r = simulateWave(removeNode(arch, n.id), wave, catalog);
         const valid = !r.events.some((e) => e.type === 'invalid') && r.failuresByReason['no-route'] === 0;

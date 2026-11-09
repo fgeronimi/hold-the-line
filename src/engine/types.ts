@@ -106,6 +106,11 @@ export interface ArchNode {
   upgrades?: Record<string, number>;
   /** Case du plateau où le joueur a posé le bâtiment. Ignorée par la simulation. */
   cell?: BoardCell;
+  /**
+   * Service déjà en place, fourni par le scénario (décision S8) : il n'est pas facturé et
+   * ne se démolit pas ; ses évolutions, elles, se paient. Son nom remplace celui du composant.
+   */
+  fixed?: { tech: string; metaphor: string };
 }
 
 /** Un lien relie deux composants ; ce qui y circule est déduit par `routeTable`. */
@@ -181,10 +186,11 @@ export interface Wave {
   singleStrategy?: boolean;
   incidents?: Incident[];
   /**
-   * Nombre de services qui doivent recevoir chaque événement async (décision S4). Ce qui
-   * n'en atteint pas autant compte en échec « non livré ». Absent : 1, sans contrôle.
+   * Services (ids des bâtiments du scénario) qui doivent chacun recevoir chaque événement
+   * async (décisions S4, S8). Ce qui ne leur parvient pas compte en échec « non livré ».
+   * Absent : aucun contrôle de livraison.
    */
-  fanOut?: number;
+  consumers?: string[];
   /**
    * Troisième étoile : facture au plus égale à ce seuil, calé sur la stratégie gagnante la
    * moins chère (décision E7). Absent : le budget.
@@ -197,6 +203,8 @@ export interface Scenario {
   title: string;
   subtitle: string;
   waves: Wave[];
+  /** Bâtiments déjà sur le plateau au début de la partie, en plus de la source. */
+  fixtures?: ArchNode[];
 }
 
 /**
@@ -285,7 +293,7 @@ export interface WaveResult {
   failuresByReason: Record<FailureReason, number>;
   /** Requêtes abusives écartées par le rate limiting : voulu, donc hors échecs. */
   shed: number;
-  /** Quand une vague exige plusieurs abonnés (`fanOut`) : copies attendues et reçues. */
+  /** Quand une vague nomme les services à livrer (`consumers`) : copies attendues et reçues. */
   delivery?: { expected: number; delivered: number };
   nodes: Record<string, NodeSummary>;
   ticks: TickMetrics[];

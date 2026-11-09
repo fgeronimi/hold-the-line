@@ -25,7 +25,20 @@ import {
 } from './views.ts';
 import './style.css';
 
-const START: Architecture = { nodes: [{ id: 'src', type: 'traffic-source', cell: { q: 0, r: 0 } }], links: [] };
+/** Le plateau de départ d'un scénario : la source, et les services déjà en place. */
+function startOf(scenario: ViewState['scenario']): Architecture {
+  return { nodes: [{ id: 'src', type: 'traffic-source', cell: { q: 0, r: 0 } }, ...structuredClone(scenario.fixtures ?? [])], links: [] };
+}
+
+/** Une partie commencée avant l'arrivée des services déjà en place les reçoit. */
+function withFixtures(draft: Architecture, scenario: ViewState['scenario']): Architecture {
+  const missing = (scenario.fixtures ?? []).filter((f) => !draft.nodes.some((n) => n.id === f.id));
+  return missing.length > 0 ? { ...draft, nodes: [...draft.nodes, ...structuredClone(missing)] } : draft;
+}
+
+/** La source et les services déjà en place ne se démolissent pas. */
+const permanent = (node: Architecture['nodes'][number]) =>
+  state.catalog.components[node.type]?.behavior === 'source' || !!node.fixed;
 
 type Saved = Pick<ViewState, 'catalog' | 'scenario' | 'game' | 'draft'>;
 
@@ -42,12 +55,13 @@ const defaultScenario = (id: string) => scenarioById(id) ?? SCENARIOS[0]!.scenar
 /** La partie d'un scénario : celle sauvegardée, ou une nouvelle. */
 function gameOf(id: string): Saved {
   const saved = store.saves[id];
+  const scenario = saved?.scenario ?? defaultScenario(id);
   return {
     catalog: saved?.catalog ?? structuredClone(defaultCatalog),
     scenario: saved?.scenario ?? structuredClone(defaultScenario(id)),
     game: saved?.game ?? newGame(),
     // Un brouillon d'avant le plateau reçoit des cases et des chemins une fois pour toutes.
-    draft: autoPlace(saved?.draft ?? START),
+    draft: autoPlace(withFixtures(saved?.draft ?? startOf(scenario), scenario)),
   };
 }
 
@@ -173,7 +187,7 @@ function canUse(cell: BoardCell): boolean {
     case 'link':
       return here !== undefined;
     case 'remove':
-      return here !== undefined && state.catalog.components[here.type]?.behavior !== 'source';
+      return here !== undefined && !permanent(here);
     case 'select':
       return true;
   }
@@ -201,7 +215,7 @@ function onBoardClick(cell: BoardCell): void {
       if (!tool.from) return update({ tool: { kind: 'link', from: here.id }, boardMessage: undefined });
       return applied(connect(state.draft, tool.from, here.id), { tool: { kind: 'link' } });
     case 'remove':
-      if (!here || state.catalog.components[here.type]?.behavior === 'source') return;
+      if (!here || permanent(here)) return;
       update({ draft: removeNode(state.draft, here.id), selectedNode: undefined, boardMessage: undefined });
       return;
   }
@@ -245,7 +259,7 @@ function describeDraft(arch: Architecture): string {
   return types.length > 0 ? types.join(' + ') : 'vide';
 }
 
-const committedOrStart = (game = state.game) => (game.committed.nodes.length > 0 ? game.committed : START);
+const committedOrStart = (game = state.game) => (game.committed.nodes.length > 0 ? game.committed : startOf(state.scenario));
 
 const actions: Record<string, (el: HTMLElement) => void> = {
   menu: () => update({ showMenu: !state.showMenu }),
@@ -300,8 +314,11 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     const type = (document.getElementById('new-node') as HTMLSelectElement).value;
     update({ draft: addNode(state.draft, type) });
   },
-  'remove-node': (el) =>
-    update({ draft: removeNode(state.draft, el.dataset.node!), selectedNode: undefined, tool: { kind: 'select' } }),
+  'remove-node': (el) => {
+    const node = state.draft.nodes.find((n) => n.id === el.dataset.node);
+    if (!node || permanent(node)) return;
+    update({ draft: removeNode(state.draft, node.id), selectedNode: undefined, tool: { kind: 'select' } });
+  },
   upgrade: (el) =>
     update({
       draft: setUpgrade(state.draft, el.dataset.node!, el.dataset.upgrade!, Number((el as HTMLSelectElement).value)),
@@ -365,7 +382,7 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     leaveWave();
     update({
       game: newGame(),
-      draft: START,
+      draft: startOf(state.scenario),
       attempts: [],
       selected: undefined,
       selectedNode: undefined,

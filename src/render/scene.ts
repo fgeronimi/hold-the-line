@@ -33,7 +33,7 @@ import { HEX_SIZE, HEX_WIDTH, hexAt, hexCenter, hexDistance, hexKey, type Hex } 
 import { escapeHtml } from './html.ts';
 import { layoutArchitecture, pointAlong, type Layout, type Road } from './layout.ts';
 import { ModelLibrary, type ModelId } from './models.ts';
-import type { BuildingStyle, Shape, Theme } from './theme.ts';
+import { nodeNames, type BuildingStyle, type Shape, type Theme } from './theme.ts';
 import { journeyAt, type Journey, type Outcome } from './traffic.ts';
 
 const MAX_VEHICLES_PER_KIND = 2500;
@@ -509,8 +509,8 @@ export class CityScene {
       instances: [],
       parked: [],
       label: document.createElement('div'),
-      techName: def?.techName ?? node.type,
-      metaphor: this.theme.buildings[node.type]?.metaphor ?? node.type,
+      techName: nodeNames(node, this.catalog, this.theme).tech,
+      metaphor: nodeNames(node, this.catalog, this.theme).metaphor,
       top: 1,
     };
   }

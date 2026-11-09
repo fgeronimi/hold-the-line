@@ -138,20 +138,22 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 | S1 | Deuxième scénario : **la prise de commande d'une boutique en ligne**, dans la même cité, avec les mêmes bâtiments et les mêmes couleurs que le premier. Seul nouveau bâtiment : le crieur public, au clocher (l'église KayKit ; les modèles « stage » du pack sont des étapes de chantier, pas une scène). | Chaque incident a une conséquence que tout le monde comprend (client débité deux fois, commande payée jamais expédiée). Garder la cité évite de refaire le rendu : c'est le seul pack KayKit hexagonal. | Fait |
 | S2 | Un **écran de choix** au lancement, sans verrou : *Les portes de la cité* (débutant) et *Le grand marché* (suite). Une partie par scénario, avec sa progression, ses étoiles et son score. | Jeu pédagogique : on ne bloque pas quelqu'un qui connaît déjà les bases. | Fait |
 | S3 | Vagues : 1. lancement, la commande passe par une file ; 2. trois services veulent chaque événement (stock, facturation, e-mail) : pub/sub ; 3. incident de double livraison : idempotence ; 4. incident d'événements perdus entre la base et le bus : outbox ; 5. les soldes, qui combinent tout. | Un composant ou une évolution par vague, dans l'ordre où le besoin apparaît. | Fait |
-| S4 | **Pub/sub** (le crieur public, une scène) : il copie chaque message async vers chacun de ses abonnés, là où la file les partage. Une vague peut exiger que chaque événement atteigne N abonnés (`fanOut`) : ce qui manque compte en échec « non livré ». | La différence entre partager et diffuser est la leçon de la vague 2. | Fait |
+| S4 | **Pub/sub** (le crieur public, au clocher) : il copie chaque message async vers chacun de ses abonnés, là où la file les partage. Ce qui ne parvient pas à un service attendu compte en échec « non livré » (voir S8). | La différence entre partager et diffuser est la leçon de la vague 2. | Fait |
 | S5 | **Idempotence** : évolution du serveur consommateur. Sans elle, un message livré deux fois est un échec « doublon » ; avec, il est reconnu et ignoré, au prix d'une écriture en base par message (la clé déjà traitée). | Le compromis « stockage des clés » de la spec devient de la charge réelle sur la base. | Fait |
 | S6 | **Outbox** : évolution de la base. Sans elle, pendant l'incident, une part des événements publiés par le serveur est perdue (échec « événement perdu ») ; avec, l'événement est écrit dans la même transaction, au prix d'une écriture de plus par commande. | Le compromis « table et relais en plus » de la spec, rendu en charge. | Fait |
 | S7 | La barre d'outils reste **la même dans tous les scénarios** : tous les composants sont proposés. | Choisir, c'est aussi savoir écarter ce qui ne sert à rien ; le debrief signale le superflu. | Fait |
+| S8 | Les trois services du grand marché (stock, facturation, e-mail) sont **déjà sur le plateau** au début, de l'autre côté de la rivière : ni facturés ni démolissables, seules leurs évolutions se paient. Chaque vague nomme les services qui doivent recevoir chaque événement (`consumers`) ; la livraison se compte service par service. | Le joueur ne construit pas les consommateurs, il les relie : la leçon porte sur la diffusion, pas sur le nombre de workers. Compter par service rend « non livré » exact. | Fait |
+| S9 | Le guide signale une **impasse** : un bâtiment qui reçoit du travail qu'il ne termine pas, sans lien sortant. Toutes les évolutions restent proposées dès la première vague, comme tous les composants (S7). | L'impasse donnait des « no-route » que rien n'expliquait avant la vague. Cocher une parade trop tôt se paie (l'outbox fait saturer la base en vague 1) et le debrief l'explique : c'est une leçon, pas un piège. | Fait |
 
 ### Calibrage du grand marché
 
 | Vague | Budget | Plafond complexité | Réponse attendue |
 |---|---|---|---|
-| 1 | 120 | 6 | file + worker (115) ; sans file, la base sature |
-| 2 | 200 | 13 | pub/sub + une file par service + worker (195) ; une ou trois files sans pub/sub ne livrent qu'un tiers |
-| 3 | 210 | 14 | + idempotence (205) ; sans elle, 5 % de doublons |
-| 4 | 260 | 18 | + outbox, qui double les écritures : + cache (235) ou + réplica (260) |
-| 5 | 270 | 20 | tout, + une instance derrière un load balancer (265) |
+| 1 | 100 | 5 | serveur + base + une file vers le service e-mail (95) ; sans file, rien ne lui parvient et la base sature |
+| 2 | 180 | 12 | pub/sub + une file par service (175) ; une file partagée ne livre qu'un tiers à chacun |
+| 3 | 210 | 15 | + idempotence sur les trois services (205) ; sans elle, 5 % de doublons |
+| 4 | 260 | 19 | + outbox, qui double les écritures : + cache (235) ou + réplica (260) |
+| 5 | 270 | 21 | tout, + une instance derrière un load balancer (265) |
 
 Verrouillé par `tests/market.test.ts`. L'énumération en masse (`npm run balance`) ne couvre
 encore que le raccourcisseur.

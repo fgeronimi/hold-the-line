@@ -24,6 +24,12 @@ describe('editor', () => {
     expect(setUpgrade(up, 'db', 'read-replica', 0).nodes.find((n) => n.id === 'db')).toEqual({ id: 'db', type: 'database' });
   });
 
+  it('retirer la dernière évolution garde la case et le statut de service en place', () => {
+    const fixed = { id: 'mail', type: 'app-server', cell: { q: 1, r: 2 }, fixed: { tech: 'Service e-mail', metaphor: 'Messager' }, upgrades: { idempotence: 1 } };
+    const out = setUpgrade({ nodes: [fixed], links: [] }, 'mail', 'idempotence', 0).nodes[0];
+    expect(out).toEqual({ id: 'mail', type: 'app-server', cell: { q: 1, r: 2 }, fixed: fixed.fixed });
+  });
+
   it('ignore un lien déjà présent ou vers soi-même', () => {
     expect(addLink(A.minimal, 'app', 'db')).toBe(A.minimal);
     expect(addLink(A.minimal, 'app', 'app')).toBe(A.minimal);

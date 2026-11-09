@@ -1,7 +1,7 @@
 import { validateArchitecture } from '../engine/validate.ts';
 import type { Architecture, Catalog, Wave, WaveResult } from '../engine/types.ts';
 import { escapeHtml } from './html.ts';
-import type { Theme } from './theme.ts';
+import { nodeNames, type Theme } from './theme.ts';
 
 /**
  * Courbes tick par tick d'une vague : le trafic, le taux d'échec cumulé face au SLA, puis
@@ -84,8 +84,8 @@ export function chartModel(result: WaveResult, arch: Architecture, wave: Wave, c
     const load = ticks.map((t) => t.nodes[id]?.utilization ?? 0);
     panels.push({
       id,
-      title: catalog.components[node.type]?.techName ?? node.type,
-      subtitle: theme.buildings[node.type]?.metaphor ?? '',
+      title: nodeNames(node, catalog, theme).tech,
+      subtitle: nodeNames(node, catalog, theme).metaphor,
       unit: '%',
       values: load,
       top: Math.min(2, Math.max(1.2, ...load) * 1.05),

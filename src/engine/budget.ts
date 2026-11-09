@@ -17,7 +17,8 @@ export function bill(arch: Architecture, catalog: Catalog): BillLine[] {
   for (const node of arch.nodes) {
     const def = catalog.components[node.type];
     if (!def) continue;
-    lines.push({ node: node.id, item: def.id, cost: def.cost, complexity: def.complexity });
+    // Un service déjà en place n'est pas à construire : seules ses évolutions se paient.
+    if (!node.fixed) lines.push({ node: node.id, item: def.id, cost: def.cost, complexity: def.complexity });
     for (const [upgradeId, level] of Object.entries(node.upgrades ?? {})) {
       const up = catalog.upgrades[upgradeId];
       if (!up || level <= 0) continue;

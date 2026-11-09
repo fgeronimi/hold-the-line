@@ -7,6 +7,14 @@ const flat = [{ until: TICKS, factor: 1 }];
  * Les chalands : ils consultent leurs commandes (lectures), en passent (écritures), et
  * chaque commande passée émet un événement (async) que les services doivent recevoir.
  */
+/**
+ * Les trois services des autres équipes, déjà en place de l'autre côté de la rivière
+ * (décision S8) : il reste à leur faire parvenir chaque commande.
+ */
+const SERVICES = { stock: ['Service stock', 'Magasinier'], billing: ['Service facturation', 'Trésorier'], mail: ['Service e-mail', 'Messager'] } as const;
+const CELLS = { stock: { q: 15, r: -3 }, billing: { q: 14, r: 0 }, mail: { q: 13, r: 3 } };
+const ALL = Object.keys(SERVICES);
+
 const shoppers = (read: number, orders: number): TrafficSource => ({
   id: 'shoppers',
   clients: 1000,
@@ -17,34 +25,41 @@ export const market: Scenario = {
   id: 'market',
   title: 'Prise de commande',
   subtitle: 'Hold the Line : le grand marché',
+  fixtures: Object.entries(SERVICES).map(([id, [tech, metaphor]]) => ({
+    id,
+    type: 'app-server',
+    cell: CELLS[id as keyof typeof CELLS],
+    fixed: { tech, metaphor },
+  })),
   waves: [
     {
       id: 'market-open',
       title: 'Ouverture du marché',
       briefing:
-        'La boutique ouvre : 100 commandes par seconde, chacune écrite en base, et chacune émet un événement à traiter (l’e-mail de confirmation). La base encaisse 600 unités de travail par seconde, une écriture en coûte 3.',
+        'La boutique ouvre : 100 commandes par seconde, chacune écrite en base, et chacune émet un événement que le service e-mail, déjà en place, doit recevoir pour envoyer la confirmation. La base encaisse 600 unités de travail par seconde, une écriture en coûte 3.',
       ticks: TICKS,
       profile: flat,
       sources: [shoppers(100, 100)],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
-      budget: 120,
-      complexityCap: 6,
-      thriftyCost: 115,
+      budget: 100,
+      complexityCap: 5,
+      thriftyCost: 95,
+      consumers: ['mail'],
       singleStrategy: true,
     },
     {
       id: 'three-trades',
       title: 'Trois services à prévenir',
       briefing:
-        'Chaque commande doit maintenant prévenir trois services : le stock, la facturation et l’e-mail. Chacun doit recevoir chaque événement.',
+        'Les services stock et facturation, déjà en place eux aussi, veulent maintenant chaque commande. Chacun des trois services doit recevoir chaque événement.',
       ticks: TICKS,
       profile: flat,
       sources: [shoppers(200, 100)],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
-      budget: 200,
-      complexityCap: 13,
-      thriftyCost: 195,
-      fanOut: 3,
+      budget: 180,
+      complexityCap: 12,
+      thriftyCost: 175,
+      consumers: ALL,
       singleStrategy: true,
     },
     {
@@ -57,9 +72,9 @@ export const market: Scenario = {
       sources: [shoppers(200, 100)],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
       budget: 210,
-      complexityCap: 14,
+      complexityCap: 15,
       thriftyCost: 205,
-      fanOut: 3,
+      consumers: ALL,
       singleStrategy: true,
       incidents: [{ id: 'redelivery', title: 'Le bus relivre des messages', component: 'pubsub', from: 20, until: 40, effect: { type: 'duplicate-delivery', share: 0.2 } }],
     },
@@ -73,9 +88,9 @@ export const market: Scenario = {
       sources: [shoppers(200, 80)],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
       budget: 260,
-      complexityCap: 18,
+      complexityCap: 19,
       thriftyCost: 240,
-      fanOut: 3,
+      consumers: ALL,
       incidents: [{ id: 'crash-before-publish', title: 'Le serveur tombe avant de publier', component: 'app-server', from: 20, until: 35, effect: { type: 'publish-loss', share: 0.3 } }],
     },
     {
@@ -88,9 +103,9 @@ export const market: Scenario = {
       sources: [shoppers(1500, 80)],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
       budget: 270,
-      complexityCap: 20,
+      complexityCap: 21,
       thriftyCost: 265,
-      fanOut: 3,
+      consumers: ALL,
       // Le réplica de la vague 4 ne suffit plus : l'outbox et les soldes chargent trop la base.
       singleStrategy: true,
       incidents: [

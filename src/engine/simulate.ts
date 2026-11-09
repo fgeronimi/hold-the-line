@@ -170,7 +170,8 @@ export function simulateWave(
   const events: SimEvent[] = [];
   const shed = { value: 0 };
   const asyncTally = { failed: 0, delivered: 0 };
-  const fanOut = wave.fanOut ?? 1;
+  const consumers = new Set(wave.consumers ?? []);
+  const fanOut = consumers.size;
   let asyncInjected = 0;
   let undeliveredSoFar = 0;
   const ticks: TickMetrics[] = [];
@@ -232,6 +233,7 @@ export function simulateWave(
         hitRateAt,
         roles: roles.get(id)!,
         incidentShare: (effect) => incidentShare(node.type, effect),
+        consumer: consumers.has(id),
       });
 
       const isSaturated = outcome.utilization > 1;
@@ -271,7 +273,7 @@ export function simulateWave(
 
     // Ce qui manque aux abonnés attendus, une fois retirés les échecs déjà comptés et ce
     // qui attend encore en file : compté au fil des ticks, pour que le rejeu le montre.
-    if (fanOut > 1) {
+    if (fanOut > 0) {
       // Seul ce qui attend dans une file vidée par un consommateur arrivera un jour.
       const waiting = [...backlogs]
         .filter(([id]) => routes.get(id)!.forward.async.length > 0)
@@ -320,7 +322,7 @@ export function simulateWave(
     failed,
     failuresByReason: failures,
     shed: shed.value,
-    ...(fanOut > 1 ? { delivery: { expected: asyncInjected * fanOut, delivered: asyncTally.delivered } } : {}),
+    ...(fanOut > 0 ? { delivery: { expected: asyncInjected * fanOut, delivered: asyncTally.delivered } } : {}),
     nodes: Object.fromEntries(summaries),
     ticks,
     events,
@@ -684,6 +686,8 @@ interface RouteEnv {
   hitRateAt: (nodeId: string, s: Stream) => number;
   roles: MessagingRoles;
   incidentShare: (effect: 'duplicate-delivery' | 'publish-loss') => number;
+  /** Service qui doit recevoir chaque événement : ce qui lui parvient compte comme livré. */
+  consumer: boolean;
 }
 
 /** Ce qu'un nœud fait des événements async : les publier, les consommer, avec quelles protections. */
@@ -749,10 +753,8 @@ function route(id: string, def: ComponentDef, passed: Flow, routes: NodeRoutes, 
 
   for (const original of passed.values()) {
     let s = original;
-    if (def.terminalFor.includes(s.kind)) {
-      if (isEvent(s)) env.ctx.asyncTally.delivered += s.rps;
-      continue;
-    }
+    if (env.consumer && isEvent(s)) env.ctx.asyncTally.delivered += s.rps;
+    if (def.terminalFor.includes(s.kind)) continue;
 
     if (s.kind === 'async' && def.behavior === 'service') {
       if (s.duplicate) {

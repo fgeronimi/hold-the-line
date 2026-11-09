@@ -78,7 +78,7 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
 - `tests/balance.test.ts` énumère un espace réduit qui doit contenir toutes les réponses
   attendues : si un recalibrage déplace une réponse hors de cet espace, l'agrandir.
 - Le MVP de la spec a été élargi au CDN et à l'autoscaling (`docs/decisions.md`, X1–X4).
-- Le calibrage et la partie sont gardés dans `localStorage` (clé `hold-the-line:v6`) :
+- Le calibrage et la partie sont gardés dans `localStorage` (clé `hold-the-line:v8`) :
   changer la version de la clé dès que la forme de la partie ou du catalogue change.
 - Tout texte venant de l'état passe par `esc()` (interface) ou `escapeHtml()` (rendu)
   avant d'entrer dans le HTML.

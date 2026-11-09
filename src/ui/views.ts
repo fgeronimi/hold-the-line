@@ -9,6 +9,7 @@ import { analyzeWave, type Finding } from './debrief.ts';
 import { guideStep } from './tutorial.ts';
 import { SCENARIOS } from '../data/scenarios/index.ts';
 import { chartModel, renderChart } from '../render/charts.ts';
+import { nodeNames } from '../render/theme.ts';
 import type { Stars } from '../engine/score.ts';
 
 
@@ -302,25 +303,27 @@ function renderNodeCard(s: ViewState): string {
     .filter(({ l }) => l.from === node.id || l.to === node.id)
     .map(({ l, i }) => `<li>${esc(linkEnd(l.from))} → ${esc(linkEnd(l.to))} <button data-action="remove-link" data-link="${i}">retirer</button></li>`)
     .join('');
-  const source = def?.behavior === 'source';
+  const permanent = def?.behavior === 'source' || !!node.fixed;
+  const own = nodeNames(node, s.catalog, theme);
   function linkEnd(id: string): string {
     const n = s.draft.nodes.find((x) => x.id === id);
     if (!n) return id;
-    const tech = s.catalog.components[n.type]?.techName ?? n.type;
-    // L'identifiant ne sert qu'à distinguer deux bâtiments du même type.
-    return s.draft.nodes.filter((x) => x.type === n.type).length > 1 ? `${tech} (${n.id})` : tech;
+    const { tech } = nodeNames(n, s.catalog, theme);
+    // L'identifiant ne sert qu'à distinguer deux bâtiments du même nom.
+    return s.draft.nodes.filter((x) => nodeNames(x, s.catalog, theme).tech === tech).length > 1 ? `${tech} (${n.id})` : tech;
   }
   return `
     <section class="card panel">
       <button class="close" data-action="deselect" title="Fermer">✕</button>
-      <h3>${esc(def?.techName ?? node.type)} <small>${esc(theme.buildings[node.type]?.metaphor ?? '')}</small></h3>
+      <h3>${esc(own.tech)} <small>${esc(own.metaphor)}</small></h3>
+      ${node.fixed ? '<p class="muted">Service déjà en place, tenu par une autre équipe : il ne se démolit pas, mais ses évolutions sont à vous.</p>' : ''}
       ${theme.buildings[node.type] ? speech(theme.buildings[node.type]!.role.says, theme.buildings[node.type]!.role.real) : ''}
       ${def ? `<p class="muted">cap. ${def.capacity}, ${def.latencyMs} ms, coût ${def.cost}, complexité ${def.complexity}</p>` : ''}
       <p>${upgradeSelects(node, s.catalog) || '<span class="muted">aucune évolution</span>'}</p>
       ${links ? `<ul>${links}</ul>` : '<p class="muted">Aucun chemin.</p>'}
       <p>
         <button data-action="tool" data-tool="move" data-node="${esc(node.id)}">Déplacer</button>
-        ${source ? '' : `<button data-action="remove-node" data-node="${esc(node.id)}">Retirer</button>`}
+        ${permanent ? '' : `<button data-action="remove-node" data-node="${esc(node.id)}">Retirer</button>`}
       </p>
     </section>`;
 }
@@ -377,7 +380,7 @@ function renderBuild(s: ViewState, wave: Wave): string {
     .map((n) => {
       const def = catalog.components[n.type];
       const upgrades = upgradeSelects(n, catalog);
-      const removable = def?.behavior !== 'source';
+      const removable = def?.behavior !== 'source' && !n.fixed;
       return `<tr>
         <td><code>${esc(n.id)}</code></td>
         <td>${esc(def?.techName ?? n.type)}</td>

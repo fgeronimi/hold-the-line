@@ -1,10 +1,22 @@
 import { migrationCost, totals } from '../engine/budget.ts';
 import type { Architecture, Catalog, Wave } from '../engine/types.ts';
 import { validateArchitecture } from '../engine/validate.ts';
+import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
+import { nodeNames } from '../render/theme.ts';
 
 /** Ce qu'il faut faire maintenant, et quel bouton de la barre d'outils le montre. */
 export interface TutorialStep {
-  id: 'place-server' | 'link-source' | 'place-database' | 'link-database' | 'fix' | 'over-budget' | 'over-complexity' | 'launch';
+  id:
+    | 'place-server'
+    | 'link-source'
+    | 'place-database'
+    | 'link-database'
+    | 'feed-consumer'
+    | 'dead-end'
+    | 'fix'
+    | 'over-budget'
+    | 'over-complexity'
+    | 'launch';
   /** Le chambellan, dans la métaphore. */
   says: string;
   /** La même chose en vrai. */
@@ -94,6 +106,43 @@ export function guideStep(
   const validation = validateArchitecture(arch, catalog);
   if (!validation.ok) {
     return { id: 'fix', says: 'Quelque chose cloche dans le plan de la cité.', real: validation.errors[0] ?? 'Architecture invalide.' };
+  }
+  // Le plan est valide mais vide de sens : rien ne sort des hameaux, ou un service attendu n'est alimenté par rien.
+  const source = arch.nodes.find((n) => catalog.components[n.type]?.behavior === 'source');
+  if (source && !arch.links.some((l) => l.from === source.id)) {
+    return {
+      id: 'link-source',
+      says: 'Personne ne quitte encore les hameaux : aucun chemin n’en part.',
+      real: 'Reliez les Clients au premier bâtiment de votre architecture : outil Relier, cliquer le départ puis l’arrivée.',
+      highlight: { tool: 'link' },
+    };
+  }
+  const starved = (wave.consumers ?? []).map((id) => arch.nodes.find((n) => n.id === id)).find((n) => n && !arch.links.some((l) => l.to === n.id));
+  if (starved?.fixed) {
+    return {
+      id: 'feed-consumer',
+      says: `Le ${starved.fixed.metaphor.toLowerCase()} attend toujours les commandes : aucun chemin ne mène à lui.`,
+      real: `Le ${starved.fixed.tech} doit recevoir chaque événement de commande, et rien ne l’alimente encore.`,
+    };
+  }
+  // Une impasse : un bâtiment reçoit du travail qu'il ne sait pas finir, et rien n'en part.
+  const deadEnd = arch.nodes.find((n) => {
+    const def = catalog.components[n.type];
+    return (
+      def &&
+      def.accepts.some((k) => !def.terminalFor.includes(k)) &&
+      arch.links.some((l) => l.to === n.id) &&
+      !arch.links.some((l) => l.from === n.id)
+    );
+  });
+  if (deadEnd) {
+    const { tech, metaphor } = nodeNames(deadEnd, catalog, theme);
+    return {
+      id: 'dead-end',
+      says: `${metaphor} reçoit du travail mais n’a nulle part où le porter : aucun chemin n’en part.`,
+      real: `${tech} reçoit des requêtes mais n’a aucun lien sortant : tout ce qu’il ne termine pas lui-même échouera (no-route).`,
+      highlight: { tool: 'link' },
+    };
   }
   const { cost, complexity } = totals(arch, catalog);
   const bill = cost + migrationCost(committed, arch, catalog);

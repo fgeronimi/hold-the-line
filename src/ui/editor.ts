@@ -27,9 +27,11 @@ export function setUpgrade(arch: Architecture, nodeId: string, upgradeId: string
     ...arch,
     nodes: arch.nodes.map((n): ArchNode => {
       if (n.id !== nodeId) return n;
-      const upgrades = { ...n.upgrades, [upgradeId]: level };
+      const { upgrades: current, ...rest } = n;
+      const upgrades = { ...current, [upgradeId]: level };
       if (level === 0) delete upgrades[upgradeId];
-      return Object.keys(upgrades).length > 0 ? { ...n, upgrades } : { id: n.id, type: n.type };
+      // Le reste du bâtiment (case, service déjà en place) ne bouge pas.
+      return Object.keys(upgrades).length > 0 ? { ...rest, upgrades } : rest;
     }),
   };
 }
@@ -43,3 +45,4 @@ export function addLink(arch: Architecture, from: string, to: string): Architect
 export function removeLink(arch: Architecture, index: number): Architecture {
   return { ...arch, links: arch.links.filter((_, i) => i !== index) };
 }
+

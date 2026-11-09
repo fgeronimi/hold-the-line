@@ -1,4 +1,4 @@
-import type { RequestKind } from '../engine/types.ts';
+import type { ArchNode, Catalog, RequestKind } from '../engine/types.ts';
 
 /**
  * Formes low-poly que la scène sait construire. Le thème choisit une forme par composant :
@@ -43,4 +43,10 @@ export interface Theme {
   narrator: { name: string; icon: string };
   /** Le récit de chaque vague dans la métaphore (clé : id de la vague) ; les chiffres restent affichés à côté. */
   narratives: Record<string, string>;
+}
+
+/** Nom technique et nom dans la métaphore d'un bâtiment ; un service déjà en place a le sien. */
+export function nodeNames(node: ArchNode, catalog: Catalog, theme: Theme): { tech: string; metaphor: string } {
+  if (node.fixed) return node.fixed;
+  return { tech: catalog.components[node.type]?.techName ?? node.type, metaphor: theme.buildings[node.type]?.metaphor ?? '' };
 }
