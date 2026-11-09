@@ -10,6 +10,7 @@ import {
   HemisphereLight,
   InstancedMesh,
   Mesh,
+  CircleGeometry,
   MeshBasicMaterial,
   MeshLambertMaterial,
   Object3D,
@@ -31,7 +32,8 @@ import { BOARD } from '../data/board.ts';
 import { BRIDGE_MODEL, bridgeRotation, crossingTile, riverCells, riverKeys, riverTile, roadSides, roadTile, TERRAIN_MODELS, type Tile } from './terrain.ts';
 import { HEX_SIZE, HEX_WIDTH, hexAt, hexCenter, hexDistance, hexKey, type Hex } from './hex.ts';
 import { escapeHtml } from './html.ts';
-import { layoutArchitecture, pointAlong, type Layout, type Road } from './layout.ts';
+import { Effects } from './effects.ts';
+import { layoutArchitecture, pathLength, pointAlong, type Layout, type Road } from './layout.ts';
 import { ModelLibrary, type ModelId } from './models.ts';
 import { nodeNames, type BuildingStyle, type Shape, type Theme } from './theme.ts';
 import { journeyAt, type Journey, type Outcome } from './traffic.ts';
@@ -45,11 +47,16 @@ const TILE_SCALE = 0.94;
 const BUILDING_SPAN = HEX_WIDTH * 0.95;
 /** Durée de vie d'une pastille +1 / −1, en ticks : elle monte et s'efface. */
 const POP_LIFE = 0.9;
+/** Une tour en panne noircit vers cette teinte : elle brûle. */
+const CHARRED = new Color('#3b302b');
+/** Au plus autant de coursiers en attente devant une file : au-delà, la jauge parle. */
+const MAX_WAITING = 6;
+const DUPLICATE_TINT = new Color('#9b5de5');
 /** Au-delà, les pastilles les plus anciennes ne sont plus affichées : on garde la scène lisible. */
 const MAX_POPS = 60;
 const POP_TEXT: Record<Outcome['result'], { text: string; className: string }> = {
   served: { text: '+1 👍', className: 'pop ok' },
-  refused: { text: '−1 👎', className: 'pop ko' },
+  refused: { text: '✕ −1', className: 'pop ko' },
   repelled: { text: '🛡', className: 'pop shield' },
 };
 /** Un glisser de moins de quelques pixels reste un clic (le glisser déplace la vue). */
@@ -86,8 +93,12 @@ interface Building {
   label: HTMLElement;
   techName: string;
   metaphor: string;
+  /** Les clients : ils émettent le trafic, ils n'ont pas de charge. */
+  source: boolean;
   /** Hauteur du toit, pour placer étiquette et pastilles au-dessus. */
   top: number;
+  /** Position sur sa case : un bâtiment saturé tremble autour d'elle. */
+  home: Vector3;
 }
 
 export type SceneMode = 'build' | 'replay';
@@ -121,6 +132,11 @@ export class CityScene {
   /** Trafic abusif repoussé, à la couleur de l'ennemi. */
   private hostiles!: InstancedMesh;
   private readonly dummy = new Object3D();
+  private readonly effects: Effects;
+  /** Coursiers arrêtés devant une file qui déborde. */
+  private waiters!: InstancedMesh;
+  /** Latence visée par la vague (ms) : au-delà, le bâtiment le plus lent montre son sablier. */
+  slaLatencyMs: number | undefined;
   private readonly alert: Color;
   private readonly host: HTMLElement;
   private readonly theme: Theme;
@@ -187,6 +203,7 @@ export class CityScene {
     this.addLights();
     this.scene.add(this.dynamic);
     this.addTerrain();
+    this.effects = new Effects(this.scene);
     this.addFleets();
 
     // Le curseur hexagonal sous la souris, et le repère du bâtiment sélectionné.
@@ -269,9 +286,12 @@ export class CityScene {
 
   /** Affiche l'état du tick courant et les véhicules en route à l'instant `time`. */
   showTick(time: number, tick: TickMetrics | undefined, journeys: Journey[], outcomes: Outcome[] = []): void {
+    this.effects.begin(performance.now() / 1000);
     this.updateBuildings(tick);
+    this.updateWaiting(tick);
     this.updateTravellers(time, journeys);
     this.updatePops(time, outcomes);
+    this.effects.end();
   }
 
   /** Une pastille par requête servie (+1), refusée (−1) ou pillard repoussé, qui monte et s'efface. */
@@ -511,7 +531,9 @@ export class CityScene {
       label: document.createElement('div'),
       techName: nodeNames(node, this.catalog, this.theme).tech,
       metaphor: nodeNames(node, this.catalog, this.theme).metaphor,
+      source: def?.behavior === 'source',
       top: 1,
+      home: new Vector3(),
     };
   }
 
@@ -521,6 +543,7 @@ export class CityScene {
     if (!at || !style) return;
     const b = this.newBuilding(node);
     b.group.position.set(at.x, 0, at.z);
+    b.home.set(at.x, 0, at.z);
     this.build(b, style);
     this.fitToCell(b.group);
 
@@ -705,6 +728,17 @@ export class CityScene {
     mesh.castShadow = true;
     mesh.count = 0;
     this.scene.add(mesh);
+    // Les personnages gardent leurs couleurs : c'est le disque à leurs pieds qui dit le type
+    // de requête, aux couleurs de la légende.
+    const disc = new InstancedMesh(
+      new CircleGeometry(w * 0.75, 16).rotateX(-Math.PI / 2),
+      new MeshBasicMaterial({ color: tint ?? style.color, transparent: true, opacity: 0.85, depthWrite: false }),
+      MAX_VEHICLES_PER_KIND,
+    );
+    disc.instanceMatrix.setUsage(DynamicDrawUsage);
+    disc.count = 0;
+    this.scene.add(disc);
+    mesh.userData.disc = disc;
     return mesh;
   }
 
@@ -713,37 +747,141 @@ export class CityScene {
     this.wrecks = this.fleet(this.theme.vehicles.read, this.theme.alert);
     const [w, h, l] = this.theme.vehicles.read.size;
     this.hostiles = this.fleet({ ...this.theme.hostile, size: [w * 1.2, h * 1.1, l] });
+    this.waiters = this.fleet(this.theme.vehicles.write);
   }
 
   private updateBuildings(tick: TickMetrics | undefined): void {
+    const fx = this.effects;
+    const slowest = this.slowestNode(tick);
     for (const [id, b] of this.buildings) {
       const n = tick?.nodes[id];
       const u = n?.utilization ?? 0;
+      const failed = n?.failed ?? 0;
+      const shed = n?.shed ?? 0;
+      const over = u > 1;
+      const roof = new Vector3(b.home.x, b.top, b.home.z);
+
+      // Saturé, le bâtiment tremble et fume ; un refus ou un doublon fait clignoter sa porte.
+      b.group.position.set(b.home.x + (over ? Math.sin(fx.now * 61) * 0.03 : 0), 0, b.home.z + (over ? Math.cos(fx.now * 47) * 0.025 : 0));
+      if (over) fx.steam(roof.clone().setY(b.top - 0.2));
+      const blink = 0.5 + 0.5 * Math.sin(fx.now * 8);
+      const refusing = failed > 0 && !b.source ? 0.2 + 0.25 * blink : 0;
       // Le bâtiment rougit à l'approche de la saturation, franchement au-delà.
-      const heat = Math.min(Math.max((u - 0.8) / 0.4, 0), 1);
+      const heat = Math.max(Math.min(Math.max((u - 0.8) / 0.4, 0), 1), refusing);
       for (const m of b.tintable) {
         if ('emissive' in m && m.emissive instanceof Color) m.emissive.copy(this.alert).multiplyScalar(heat * 0.6);
       }
 
-      // En construction, toutes les tours payées sont visibles ; au rejeu, celles en service.
-      const visible = tick ? (n?.instances ?? 1) : b.instances.length;
-      b.instances.forEach((o, i) => (o.visible = i < visible));
+      // Une tour en panne reste debout et brûle ; les autres continuent de servir.
+      const inService = tick ? (n?.instances ?? 1) : b.instances.length;
+      const down = n?.down ?? 0;
+      b.instances.forEach((o, i) => {
+        const burning = i >= inService && i < inService + down;
+        o.visible = i < inService || burning;
+        this.char(o, burning);
+        if (burning) {
+          const p = o.getWorldPosition(new Vector3());
+          fx.flames(p.clone().setY(b.top * 0.7));
+          fx.smoke(p.clone().setY(b.top));
+        }
+      });
+      if (down > 0 && b.instances.length === 0) {
+        fx.flames(roof.clone().setY(b.top * 0.6));
+        fx.smoke(roof);
+      }
+
+      if ((n?.duplicates ?? 0) > 0) fx.puff(roof.clone().setY(b.top * 0.5), DUPLICATE_TINT);
+      if ((n?.lost ?? 0) > 0) {
+        const out = [...this.roads.values()].find((r) => r.from === id);
+        const next = out?.path[1];
+        const along = next ? new Vector3(next.x - b.home.x, 0, next.z - b.home.z).normalize() : new Vector3(1, 0, 0);
+        fx.letter(b.home.clone().addScaledVector(along, 0.6), along);
+        fx.puff(b.home.clone().addScaledVector(along, 0.9).setY(0.4));
+      }
+      if (shed > 0) fx.shield(b.home, 1.05, shed / Math.max(1, n?.rps ?? 1) + 0.3);
 
       const backlog = n?.backlog ?? 0;
       const parked = backlog > 0 ? Math.min(b.parked.length, Math.ceil(Math.log10(1 + backlog) * 3)) : 0;
       b.parked.forEach((o, i) => (o.visible = i < parked));
 
-      const failed = n?.failed ?? 0;
-      const shed = n?.shed ?? 0;
+      const em = (text: string, hot = false) => `<em class="${hot ? 'hot' : ''}">${text}</em>`;
+      const rounded = (x: number) => Math.round(x);
       b.label.innerHTML =
         `<b>${escapeHtml(b.techName)}</b><span>${escapeHtml(b.metaphor)}</span>` +
-        (n?.down ? `<em class="hot">⚡ ${n.down} instance${n.down > 1 ? 's' : ''} en panne</em>` : '') +
-        // La charge n'apparaît que quand elle compte : moins d'étiquettes qui se chevauchent.
-        (n?.down && n.instances === 0
-          ? '<em class="hot">hors service</em>'
-          : u > 0.6 ? `<em class="${u > 1 ? 'hot' : ''}">charge ${Math.round(u * 100)} %</em>` : '') +
-        (failed > 0 ? `<em class="hot">✕ ${Math.round(failed)} req/s en échec</em>` : '') +
-        (shed > 0 ? `<em>🛡 ${Math.round(shed)} req/s abusives repoussées</em>` : '');
+        (down > 0 ? em(`🔥 ${down} instance${down > 1 ? 's' : ''} en panne`, true) : '') +
+        // Au rejeu, chaque bâtiment montre ce qu'il reçoit et sa charge : de quoi dimensionner.
+        (down > 0 && n?.instances === 0
+          ? em('hors service', true)
+          : n && n.rps > 0 ? em(`${rounded(n.rps)} req/s${b.source ? ' émises' : ` · charge ${rounded(u * 100)} %`}`, over) : '') +
+        (id === slowest && n ? em(`<span class="hourglass">⏳</span> ${rounded(n.latencyMs)} ms`, true) : '') +
+        (backlog > 0 ? em(`arriéré ${rounded(backlog)} <span class="gauge"><i style="width:${Math.min(100, (Math.log10(1 + backlog) / 4) * 100)}%"></i></span>`) : '') +
+        ((n?.duplicates ?? 0) > 0 ? em(`×2 ${rounded(n!.duplicates!)} req/s traitées deux fois`, true) : '') +
+        ((n?.deduplicated ?? 0) > 0 ? em(`🔁 ${rounded(n!.deduplicated!)} doublons écartés`) : '') +
+        ((n?.lost ?? 0) > 0 ? em(`✉ ${rounded(n!.lost!)} événements perdus`, true) : '') +
+        (failed > 0 ? em(`✕ ${rounded(failed)} req/s en échec`, true) : '') +
+        (shed > 0 ? em(`🛡 ${rounded(shed)} req/s abusives repoussées`) : '');
+    }
+  }
+
+  /**
+   * Le bâtiment qui fait attendre : le plus lent de ceux qui reçoivent du trafic, quand la
+   * latence du tick dépasse le SLA. Le rendu ne recalcule pas le chemin critique : il montre
+   * où regarder, la latence exacte reste dans la barre et les courbes.
+   */
+  private slowestNode(tick: TickMetrics | undefined): string | undefined {
+    if (!tick || this.slaLatencyMs === undefined || tick.avgLatencyMs <= this.slaLatencyMs) return undefined;
+    let best: string | undefined;
+    let worst = 0;
+    for (const [id, n] of Object.entries(tick.nodes)) {
+      if (n.rps > 0 && n.latencyMs > worst && !this.buildings.get(id)?.source) {
+        worst = n.latencyMs;
+        best = id;
+      }
+    }
+    return best;
+  }
+
+  /** Noircit une tour en feu, et lui rend ses couleurs ensuite. */
+  private char(o: Object3D, burning: boolean): void {
+    if (!burning && !o.userData.charred) return;
+    o.traverse((m) => {
+      if (!(m instanceof Mesh)) return;
+      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+        if (!('color' in mat) || !(mat.color instanceof Color)) continue;
+        mat.userData.color ??= mat.color.clone();
+        mat.color.copy(mat.userData.color as Color);
+        if (burning) mat.color.lerp(CHARRED, 0.8);
+      }
+    });
+    o.userData.charred = burning;
+  }
+
+  /** Une file qui déborde : les coursiers attendent en rang sur le chemin qui y mène. */
+  private updateWaiting(tick: TickMetrics | undefined): void {
+    let used = 0;
+    for (const id of this.buildings.keys()) {
+      const backlog = tick?.nodes[id]?.backlog ?? 0;
+      if (backlog <= 0) continue;
+      const road = [...this.roads.values()].find((r) => r.to === id);
+      if (!road) continue;
+      const length = pathLength(road.path);
+      const count = Math.min(MAX_WAITING, Math.ceil(Math.log10(1 + backlog) * 2));
+      for (let k = 0; k < count && used < MAX_VEHICLES_PER_KIND; k++) {
+        const f = 1 - (0.95 + k * 0.42) / length;
+        if (f <= 0) break;
+        const { point, angle } = pointAlong(road.path, f);
+        const bob = Math.abs(Math.sin(this.effects.now * 3 + k)) * 0.015;
+        this.dummy.position.set(point.x + Math.cos(angle) * 0.18, 0.06 + bob, point.z - Math.sin(angle) * 0.18);
+        this.dummy.rotation.set(0, angle, 0);
+        this.dummy.updateMatrix();
+        this.waiters.setMatrixAt(used, this.dummy.matrix);
+        (this.waiters.userData.disc as InstancedMesh).setMatrixAt(used, this.dummy.matrix.clone().setPosition(this.dummy.position.x, 0.065, this.dummy.position.z));
+        used++;
+      }
+    }
+    for (const m of [this.waiters, this.waiters.userData.disc as InstancedMesh]) {
+      m.count = used;
+      m.instanceMatrix.needsUpdate = true;
     }
   }
 
@@ -768,21 +906,32 @@ export class CityScene {
       const hop = Math.abs(Math.sin((time + j.start * 7.3) * 9)) * 0.06;
       const y = fleet.userData.grounded ? 0.06 + hop : 0.04 + h / 2;
       this.dummy.position.set(point.x + Math.cos(angle) * lane, y, point.z - Math.sin(angle) * lane);
-      this.dummy.rotation.set(0, at.returning ? angle + Math.PI : angle, 0);
+      // Un pillard repoussé culbute en arrière en quittant le bouclier.
+      // Au retour, f va de 1 à 0 : la culbute occupe le premier tiers du chemin.
+      const back = (1 - at.f) * 3;
+      const tumble = j.hostile && at.returning && back < 1 ? back : 0;
+      this.dummy.rotation.set(-tumble * Math.PI * 2, at.returning ? angle + Math.PI : angle, 0, 'YXZ');
+      if (tumble > 0) this.dummy.position.y += Math.sin(tumble * Math.PI) * 0.4;
       this.dummy.updateMatrix();
       fleet.setMatrixAt(i, this.dummy.matrix);
+      this.dummy.rotation.set(0, this.dummy.rotation.y, 0, 'XYZ');
+      // Le disque reste au sol pendant que le personnage sautille.
+      this.dummy.position.y = 0.065;
+      this.dummy.updateMatrix();
+      (fleet.userData.disc as InstancedMesh).setMatrixAt(i, this.dummy.matrix);
       if (j.hostile) repelled++;
       else if (at.failed) wrecked++;
       else counts.set(j.kind, i + 1);
     }
-    for (const [kind, fleet] of this.fleets) {
-      fleet.count = counts.get(kind)!;
-      fleet.instanceMatrix.needsUpdate = true;
-    }
-    this.wrecks.count = wrecked;
-    this.wrecks.instanceMatrix.needsUpdate = true;
-    this.hostiles.count = repelled;
-    this.hostiles.instanceMatrix.needsUpdate = true;
+    const show = (fleet: InstancedMesh, count: number) => {
+      for (const m of [fleet, fleet.userData.disc as InstancedMesh]) {
+        m.count = count;
+        m.instanceMatrix.needsUpdate = true;
+      }
+    };
+    for (const [kind, fleet] of this.fleets) show(fleet, counts.get(kind)!);
+    show(this.wrecks, wrecked);
+    show(this.hostiles, repelled);
   }
 }
 

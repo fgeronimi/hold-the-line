@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hold the Line — vitrine des incidents</title>
+    <style>
+      body { margin: 0; background: #e8eef3; color: #1c2630; font: 14px/1.5 system-ui, sans-serif; }
+      main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; display: grid; gap: 20px; }
+      h1 { margin: 0; font-size: 22px; }
+      header p { margin: 4px 0 0; color: #586674; max-width: 70ch; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+      .tile { background: #fff; border: 1px solid #d3dbe1; border-radius: 10px; overflow: hidden; }
+      .view { position: relative; aspect-ratio: 4 / 3; background: #dfe8ee; }
+      .view canvas { display: block; width: 100%; height: 100%; }
+      .labels { position: absolute; inset: 0; pointer-events: none; }
+      .sheet { padding: 10px 14px 14px; display: grid; gap: 4px; }
+      .sheet h2 { margin: 0; font-size: 16px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+      .sheet p { margin: 0; color: #36424e; }
+      .chip { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
+      .chip.ok { background: #e3efd9; color: #3d6b2a; }
+      .chip.new { background: #fbe7d3; color: #8a4a12; }
+      code { font: 12px ui-monospace, monospace; background: #eef2f5; padding: 0 4px; border-radius: 3px; }
+      .pop { padding: 1px 6px; border-radius: 9px; font: 700 12px system-ui; color: #fff; white-space: nowrap; background: #d62828; }
+      .pop.info { background: #2b2d42; }
+      .pop.shield { background: #2a9d8f; }
+      .gauge { width: 70px; height: 7px; border-radius: 4px; background: #00000025; overflow: hidden; }
+      .gauge i { display: block; height: 100%; background: #fb8500; }
+      .hourglass { font: 700 12px system-ui; color: #1c2630; background: #fff; border-radius: 9px; padding: 1px 6px; display: flex; gap: 5px; align-items: center; }
+      .hourglass .gauge i { background: #9b5de5; }
+      .sla { position: absolute; inset: 0; pointer-events: none; }
+      .sla .vig { position: absolute; inset: 0; box-shadow: inset 0 0 60px 18px #d62828; opacity: 0; }
+      .sla .bar { position: absolute; left: 12px; right: 12px; top: 10px; height: 8px; border-radius: 4px; background: #00000022; }
+      .sla .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: #6a994e; }
+      .sla .bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #1c2630; left: 40%; }
+      .sla .bar span { position: absolute; top: 12px; left: 40%; transform: translateX(-50%); font: 700 10px system-ui; color: #1c2630; }
+      .sla .banner { position: absolute; left: 50%; top: 34px; transform: translate(-50%, -60px); background: #d62828; color: #fff; font: 800 14px system-ui; padding: 4px 14px; border-radius: 4px; }
+      .sla .bell { position: absolute; left: 50%; top: 66px; font-size: 22px; transform-origin: 50% 0; margin-left: -11px; opacity: 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Vitrine des incidents</h1>
+        <p>Chaque îlot rejoue un problème avec les tuiles et les personnages du jeu. Page de debug, hors partie : rien n'est branché sur le moteur.</p>
+      </header>
+      <section class="grid" id="grid"></section>
+    </main>
+    <script type="module" src="/src/render/showcase.ts"></script>
+  </body>
+</html>

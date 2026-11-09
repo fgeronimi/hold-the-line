@@ -82,6 +82,14 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
 
   scene.setArchitecture(o.arch, o.catalog);
   scene.setMode('replay');
+  scene.slaLatencyMs = o.wave.sla.maxP95LatencyMs;
+
+  // L'instant où la vague est perdue : la cloche sonne, les bords rougissent, la bannière tombe.
+  const alarm = document.createElement('div');
+  alarm.className = 'sla-alarm';
+  alarm.hidden = true;
+  alarm.innerHTML = `<div class="sla-banner"><span class="bell">🔔</span> SLA rompu : plus de ${(o.wave.sla.maxFailureRate * 100).toFixed(0)} % d’échecs</div>`;
+  barHost.appendChild(alarm);
 
   const typeOf = new Map(o.arch.nodes.map((n) => [n.id, n.type]));
   const nameOf = (id: string) => {
@@ -140,6 +148,8 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
 
   const renderHud = () => {
     const st = replayStats(o.result, outcomes, time);
+    // Se cacher puis réapparaître rejoue l'animation : revenir avant le seuil la réarme.
+    alarm.hidden = st.failureRate <= o.wave.sla.maxFailureRate;
     const { sla, budget } = o.wave;
     const cost = o.result.gauges.cost.value;
     const gauge = (label: string, value: string, bad: boolean) => `<span class="${bad ? 'ko' : ''}">${label} <b>${value}</b></span>`;
@@ -188,7 +198,9 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     scene.onFrame = undefined;
     scene.focusOn(undefined);
     alert.remove();
+    alarm.remove();
     panel.remove();
+    scene.slaLatencyMs = undefined;
     scene.showTick(0, undefined, []);
     scene.setMode('build');
     window.removeEventListener('keydown', onKey);
