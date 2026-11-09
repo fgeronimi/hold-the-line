@@ -1,9 +1,10 @@
-import type { Architecture, Catalog } from '../engine/types.ts';
+import { migrationCost, totals } from '../engine/budget.ts';
+import type { Architecture, Catalog, Wave } from '../engine/types.ts';
 import { validateArchitecture } from '../engine/validate.ts';
 
 /** Ce qu'il faut faire maintenant, et quel bouton de la barre d'outils le montre. */
 export interface TutorialStep {
-  id: 'place-server' | 'link-source' | 'place-database' | 'link-database' | 'fix' | 'launch';
+  id: 'place-server' | 'link-source' | 'place-database' | 'link-database' | 'fix' | 'over-budget' | 'over-complexity' | 'launch';
   /** Le chambellan, dans la métaphore. */
   says: string;
   /** La même chose en vrai. */
@@ -68,6 +69,46 @@ export function tutorialStep(arch: Architecture, catalog: Catalog): TutorialStep
     id: 'launch',
     says: 'La cité est prête, Sire. Que les voyageurs viennent !',
     real: 'Clients → serveur → base : l’architecture minimale d’un service web. Lancez la vague.',
+    highlight: { tool: 'launch' },
+  };
+}
+
+/**
+ * Ce qu'il faut faire maintenant, à toutes les vagues : le pas-à-pas à la première, puis
+ * le défi de la vague et ce qui bloque le lancement. Ne souffle jamais la parade : c'est
+ * au joueur de la trouver, le chambellan l'explique au debrief.
+ */
+export function guideStep(arch: Architecture, catalog: Catalog, wave: Wave, waveIndex: number, committed: Architecture): TutorialStep {
+  if (waveIndex === 0) {
+    const step = tutorialStep(arch, catalog);
+    if (step.id !== 'launch') return step;
+  }
+  const validation = validateArchitecture(arch, catalog);
+  if (!validation.ok) {
+    return { id: 'fix', says: 'Quelque chose cloche dans le plan de la cité.', real: validation.errors[0] ?? 'Architecture invalide.' };
+  }
+  const { cost, complexity } = totals(arch, catalog);
+  const bill = cost + migrationCost(committed, arch, catalog);
+  if (bill > wave.budget) {
+    return {
+      id: 'over-budget',
+      says: `Le trésor ne suffira pas, Sire : ${Math.round(bill)} écus pour ${wave.budget}.`,
+      real: `La facture prévue dépasse le budget de la vague (${Math.round(bill)} / ${wave.budget}, retraits compris). Retirer un composant ou baisser une évolution.`,
+    };
+  }
+  if (complexity > wave.complexityCap) {
+    return {
+      id: 'over-complexity',
+      says: `Trop de rouages à entretenir : vos gens n’en suivront pas ${complexity}.`,
+      real: `La complexité dépasse le plafond de la vague (${complexity} / ${wave.complexityCap}). Chaque composant et chaque évolution en ajoute.`,
+    };
+  }
+  const incidents = (wave.incidents ?? []).map((i) => ` Incident annoncé : ${i.title.toLowerCase()} (ticks ${i.from + 1} à ${i.until}).`).join('');
+  if (waveIndex === 0) return { ...tutorialStep(arch, catalog), real: `${tutorialStep(arch, catalog).real}${incidents}` };
+  return {
+    id: 'launch',
+    says: `${wave.title} : la cité tiendra-t-elle ? Quand vous serez prêt, lancez la vague.`,
+    real: `${wave.briefing}${incidents}`,
     highlight: { tool: 'launch' },
   };
 }

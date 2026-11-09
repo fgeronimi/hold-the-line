@@ -8,6 +8,7 @@ import { simulateWave } from '../engine/simulate.ts';
 import type { Architecture, BoardCell } from '../engine/types.ts';
 import type { CityScene } from '../render/scene.ts';
 import { isRiver } from '../render/terrain.ts';
+import { attachChart, chartModel } from '../render/charts.ts';
 import { autoPlace, connect, insideBoard, moveNode, nodeAt, placeNode, type BoardResult } from './board.ts';
 import { changedSettings, parseField, setAt } from './calibration.ts';
 import { addLink, addNode, removeLink, removeNode, setUpgrade } from './editor.ts';
@@ -43,6 +44,7 @@ function initialState(): ViewState {
     phase: game.finished ? 'build' : 'briefing',
     debug: new URLSearchParams(location.search).has('debug'),
     debugTab: 'attempts',
+    debriefTab: 'analysis',
     showMenu: false,
   };
 }
@@ -86,7 +88,16 @@ function render(): void {
   regions.dialog.innerHTML = renderDialog(state);
   regions.debug.innerHTML = renderDebug(state);
   document.body.classList.toggle('debug-open', state.debug);
+  attachDebriefChart();
   syncBoard();
+}
+
+/** Le survol des courbes du debrief : le HTML est réécrit à chaque rendu, on le rebranche. */
+function attachDebriefChart(): void {
+  const root = regions.dialog.querySelector<HTMLElement>('[data-chart="root"]');
+  const a = state.attempts.find((x) => x.id === state.current);
+  const wave = a && state.scenario.waves[a.waveIndex];
+  if (root && a && wave) attachChart(root, chartModel(a.result, a.arch, wave, state.catalog, theme));
 }
 
 /** Aligne le plateau 3D sur l'état : architecture, bâtiment marqué, fantôme de l'outil. */
@@ -170,7 +181,7 @@ async function playOnBoard(attempt: Attempt): Promise<void> {
   const { startReplay } = await import('../render/replay.ts');
   stopWave?.();
   const wave = state.scenario.waves[attempt.waveIndex]!;
-  update({ phase: 'wave', current: attempt.id, selectedNode: undefined, tool: { kind: 'select' }, showMenu: false });
+  update({ phase: 'wave', debriefTab: 'analysis', current: attempt.id, selectedNode: undefined, tool: { kind: 'select' }, showMenu: false });
   stopWave = startReplay(scene, regions.board, {
     title: `Vague ${attempt.waveIndex + 1} — ${wave.title}`,
     arch: attempt.arch,
@@ -200,6 +211,7 @@ const actions: Record<string, (el: HTMLElement) => void> = {
   menu: () => update({ showMenu: !state.showMenu }),
   'toggle-debug': () => update({ debug: !state.debug, showMenu: false }),
   'debug-tab': (el) => update({ debugTab: el.dataset.tab as ViewState['debugTab'] }),
+  'debrief-tab': (el) => update({ debriefTab: el.dataset.tab as ViewState['debriefTab'] }),
   'show-briefing': () => {
     leaveWave();
     update({ phase: 'briefing', showMenu: false });

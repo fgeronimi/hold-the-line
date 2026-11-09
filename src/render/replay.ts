@@ -1,3 +1,4 @@
+import { attachChart, chartModel, renderChart } from './charts.ts';
 import type { Architecture, Catalog, Wave, WaveResult } from '../engine/types.ts';
 import { escapeHtml } from './html.ts';
 import { firstSaturations, replayStats } from './hud.ts';
@@ -39,6 +40,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     <span data-r="readout"></span>
     <span class="hud" data-r="hud"></span>
     <button data-r="recenter" title="Revoir tout le plateau">Recentrer</button>
+    <button data-r="charts" title="Courbes tick par tick, bâtiment par bâtiment">📈 Courbes</button>
     <span class="replay-legend">${Object.values(o.theme.vehicles)
       .map((v) => `<i style="background:${v.color}"></i>${escapeHtml(v.metaphor)}`)
       .join(' ')}<i style="background:${o.theme.alert}"></i>${escapeHtml(o.theme.failed)}<i style="background:${o.theme.hostile.color}"></i>${escapeHtml(o.theme.hostile.metaphor)}</span>
@@ -48,6 +50,19 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   alert.className = 'replay-alert';
   alert.hidden = true;
   barHost.appendChild(alert);
+
+  const model = chartModel(o.result, o.arch, o.wave, o.catalog, o.theme);
+  const panel = document.createElement('div');
+  panel.className = 'replay-charts';
+  panel.hidden = true;
+  panel.innerHTML = renderChart(model);
+  barHost.appendChild(panel);
+  const chart = attachChart(panel.querySelector('[data-chart="root"]')!, model, (tick) => {
+    time = tick;
+    seek.value = String(time);
+    playing = false;
+    play.textContent = '▶';
+  });
 
   const $ = <T extends HTMLElement>(name: string) => bar.querySelector<T>(`[data-r="${name}"]`)!;
   const readout = $('readout');
@@ -93,6 +108,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     if (ended) return;
     ended = true;
     alert.hidden = true;
+    panel.hidden = true;
     o.onEnd();
   };
 
@@ -155,8 +171,10 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
       outcomes.filter((o) => o.at <= time && o.at > time - 1),
     );
     if (tick) readout.textContent = `tick ${Math.floor(Math.min(time, end - 1)) + 1}/${end} · ${Math.round(tick.offered)} req/s`;
-    raiseAlerts();
+    // Une fois la vague finie, le debrief prend la place : plus de bandeau.
+    if (!ended) raiseAlerts();
     renderHud();
+    if (!panel.hidden) chart.setCursor(time);
   };
 
   const togglePlay = () => {
@@ -168,6 +186,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     scene.onFrame = undefined;
     scene.focusOn(undefined);
     alert.remove();
+    panel.remove();
     scene.showTick(0, undefined, []);
     scene.setMode('build');
     window.removeEventListener('keydown', onKey);
@@ -189,6 +208,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     // Revenir en arrière réarme les alertes des goulots pas encore atteints.
     for (const a of alerts) if (a.tick > time) shown.delete(a.node);
   });
+  $('charts').addEventListener('click', () => (panel.hidden = !panel.hidden));
   $('recenter').addEventListener('click', () => {
     scene.focusOn(undefined);
     alert.hidden = true;

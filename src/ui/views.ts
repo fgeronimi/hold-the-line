@@ -6,7 +6,8 @@ import { validateArchitecture } from '../engine/validate.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { calibrationGroups, formatField, getAt } from './calibration.ts';
 import { analyzeWave, type Finding } from './debrief.ts';
-import { tutorialStep } from './tutorial.ts';
+import { guideStep } from './tutorial.ts';
+import { chartModel, renderChart } from '../render/charts.ts';
 import type { Stars } from '../engine/score.ts';
 
 
@@ -56,6 +57,8 @@ export interface ViewState {
   /** Mode debug : essais, vue tableau, calibrage, détail chiffré. `?debug` ou la touche D. */
   debug: boolean;
   debugTab: 'attempts' | 'table' | 'calibrate';
+  /** Le debrief montre l'analyse du chambellan ou les courbes tick par tick. */
+  debriefTab: 'analysis' | 'charts';
   showMenu: boolean;
 }
 
@@ -128,7 +131,7 @@ export function renderToolbar(s: ViewState): string {
   if (s.phase !== 'build' || !wave) return '';
   const { catalog, draft, tool } = s;
   const active = (on: boolean) => (on ? ' active' : '');
-  const guide = s.game.waveIndex === 0 ? tutorialStep(draft, catalog) : undefined;
+  const guide = guideStep(draft, catalog, wave, s.game.waveIndex, s.game.committed);
   const hint = (on: boolean) => (on ? ' hint' : '');
   const tools = [
     { kind: 'select', icon: '👆', label: 'Sélection', hint: 'Cliquer un bâtiment pour ouvrir sa fiche' },
@@ -201,8 +204,16 @@ export function renderDialog(s: ViewState): string {
   return `<div class="dialog panel ${r.won ? 'won' : 'lost'}">
     <h2>${r.won ? '🏆 Vague tenue' : '💥 Vague perdue'}${a.played && r.won ? ` — +${fmt(a.score)} 🏅` : ''}${a.played ? '' : ' (essai)'}</h2>
     ${attemptWave ? renderStars(a.stars, attemptWave) : ''}
+    <p class="tabs">
+      <button data-action="debrief-tab" data-tab="analysis" ${s.debriefTab === 'analysis' ? 'class="active"' : ''}>${theme.narrator.icon} Analyse</button>
+      <button data-action="debrief-tab" data-tab="charts" ${s.debriefTab === 'charts' ? 'class="active"' : ''}>📈 Courbes</button>
+    </p>
     ${finished ? `<p class="final">La cité a tenu toutes les vagues. <b>${totalStars(s)} / ${s.scenario.waves.length * 3}</b> ★, score final <b>${fmt(totalScore(s))}</b> 🏅</p>` : ''}
-    ${attemptWave ? renderFindings(analyzeWave(r, a.arch, attemptWave, s.catalog, theme)) : ''}
+    ${attemptWave
+      ? s.debriefTab === 'charts'
+        ? `${renderChart(chartModel(r, a.arch, attemptWave, s.catalog, theme))}<p class="muted">Survoler pour lire chaque tick. La courbe d’un bâtiment passe en rouge au-delà de sa capacité ; les barres rouges sont les requêtes en échec, les bandes orange les incidents.</p>`
+        : renderFindings(analyzeWave(r, a.arch, attemptWave, s.catalog, theme))
+      : ''}
     ${a.played && !r.won && s.game.replays > 0 ? `<p class="muted">Chaque nouvel essai coûte 20 % des points de la vague. Si un choix plus ancien bloque, le menu ☰ permet de revenir à une vague antérieure.</p>` : ''}
     <p class="actions">${actions}</p>
   </div>`;

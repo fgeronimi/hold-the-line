@@ -156,3 +156,25 @@ button.primary:hover { background: var(--wood-dark); }
 .speech p.real { background: none; border: none; border-left: 3px solid #b9a77f; border-radius: 0; padding: 0 8px; font-size: 13px; }
 .card .speech .speaker { font-size: 22px; }
 .card .speech p { font-size: 13px; }
+
+/* Courbes tick par tick : une figure, un axe des ticks partagé. */
+.chart { position: relative; }
+.chart svg { width: 100%; height: auto; display: block; font: 10px system-ui, sans-serif; }
+.chart-title { font-weight: bold; fill: var(--ink); font-size: 11px; }
+.chart-subtitle, .chart-peak, .chart-axis, .chart-strip-label, .chart-threshold-label { fill: #7a6a55; }
+.chart-base { stroke: #cbb98f; stroke-width: 1; }
+.chart-threshold { stroke: #7a6a55; stroke-width: 1; stroke-dasharray: 3 3; }
+.chart-line { fill: none; stroke: #3d5a80; stroke-width: 2; stroke-linejoin: round; }
+.chart-line.over { stroke: var(--ko); }
+.chart-failed { fill: var(--ko); }
+.chart-incident { fill: rgba(233, 162, 59, 0.18); }
+.chart-incident-label { fill: #9a5b00; font-weight: bold; }
+.chart-cursor { stroke: var(--ink); stroke-width: 1.5; }
+.chart-hair { stroke: #7a6a55; stroke-width: 1; }
+.chart-hit { fill: transparent; }
+.chart-tip { position: fixed; z-index: 20; pointer-events: none; padding: 6px 8px; background: #fffaf0; border: 1px solid var(--wood); border-radius: 6px; box-shadow: var(--shadow); font-size: 12px; white-space: nowrap; }
+.chart-tip strong { color: var(--ink); }
+.chart-tip span { color: #7a6a55; }
+.dialog .tabs { display: flex; gap: 6px; margin: 4px 0 8px; }
+.dialog .tabs button.active { background: var(--wood); color: #fff; }
+.replay-charts { position: absolute; z-index: 2; top: 118px; right: 10px; width: min(600px, calc(100vw - 20px)); max-height: calc(100vh - 270px); overflow-y: auto; padding: 8px; background: var(--parchment); border: 2px solid var(--wood); border-radius: 10px; box-shadow: var(--shadow); }
