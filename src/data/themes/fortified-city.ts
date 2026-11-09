@@ -63,7 +63,7 @@ export const fortifiedCity: Theme = {
     'marketing-peak':
       'Les crieurs annoncent une grande foire : pendant un tiers de la journée, cinq fois plus de monde, et la foule arrive en quelques instants. Vos scribes tiendront-ils le choc ?',
     'noisy-client':
-      'La foire a réussi, la foule est restée. Cinquante marchands partenaires passent à grand débit… et deux bandes de pillards inondent la porte en visitant chaque raccourci du royaume.',
+      'La foire a réussi : la foule est restée. Cinquante marchands passent la porte toute la journée. Et deux bandes de pillards sont venues recopier tout le registre des raccourcis, page après page, même les pages que personne ne consulte jamais.',
     'click-tracking':
       'Le trésorier veut compter chaque passage par un raccourci. Mais un voyageur ne doit jamais attendre qu’on ait fini de compter.',
   },
