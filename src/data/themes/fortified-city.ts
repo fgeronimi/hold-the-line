@@ -35,6 +35,12 @@ export const fortifiedCity: Theme = {
         real: 'Le serveur d’application exécute le code ; on ajoute des instances pour tenir plus de charge.',
       },
       metaphor: 'Tour des scribes', icon: '📜', shape: 'tower', color: '#d6cfc0', accent: '#3d5a80' },
+    'domain-service': {
+      role: {
+        says: 'Un maître d’un autre corps de métier, installé de l’autre côté de la rivière : il fait son ouvrage quand on le lui annonce.',
+        real: 'Un service métier tenu par une autre équipe : il consomme les événements et fait son travail, avec son propre stockage.',
+      },
+      metaphor: 'Maître de métier', icon: '⚒️', shape: 'tower', color: '#d6cfc0', accent: '#7a4e8a' },
     cache: {
       role: {
         says: 'Le carnet où le scribe note les réponses déjà cherchées, pour ne pas retourner aux archives à chaque fois.',
@@ -64,7 +70,7 @@ export const fortifiedCity: Theme = {
   narratives: {
     // Le grand marché.
     'market-open':
-      'Sire, le grand marché ouvre ses étals. Cent commandes chaque seconde, chacune à consigner au grand livre… et chacune réclame une lettre de confirmation. Les archives n’écriront pas tout à la fois.',
+      'Sire, le grand marché ouvre ses étals. Cent commandes chaque seconde, chacune à consigner au grand livre… et chacune réclame une lettre de confirmation. Le messager met du temps à écrire chaque lettre, et le chaland, lui, n’aime pas attendre au comptoir.',
     'three-trades':
       'Le magasinier, le trésorier et le messager veulent tous apprendre chaque commande, et chacun la sienne. Si l’un l’apprend, les deux autres doivent l’apprendre aussi.',
     'double-delivery':

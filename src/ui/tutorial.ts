@@ -117,14 +117,6 @@ export function guideStep(
       highlight: { tool: 'link' },
     };
   }
-  const starved = (wave.consumers ?? []).map((id) => arch.nodes.find((n) => n.id === id)).find((n) => n && !arch.links.some((l) => l.to === n.id));
-  if (starved?.fixed) {
-    return {
-      id: 'feed-consumer',
-      says: `Le ${starved.fixed.metaphor.toLowerCase()} attend toujours les commandes : aucun chemin ne mène à lui.`,
-      real: `Le ${starved.fixed.tech} doit recevoir chaque événement de commande, et rien ne l’alimente encore.`,
-    };
-  }
   // Une impasse : un bâtiment reçoit du travail qu'il ne sait pas finir, et rien n'en part.
   const deadEnd = arch.nodes.find((n) => {
     const def = catalog.components[n.type];
@@ -142,6 +134,14 @@ export function guideStep(
       says: `${metaphor} reçoit du travail mais n’a nulle part où le porter : aucun chemin n’en part.`,
       real: `${tech} reçoit des requêtes mais n’a aucun lien sortant : tout ce qu’il ne termine pas lui-même échouera (no-route).`,
       highlight: { tool: 'link' },
+    };
+  }
+  const starved = (wave.consumers ?? []).map((id) => arch.nodes.find((n) => n.id === id)).find((n) => n && !arch.links.some((l) => l.to === n.id));
+  if (starved?.fixed) {
+    return {
+      id: 'feed-consumer',
+      says: `Le ${starved.fixed.metaphor.toLowerCase()} attend toujours les commandes : aucun chemin ne mène à lui.`,
+      real: `Le ${starved.fixed.tech} doit recevoir chaque événement de commande, et rien ne l’alimente encore.`,
     };
   }
   const { cost, complexity } = totals(arch, catalog);

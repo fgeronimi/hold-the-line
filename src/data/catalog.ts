@@ -61,6 +61,25 @@ export const catalog: Catalog = {
       terminalFor: [],
       accepts: ['read', 'write', 'async'],
     },
+    // Un service métier tenu par une autre équipe (stock, facturation, e-mail) : il reçoit un
+    // événement et fait son travail, sans base partagée. Sa latence est celle d'un vrai travail
+    // (réserver, débiter, envoyer un mail) : l'appeler en direct la met sur le chemin critique.
+    'domain-service': {
+      id: 'domain-service',
+      behavior: 'service',
+      label: 'Service métier',
+      techName: 'Service métier',
+      cost: 0,
+      complexity: 0,
+      capacity: 1000,
+      latencyMs: 200,
+      workPerRequest: { async: 1 },
+      terminalFor: ['async'],
+      accepts: ['async'],
+      // Relié en direct, il reçoit l'événement avant la base : c'est lui qui le traite.
+      routingPriority: 1,
+      prePlaced: true,
+    },
     cache: {
       id: 'cache',
       behavior: 'cache',
@@ -107,7 +126,7 @@ export const catalog: Catalog = {
       batchSize: 100,
       maxBacklog: 200000,
       // Une base qui consomme directement une file n'existe pas : il faut un worker.
-      allowedDownstream: ['app-server'],
+      allowedDownstream: ['app-server', 'domain-service'],
     },
     pubsub: {
       id: 'pubsub',
@@ -125,7 +144,7 @@ export const catalog: Catalog = {
       routingPriority: 2,
       fanOut: true,
       // Ses abonnés : des files (un service, une file) ou directement des serveurs.
-      allowedDownstream: ['message-queue', 'app-server'],
+      allowedDownstream: ['message-queue', 'app-server', 'domain-service'],
     },
   },
   upgrades: {
@@ -169,7 +188,7 @@ export const catalog: Catalog = {
       id: 'idempotence',
       label: 'Messages traités une seule fois',
       techName: 'Idempotence',
-      appliesTo: 'app-server',
+      appliesTo: 'domain-service',
       maxLevel: 1,
       cost: { base: 10, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },

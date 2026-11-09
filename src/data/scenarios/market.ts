@@ -2,19 +2,21 @@ import type { Scenario, TrafficSource } from '../../engine/types.ts';
 
 const TICKS = 60;
 const flat = [{ until: TICKS, factor: 1 }];
+/** Le trafic monte au départ et retombe à la fin (décision S11). */
+const RAMP = { up: 8, down: 8 };
 
 /**
- * Les chalands : ils consultent leurs commandes (lectures), en passent (écritures), et
- * chaque commande passée émet un événement (async) que les services doivent recevoir.
- */
-/**
  * Les trois services des autres équipes, déjà en place de l'autre côté de la rivière
- * (décision S8) : il reste à leur faire parvenir chaque commande.
+ * (décisions S8, S10) : il reste à leur faire parvenir chaque commande.
  */
 const SERVICES = { stock: ['Service stock', 'Magasinier'], billing: ['Service facturation', 'Trésorier'], mail: ['Service e-mail', 'Messager'] } as const;
 const CELLS = { stock: { q: 15, r: -3 }, billing: { q: 14, r: 0 }, mail: { q: 13, r: 3 } };
 const ALL = Object.keys(SERVICES);
 
+/**
+ * Les chalands : ils consultent leurs commandes (lectures), en passent (écritures), et
+ * chaque commande passée émet un événement (async) que les services doivent recevoir.
+ */
 const shoppers = (read: number, orders: number): TrafficSource => ({
   id: 'shoppers',
   clients: 1000,
@@ -27,7 +29,7 @@ export const market: Scenario = {
   subtitle: 'Hold the Line : le grand marché',
   fixtures: Object.entries(SERVICES).map(([id, [tech, metaphor]]) => ({
     id,
-    type: 'app-server',
+    type: 'domain-service',
     cell: CELLS[id as keyof typeof CELLS],
     fixed: { tech, metaphor },
   })),
@@ -36,8 +38,9 @@ export const market: Scenario = {
       id: 'market-open',
       title: 'Ouverture du marché',
       briefing:
-        'La boutique ouvre : 100 commandes par seconde, chacune écrite en base, et chacune émet un événement que le service e-mail, déjà en place, doit recevoir pour envoyer la confirmation. La base encaisse 600 unités de travail par seconde, une écriture en coûte 3.',
+        'La boutique ouvre : 100 commandes par seconde, chacune écrite en base, et chacune émet un événement que le service e-mail, déjà en place, doit recevoir pour envoyer la confirmation. Envoyer un mail prend 200 ms ; le client, lui, veut sa commande validée en moins de 60 ms.',
       ticks: TICKS,
+      ramp: RAMP,
       profile: flat,
       sources: [shoppers(100, 100)],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
@@ -53,6 +56,7 @@ export const market: Scenario = {
       briefing:
         'Les services stock et facturation, déjà en place eux aussi, veulent maintenant chaque commande. Chacun des trois services doit recevoir chaque événement.',
       ticks: TICKS,
+      ramp: RAMP,
       profile: flat,
       sources: [shoppers(200, 100)],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
@@ -68,6 +72,7 @@ export const market: Scenario = {
       briefing:
         'Le bus garantit qu’un message arrive au moins une fois… pas exactement une fois. Pendant un incident, une part des messages sera livrée deux fois.',
       ticks: TICKS,
+      ramp: RAMP,
       profile: flat,
       sources: [shoppers(200, 100)],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
@@ -84,6 +89,7 @@ export const market: Scenario = {
       briefing:
         'Le serveur écrit la commande en base, puis publie l’événement. Pendant un incident, il tombera parfois entre les deux.',
       ticks: TICKS,
+      ramp: RAMP,
       profile: flat,
       sources: [shoppers(200, 80)],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
@@ -99,6 +105,7 @@ export const market: Scenario = {
       briefing:
         'Les soldes commencent : 1 500 consultations de commandes par seconde, 80 commandes par seconde, et les deux incidents connus peuvent revenir à tout moment.',
       ticks: TICKS,
+      ramp: RAMP,
       profile: flat,
       sources: [shoppers(1500, 80)],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },

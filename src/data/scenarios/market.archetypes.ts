@@ -11,16 +11,18 @@ const SERVICES = ['stock', 'billing', 'mail'];
 const services = (idempotence = false): ArchNode[] =>
   (market.fixtures ?? []).map((n) => ({ ...n, upgrades: { idempotence: idempotence ? 1 : 0 } }));
 
-/** Le serveur écrit les commandes en base ; les événements y vont aussi, en ligne. */
-export const inline: Architecture = {
+const base: Architecture = {
   nodes: [source, { id: 'app', type: 'app-server' }, { id: 'db', type: 'database' }, ...services()],
-  links: [link('src', 'app'), link('app', 'db'), ...SERVICES.map((s) => link(s, 'db'))],
+  links: [link('src', 'app'), link('app', 'db')],
 };
 
-/** Une file vers le service e-mail : les événements sont traités à part, par lots. */
+/** Le serveur appelle le service e-mail en direct : le client attend l'envoi du mail. */
+export const inline: Architecture = { nodes: base.nodes, links: [...base.links, link('app', 'mail')] };
+
+/** Une file vers le service e-mail : l'événement sort du chemin critique. */
 export const queued: Architecture = {
-  nodes: [...inline.nodes, { id: 'queue', type: 'message-queue' }],
-  links: [...inline.links, link('app', 'queue'), link('queue', 'mail')],
+  nodes: [...base.nodes, { id: 'queue', type: 'message-queue' }],
+  links: [...base.links, link('app', 'queue'), link('queue', 'mail')],
 };
 
 /** Une file pour les trois services, sans pub/sub : elle partage les événements, chacun n'en voit qu'un tiers. */
@@ -51,7 +53,7 @@ export function fannedOut(o: FanOutOptions = {}): Architecture {
   const links: ArchLink[] = [
     link('app', 'db'),
     link('app', 'bus'),
-    ...SERVICES.flatMap((s) => [link('bus', `q-${s}`), link(`q-${s}`, s), link(s, 'db')]),
+    ...SERVICES.flatMap((s) => [link('bus', `q-${s}`), link(`q-${s}`, s)]),
   ];
   if (o.extraInstances) {
     nodes.push({ id: 'lb', type: 'load-balancer' });

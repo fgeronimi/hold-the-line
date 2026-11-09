@@ -97,6 +97,12 @@ export const reasonLessons = {
     remedy: 'Retirer les composants et évolutions qui n’apportent rien à cette vague.',
     concept: 'Over-engineering',
   },
+  syncCall: {
+    says: 'Chaque chaland attend au comptoir que le {metaphor} ait fini son ouvrage : la commande traîne.',
+    tech: '{name} est appelé en direct : le client attend la fin de son travail ({latency} ms) avant d’avoir sa réponse. L’événement est sur le chemin critique.',
+    remedy: 'Sortir ce travail du chemin critique : publier l’événement dans une file, que le service vide à son rythme.',
+    concept: 'Traitement asynchrone',
+  },
   slow: {
     says: 'Les voyageurs attendent trop longtemps leur réponse.',
     tech: 'La latence p95 dépasse le SLA : {name} tourne trop près de sa capacité (charge {load}).',
@@ -157,13 +163,13 @@ export const incidentLessons: Record<IncidentEffect['type'], { hurt: Lesson; hel
     hurt: {
       says: '{title} : {failed} commandes ont été traitées deux fois.',
       tech: 'Pendant l’incident, une part des messages est livrée deux fois ; un consommateur qui ne reconnaît pas un message déjà traité le traite à nouveau.',
-      remedy: 'L’idempotence sur les consommateurs : une écriture en base par message pour garder sa clé.',
+      remedy: 'L’idempotence sur les consommateurs : chacun garde la clé des messages déjà traités et ignore les doublons.',
       concept: 'Idempotence',
     },
     held: {
       says: '{title} : les doublons ont été reconnus et écartés.',
       tech: 'Les consommateurs idempotents ont ignoré les messages déjà traités.',
-      remedy: 'L’idempotence a un coût : une écriture par message. La base doit suivre.',
+      remedy: 'L’idempotence a un coût : chaque service garde la mémoire des clés vues, dans son propre stockage.',
       concept: 'Idempotence',
     },
   },

@@ -40,7 +40,13 @@ function withFixtures(draft: Architecture, scenario: ViewState['scenario']): Arc
 const permanent = (node: Architecture['nodes'][number]) =>
   state.catalog.components[node.type]?.behavior === 'source' || !!node.fixed;
 
-type Saved = Pick<ViewState, 'catalog' | 'scenario' | 'game' | 'draft'>;
+type Saved = Pick<ViewState, 'game' | 'draft'> & {
+  /**
+   * Seulement si le joueur a calibré en debug : sinon catalogue et scénario viennent du
+   * code, pour qu'une partie en cours profite des données mises à jour (rampe, chiffres…).
+   */
+  calibration?: Pick<ViewState, 'catalog' | 'scenario'>;
+};
 
 /** Une partie par scénario (décision S2), et le dernier scénario joué. */
 interface Store {
@@ -50,15 +56,19 @@ interface Store {
 
 const store: Store = load<Store>() ?? { saves: {} };
 
+/** Les scénarios dont le joueur a touché le calibrage. */
+const calibrated = new Set<string>();
+
 const defaultScenario = (id: string) => scenarioById(id) ?? SCENARIOS[0]!.scenario;
 
 /** La partie d'un scénario : celle sauvegardée, ou une nouvelle. */
-function gameOf(id: string): Saved {
+function gameOf(id: string): Pick<ViewState, 'catalog' | 'scenario' | 'game' | 'draft'> {
   const saved = store.saves[id];
-  const scenario = saved?.scenario ?? defaultScenario(id);
+  if (saved?.calibration) calibrated.add(id);
+  const scenario = saved?.calibration?.scenario ?? structuredClone(defaultScenario(id));
   return {
-    catalog: saved?.catalog ?? structuredClone(defaultCatalog),
-    scenario: saved?.scenario ?? structuredClone(defaultScenario(id)),
+    catalog: saved?.calibration?.catalog ?? structuredClone(defaultCatalog),
+    scenario,
     game: saved?.game ?? newGame(),
     // Un brouillon d'avant le plateau reçoit des cases et des chemins une fois pour toutes.
     draft: autoPlace(withFixtures(saved?.draft ?? startOf(scenario), scenario)),
@@ -128,7 +138,9 @@ function update(patch: Partial<ViewState>): void {
   state = { ...state, ...patch };
   if (state.phase !== 'choose') {
     store.current = state.scenario.id;
-    store.saves[state.scenario.id] = { catalog: state.catalog, scenario: state.scenario, game: state.game, draft: state.draft };
+    const id = state.scenario.id;
+    const calibration = calibrated.has(id) ? { catalog: state.catalog, scenario: state.scenario } : undefined;
+    store.saves[id] = { game: state.game, draft: state.draft, ...(calibration && { calibration }) };
     save(store);
     state.choices = choices();
   }
@@ -363,10 +375,14 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     const input = el as HTMLInputElement;
     const value = parseField(input.value, { path: input.dataset.path!, label: '', list: input.dataset.list === '1' });
     if (value === undefined) return;
+    calibrated.add(state.scenario.id);
     if (input.dataset.root === 'catalog') update({ catalog: setAt(state.catalog, input.dataset.path!, value) });
     else update({ scenario: setAt(state.scenario, input.dataset.path!, value) });
   },
-  'reset-calibration': () => update({ catalog: structuredClone(defaultCatalog), scenario: structuredClone(defaultScenario(state.scenario.id)) }),
+  'reset-calibration': () => {
+    calibrated.delete(state.scenario.id);
+    update({ catalog: structuredClone(defaultCatalog), scenario: structuredClone(defaultScenario(state.scenario.id)) });
+  },
   export: () => {
     const area = document.getElementById('export') as HTMLTextAreaElement;
     area.hidden = false;

@@ -20,6 +20,8 @@ export interface ChartPanel {
   top: number;
   /** Ligne de seuil : la capacité (100 %) ou le SLA. */
   threshold?: { value: number; label: string };
+  /** Débit reçu par tick (req/s), lu à côté de la charge : de quoi refaire le calcul de capacité. */
+  rps?: number[];
   /** Échecs par tick, dessinés en barres sous la courbe. */
   failed?: number[];
   /** Ce que l'infobulle ajoute à la valeur, tick par tick. */
@@ -34,7 +36,7 @@ export interface ChartModel {
 }
 
 const pct = (n: number) => `${Math.round(n * 100)} %`;
-const num = (n: number) => (Math.abs(n) >= 100 ? String(Math.round(n)) : n.toFixed(n < 10 ? 1 : 0));
+const num = (n: number) => (n === 0 ? '0' : Math.abs(n) >= 100 ? String(Math.round(n)) : n.toFixed(n < 10 ? 1 : 0));
 
 export function chartModel(result: WaveResult, arch: Architecture, wave: Wave, catalog: Catalog, theme: Theme): ChartModel {
   const ticks = result.ticks;
@@ -83,6 +85,7 @@ export function chartModel(result: WaveResult, arch: Architecture, wave: Wave, c
     if (!node || catalog.components[node.type]?.behavior === 'source') continue;
     const load = ticks.map((t) => t.nodes[id]?.utilization ?? 0);
     panels.push({
+      rps: ticks.map((t) => t.nodes[id]?.rps ?? 0),
       id,
       title: nodeNames(node, catalog, theme).tech,
       subtitle: nodeNames(node, catalog, theme).metaphor,
@@ -136,6 +139,17 @@ function format(p: ChartPanel, v: number): string {
   return v >= 10 ? 'hors service' : pct(v);
 }
 
+/** La lecture d'un tick : la charge d'un bâtiment vient avec le débit qui la produit. */
+export function readingAt(p: ChartPanel, tick: number): string {
+  const v = format(p, p.values[tick] ?? 0);
+  return p.rps ? `${num(p.rps[tick] ?? 0)} req/s · charge ${v}` : v;
+}
+
+/** Le pic d'une vague jouée : la plus forte charge, et le plus fort débit reçu. */
+function peakReading(p: ChartPanel): string {
+  return p.rps ? `pic ${format(p, p.peak)} · ${num(Math.max(0, ...p.rps))} req/s` : `pic ${format(p, p.peak)}`;
+}
+
 /** Les ids SVG sont globaux au document : deux figures affichées ne doivent pas partager leurs clipPath. */
 let renders = 0;
 
@@ -151,6 +165,8 @@ export function renderChart(m: ChartModel, opts: { live?: boolean } = {}): strin
   const step = (x1 - x0) / Math.max(1, m.ticks);
   let y = CHART.top;
   const parts: string[] = [];
+  // Les repères d'échelle passent au-dessus du voile : ils ne disent rien de ce qui va arriver.
+  const scales: string[] = [];
 
   // Les incidents d'abord, sous tout le reste, sur toute la hauteur.
   for (const i of m.incidents) {
@@ -173,15 +189,18 @@ export function renderChart(m: ChartModel, opts: { live?: boolean } = {}): strin
     parts.push(
       `<text class="chart-title" x="0" y="${yTop + 12}">${escapeHtml(p.title)}</text>`,
       `<text class="chart-subtitle" x="0" y="${yTop + 25}">${escapeHtml(p.subtitle)}</text>`,
-      opts.live ? '' : `<text class="chart-peak" x="0" y="${yTop + 38}">pic ${escapeHtml(format(p, p.peak))}</text>`,
+      // En direct, la valeur du tick joué ; après coup, le pic de la vague.
+      opts.live
+        ? `<text class="chart-now" data-chart="now" data-panel="${k}" x="0" y="${yTop + 38}">${escapeHtml(readingAt(p, 0))}</text>`
+        : `<text class="chart-peak" x="0" y="${yTop + 38}">${escapeHtml(peakReading(p))}</text>`,
       `<line class="chart-base" x1="${x0}" x2="${x1}" y1="${yBottom}" y2="${yBottom}"/>`,
     );
+    // L'échelle, à gauche dans le tracé : le seuil quand il y en a un, sinon le haut de l'axe.
+    if (!p.threshold) scales.push(`<text class="chart-scale" x="${x0 + 3}" y="${yTop + 8}">${escapeHtml(format(p, p.top))}</text>`);
     if (p.threshold) {
       const ty = scale(p.threshold.value);
-      parts.push(
-        `<line class="chart-threshold" x1="${x0}" x2="${x1}" y1="${ty}" y2="${ty}"/>`,
-        `<text class="chart-threshold-label" x="${x1}" y="${ty - 3}" text-anchor="end">${escapeHtml(p.threshold.label)}</text>`,
-      );
+      parts.push(`<line class="chart-threshold" x1="${x0}" x2="${x1}" y1="${ty}" y2="${ty}"/>`);
+      scales.push(`<text class="chart-threshold-label" x="${x0 + 3}" y="${ty - 3}">${escapeHtml(`${p.threshold.label} ${format(p, p.threshold.value)}`)}</text>`);
       // Au-dessus du seuil, la même courbe repasse en rouge : on voit d'un coup d'œil quand ça déborde.
       parts.push(
         `<clipPath id="${uid}-over-${k}"><rect x="${x0}" y="${yTop - 2}" width="${x1 - x0}" height="${ty - yTop + 2}"/></clipPath>`,
@@ -216,6 +235,7 @@ export function renderChart(m: ChartModel, opts: { live?: boolean } = {}): strin
   if (opts.live) {
     parts.push(`<rect class="chart-veil" data-chart="veil" x="${x0}" y="${CHART.top - 20}" width="${x1 - x0 + CHART.right}" height="${H - CHART.top + 20 - CHART.axis}"/>`);
   }
+  parts.push(...scales);
   parts.push(
     `<line class="chart-cursor" data-chart="cursor" x1="${x0}" x2="${x0}" y1="${CHART.top - 4}" y2="${H - CHART.axis}" visibility="hidden"/>`,
     `<line class="chart-hair" data-chart="hair" x1="${x0}" x2="${x0}" y1="${CHART.top - 4}" y2="${H - CHART.axis}" visibility="hidden"/>`,
@@ -230,7 +250,7 @@ export function renderChart(m: ChartModel, opts: { live?: boolean } = {}): strin
 
 /** Les lignes de l'infobulle d'un tick : la valeur d'abord, puis le nom. */
 export function tooltipRows(m: ChartModel, tick: number): { value: string; label: string; notes: string[] }[] {
-  return m.panels.map((p) => ({ value: format(p, p.values[tick] ?? 0), label: p.title, notes: p.notes[tick] ?? [] }));
+  return m.panels.map((p) => ({ value: readingAt(p, tick), label: p.title, notes: p.notes[tick] ?? [] }));
 }
 
 /**
@@ -244,6 +264,7 @@ export function attachChart(root: HTMLElement, m: ChartModel, onSeek?: (tick: nu
   const cursor = root.querySelector<SVGLineElement>('[data-chart="cursor"]')!;
   const tip = root.querySelector<HTMLElement>('[data-chart="tip"]')!;
   const veil = root.querySelector<SVGRectElement>('[data-chart="veil"]');
+  const now = [...root.querySelectorAll<SVGTextElement>('[data-chart="now"]')];
   // Sous un voile, on ne lit ni ne saute au-delà de ce qui a déjà été joué.
   let revealed = veil ? 0 : m.ticks - 1;
 
@@ -300,6 +321,7 @@ export function attachChart(root: HTMLElement, m: ChartModel, onSeek?: (tick: nu
         veil.setAttribute('x', String(x));
         veil.setAttribute('width', String(Math.max(0, CHART.width - x)));
       }
+      for (const el of now) el.textContent = readingAt(m.panels[Number(el.dataset.panel)]!, revealed);
     },
   };
 }

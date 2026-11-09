@@ -171,7 +171,12 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     .filter((id) => behaviorOf(id) !== 'source')
     .map((id) => ({ id, peak: Math.max(0, ...calm.map((t) => t.nodes[id]?.utilization ?? 0)) }))
     .sort((a, b) => b.peak - a.peak)[0];
-  if (latency.value > latency.limit && failureRate.value <= failureRate.limit && hottest) {
+  // Un service métier appelé en direct (sans file entre eux) : le client attend son travail.
+  const called = arch.links.find((l) => catalog.components[typeOf.get(l.to) ?? '']?.prePlaced && behaviorOf(l.from) !== 'queue');
+  if (latency.value > latency.limit && called) {
+    const def = catalog.components[typeOf.get(called.to)!]!;
+    tell(Infinity, fromLesson('bad', reasonLessons.syncCall, { name: name(called.to), metaphor: metaphor(called.to).toLowerCase(), latency: String(def.latencyMs) }, called.to));
+  } else if (latency.value > latency.limit && failureRate.value <= failureRate.limit && hottest) {
     tell(Infinity, fromLesson('bad', reasonLessons.slow, { name: name(hottest.id), load: pct(hottest.peak) }, hottest.id));
   } else if (won && hottest && hottest.peak > HOT && !saturated.some((s) => s.id === hottest.id)) {
     tell(Infinity, {

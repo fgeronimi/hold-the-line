@@ -26,6 +26,7 @@ technique vient toujours en premier.
 | Database, et ses réplicas en lecture | Archives royales, et leurs copies |
 | Message queue | Relais de poste |
 | Pub/sub | Crieur public, au clocher |
+| Services métier (stock, facturation, e-mail) | Magasinier, Trésorier, Messager |
 | Lectures, écritures, tâches async | Messagers, porteurs, mages |
 | Trafic abusif (scraper) | Pillards squelettes |
 

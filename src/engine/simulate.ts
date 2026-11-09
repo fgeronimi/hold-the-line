@@ -91,7 +91,24 @@ function loadedLatency(def: ComponentDef, utilization: number): number {
 }
 
 function factorAt(wave: Wave, tick: number): number {
-  return wave.profile.find((seg) => tick < seg.until)?.factor ?? wave.profile.at(-1)?.factor ?? 1;
+  const base = wave.profile.find((seg) => tick < seg.until)?.factor ?? wave.profile.at(-1)?.factor ?? 1;
+  return base * envelopeAt(wave, tick);
+}
+
+/** Courbe en S : une montée sans à-coup, ni au départ ni à l'arrivée. */
+const smooth = (x: number) => {
+  const t = Math.min(Math.max(x, 0), 1);
+  return t * t * (3 - 2 * t);
+};
+
+export function envelopeAt(wave: Wave, tick: number): number {
+  if (!wave.ramp) return 1;
+  const { up, down } = wave.ramp;
+  let f = 1;
+  if (up > 0 && tick < up) f = 0.25 + 0.75 * smooth((tick + 1) / up);
+  const fromEnd = wave.ticks - tick;
+  if (down > 0 && fromEnd <= down) f = Math.min(f, 1 - 0.6 * smooth((down - fromEnd + 1) / down));
+  return f;
 }
 
 interface NodeOutcome {
@@ -117,6 +134,8 @@ interface TickContext {
   nodeFailed: Map<string, number>;
   /** Trafic abusif écarté par nœud pendant le tick : voulu, donc hors échecs. */
   nodeShed: Map<string, number>;
+  /** Ce que le rendu doit montrer et que les échecs confondent : doublons reçus, événements perdus. */
+  nodeTally: Map<string, { duplicates: number; deduplicated: number; lost: number }>;
   events: SimEvent[];
   shed: { value: number };
   /** Cumul de la vague : événements async en échec, et copies arrivées au bout de leur chemin. */
@@ -190,7 +209,8 @@ export function simulateWave(
     for (const id of was) if (!active.some((i) => i.id === id)) events.push({ type: 'incident-end', tick, incident: id });
     const nodeFailed = new Map<string, number>();
     const nodeShed = new Map<string, number>();
-    const ctx: TickContext = { tick, failures, nodeFailed, nodeShed, events, shed, asyncTally };
+    const nodeTally: TickContext['nodeTally'] = new Map();
+    const ctx: TickContext = { tick, failures, nodeFailed, nodeShed, nodeTally, events, shed, asyncTally };
     const failedBefore = sumFailures(failures);
 
     const inbound = new Map<string, Flow>([...nodes.keys()].map((id) => [id, new Map()]));
@@ -251,6 +271,7 @@ export function simulateWave(
       summary.failed += nodeFailed.get(id) ?? 0;
 
       nodeTicks[id] = {
+        rps: sumRps(incoming),
         utilization: outcome.utilization,
         latencyMs: loadedLatency(def, outcome.utilization),
         failed: nodeFailed.get(id) ?? 0,
@@ -258,11 +279,14 @@ export function simulateWave(
         ...(outcome.instances !== undefined ? { instances: outcome.instances } : {}),
         ...(nodeShed.has(id) ? { shed: nodeShed.get(id)! } : {}),
         ...(down(node) > 0 ? { down: down(node) } : {}),
+        ...nonZero(nodeTally.get(id)),
       };
     }
 
     const pathLatency = computePathLatencies(validation.order, routes, routed, outcomes, nodeTicks);
-    const injectedSync = SYNC_KINDS.map((k) => ({ k, rps: sumRps(injected, (s) => s.kind === k) }));
+    // L'événement fait partie de la commande : tant qu'il est traité en direct, le client
+    // l'attend. Une file le sort du chemin critique (sa part synchrone s'arrête à elle).
+    const injectedSync = REQUEST_KINDS.map((k) => ({ k, rps: sumRps(injected, (s) => s.kind === k) }));
     const syncRps = injectedSync.reduce((a, x) => a + x.rps, 0);
     const tickLatency =
       syncRps > 0
@@ -398,6 +422,17 @@ function serveWithin(nodeId: string, flow: Flow, demand: number, capacity: numbe
 }
 
 /** `events` : la part de ces échecs qui sont des événements async, pour compter ce qui reste à livrer. */
+function tally(ctx: TickContext, nodeId: string, key: 'duplicates' | 'deduplicated' | 'lost', rps: number): void {
+  const t = ctx.nodeTally.get(nodeId) ?? { duplicates: 0, deduplicated: 0, lost: 0 };
+  t[key] += rps;
+  ctx.nodeTally.set(nodeId, t);
+}
+
+function nonZero(t: { duplicates: number; deduplicated: number; lost: number } | undefined): Partial<NodeTick> {
+  if (!t) return {};
+  return Object.fromEntries(Object.entries(t).filter(([, v]) => v > 0));
+}
+
 function fail(ctx: TickContext, nodeId: string, reason: FailureReason, rps: number, events = 0): void {
   if (rps <= 0) return;
   ctx.failures[reason] += rps;
@@ -696,9 +731,9 @@ interface MessagingRoles {
   publisher: boolean;
   /** Base à outbox où ce serveur écrit : ses événements passent par elle et ne se perdent plus. */
   outbox?: string;
-  /** Serveur consommateur idempotent : il écarte les doublons, une écriture par message. */
+  /** Service consommateur idempotent : il écarte les doublons, avec sa propre mémoire des clés. */
   idempotent: boolean;
-  /** Bases où ce nœud écrit : destination des écritures ajoutées (clés, outbox). */
+  /** Bases où ce nœud écrit : l'outbox est cherchée parmi elles. */
   writeTargets: string[];
 }
 
@@ -744,39 +779,38 @@ function route(id: string, def: ComponentDef, passed: Flow, routes: NodeRoutes, 
     env.routed.set(id, byKind);
   };
 
-  // Les écritures que l'idempotence ou l'outbox ajoutent : une par message, vers la base.
-  const extraWrite = (s: Stream, rps: number) => {
-    const to = env.roles.writeTargets;
-    for (const db of to) send(db, { ...s, kind: 'write', duplicate: false }, rps / to.length);
-  };
   const { roles } = env;
 
   for (const original of passed.values()) {
     let s = original;
     if (env.consumer && isEvent(s)) env.ctx.asyncTally.delivered += s.rps;
-    if (def.terminalFor.includes(s.kind)) continue;
 
     if (s.kind === 'async' && def.behavior === 'service') {
       if (s.duplicate) {
         // Un doublon reconnu est écarté ; sinon il est traité une seconde fois, et c'est l'erreur.
+        // La clé déjà vue est gardée par le service lui-même : pas de base partagée (S10).
         if (roles.idempotent) {
-          extraWrite(s, s.rps);
+          tally(env.ctx, id, 'deduplicated', s.rps);
           continue;
         }
+        tally(env.ctx, id, 'duplicates', s.rps);
         fail(env.ctx, id, 'duplicate', s.rps);
-      } else {
-        if (roles.idempotent) extraWrite(s, s.rps);
+        continue;
+      }
+      if (!def.terminalFor.includes(s.kind)) {
         if (roles.publisher && roles.outbox) {
           send(roles.outbox, { ...s, kind: 'write' }, s.rps);
         } else if (roles.publisher) {
           const lost = s.rps * Math.min(1, env.incidentShare('publish-loss'));
           if (lost > 0) {
+            tally(env.ctx, id, 'lost', lost);
             fail(env.ctx, id, 'lost-event', lost, lost);
             s = { ...s, rps: s.rps - lost };
           }
         }
       }
     }
+    if (def.terminalFor.includes(s.kind)) continue;
 
     // Cache-aside : chaque cache consulté sert sa part, le reste repart d'ici.
     let remaining = s.rps;

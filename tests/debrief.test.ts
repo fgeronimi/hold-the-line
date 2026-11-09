@@ -12,6 +12,16 @@ const analyze = (arch: Architecture, id: string) =>
   analyzeWave(simulateWave(arch, wave(id), catalog), arch, wave(id), catalog, fortifiedCity);
 
 describe('analyzeWave', () => {
+  it('un service métier appelé en direct : le client attend son travail, la file est la parade', async () => {
+    const { market } = await import('../src/data/scenarios/market.ts');
+    const M = await import('../src/data/scenarios/market.archetypes.ts');
+    const first = market.waves[0]!;
+    const findings = analyzeWave(simulateWave(M.inline, first, catalog), M.inline, first, catalog, fortifiedCity);
+    const finding = findings.find((f) => f.concept === 'Traitement asynchrone')!;
+    expect(finding).toMatchObject({ tone: 'bad', node: 'mail' });
+    expect(finding.tech).toContain('200 ms');
+  });
+
   it('ouvre sur la défaite, puis le lien manquant', () => {
     const findings = analyze(A.noDatabase, 'launch');
     expect(findings[0]).toMatchObject({ tone: 'bad' });

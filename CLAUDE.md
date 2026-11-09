@@ -46,6 +46,9 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
 - `src/render/` : rejeu 3D isométrique (Three.js), chargé à la demande depuis le debrief.
   `hex.ts` (grille hexagonale), `layout.ts` et `traffic.ts` sont purs et testés ; `scene.ts` ne fait qu'afficher un tick
   déjà calculé. La métaphore vient d'un thème en données (`src/data/themes/fortified-city.ts`).
+  `effects.ts` dessine les incidents (fumée, feu, lettres, bouclier) sans état. `vitrine.html`
+  (`npm run dev`, puis `/vitrine.html`) les montre un par un sur des îlots de démonstration
+  (`showcase.ts`) : à garder à jour quand un effet change. Hors build.
 - `public/models/kaykit/` : modèles glTF du KayKit Medieval Hexagon Pack (CC0), chargés
   par le rejeu. N'y copier que les modèles utilisés (`.gltf` + `.bin`, à plat, avec la
   texture commune `hexagons_medieval.png`) et tenir `public/models/CREDITS.md` à jour.
@@ -66,8 +69,9 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
   que le scénario reste jouable avant d'ajuster les tests.
 - `tests/engine.test.ts` utilise son propre catalogue : ne pas le brancher sur
   `src/data/catalog.ts`, sinon le calibrage casse les tests du moteur.
-- La latence du SLA ne compte que les lectures et écritures ; l'async est hors chemin
-  critique dès qu'il passe par une file. C'est un p95 des latences par tick, pas un
+- La latence du SLA compte lectures, écritures et événements async ; l'async sort du chemin
+  critique dès qu'il passe par une file (décision S10). Un service métier appelé en direct
+  met sa latence (200 ms) sur le chemin du client. C'est un p95 des latences par tick, pas un
   vrai p99 par requête : toujours l'afficher « p95 (approx.) ».
 - Le rate limiting ne compte que le synchrone (décision C5) ; ses niveaux sont des index
   de palier, pas des quantités.
@@ -78,8 +82,10 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
 - `tests/balance.test.ts` énumère un espace réduit qui doit contenir toutes les réponses
   attendues : si un recalibrage déplace une réponse hors de cet espace, l'agrandir.
 - Le MVP de la spec a été élargi au CDN et à l'autoscaling (`docs/decisions.md`, X1–X4).
-- Le calibrage et la partie sont gardés dans `localStorage` (clé `hold-the-line:v8`) :
-  changer la version de la clé dès que la forme de la partie ou du catalogue change.
+- La partie est gardée dans `localStorage` (clé `hold-the-line:v9`) : changer la version
+  de la clé dès que la forme de la partie change. Catalogue et scénario n'y sont copiés que
+  si le joueur a calibré en debug ; sinon ils viennent du code, et une modification des
+  données atteint les parties en cours sans changer la clé.
 - Tout texte venant de l'état passe par `esc()` (interface) ou `escapeHtml()` (rendu)
   avant d'entrer dans le HTML.
 - Le rendu ne simule rien : s'il faut une donnée de plus pour animer, elle s'ajoute aux

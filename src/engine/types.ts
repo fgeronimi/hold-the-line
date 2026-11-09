@@ -44,6 +44,8 @@ export interface ComponentDef {
   maxBacklog?: number;
   /** Types de composants autorisés en aval ; absent = tous. */
   allowedDownstream?: string[];
+  /** Jamais proposé à la construction : seul un scénario le pose (les services métier, S10). */
+  prePlaced?: boolean;
   /**
    * Diffusion (pub/sub) : chaque message est copié vers chacun des voisins qui l'acceptent,
    * au lieu d'être partagé entre eux comme le fait une file.
@@ -61,7 +63,7 @@ export type UpgradeEffect =
    * demandée ne sert qu'après `startupTicks` ; elle est facturée au prorata des ticks actifs.
    */
   | { type: 'autoscaling'; instanceCost: number; startupTicks: number; targetUtilization: number }
-  /** Consommateur qui reconnaît un message déjà traité : une écriture en base par message. */
+  /** Consommateur qui reconnaît un message déjà traité, avec sa propre mémoire des clés (S10). */
   | { type: 'idempotence' }
   /** Événement écrit dans la transaction de la commande, puis relayé : une écriture de plus. */
   | { type: 'outbox' };
@@ -176,6 +178,12 @@ export interface Wave {
   briefing: string;
   ticks: number;
   profile: ProfileSegment[];
+  /**
+   * Montée et descente du trafic, en ticks (décision S11) : le profil est multiplié par une
+   * enveloppe qui part de 25 %, atteint 100 % après `up` ticks, et retombe à 40 % sur les
+   * `down` derniers. Absent : le profil seul, à plein dès le premier tick.
+   */
+  ramp?: { up: number; down: number };
   sources: TrafficSource[];
   sla: { maxFailureRate: number; maxP95LatencyMs: number };
   budget: number;
@@ -235,6 +243,8 @@ export type SimEvent =
   | { type: 'incident-end'; tick: number; incident: string };
 
 export interface NodeTick {
+  /** Requêtes reçues ce tick (req/s), tous types confondus : émises, pour la source. */
+  rps: number;
   utilization: number;
   latencyMs: number;
   failed: number;
@@ -245,6 +255,12 @@ export interface NodeTick {
   shed?: number;
   /** Instances mises hors service par un incident ce tick. */
   down?: number;
+  /** Doublons traités une seconde fois ici (req/s) : déjà comptés dans `failed`. */
+  duplicates?: number;
+  /** Doublons reconnus et écartés ici grâce à l'idempotence (req/s). */
+  deduplicated?: number;
+  /** Événements perdus ici entre l'écriture et la publication (req/s) : déjà dans `failed`. */
+  lost?: number;
 }
 
 export interface TickMetrics {

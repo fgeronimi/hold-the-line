@@ -4,7 +4,7 @@ import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { fortifiedCity } from '../src/data/themes/fortified-city.ts';
 import { simulateWave } from '../src/engine/simulate.ts';
-import { chartModel, renderChart, tickAt, tickX, tooltipRows } from '../src/render/charts.ts';
+import { chartModel, readingAt, renderChart, tickAt, tickX, tooltipRows } from '../src/render/charts.ts';
 
 const wave = urlShortener.waves.find((w) => w.id === 'read-surge')!;
 const model = chartModel(simulateWave(A.withCache, wave, catalog), A.withCache, wave, catalog, fortifiedCity);
@@ -25,7 +25,16 @@ describe('courbes tick par tick', () => {
   it('l’infobulle lit tous les panneaux au même tick, valeur d’abord', () => {
     const rows = tooltipRows(model, 30);
     expect(rows).toHaveLength(5);
-    expect(rows.find((r) => r.label === 'Database')!.value).toMatch(/%$/);
+    expect(rows.find((r) => r.label === 'Database')!.value).toMatch(/^\d+ req\/s · charge \d+ %$/);
+  });
+
+  it('un bâtiment se lit en débit reçu et en charge, le trafic en req/s', () => {
+    const db = model.panels.find((p) => p.id === 'db')!;
+    expect(db.rps![30]).toBeGreaterThan(0);
+    expect(readingAt(db, 30)).toBe(`${Math.round(db.rps![30]!)} req/s · charge ${Math.round(db.values[30]! * 100)} %`);
+    expect(readingAt(model.panels[0]!, 30)).toMatch(/ req\/s$/);
+    // En direct, la valeur du tick joué s'affiche à côté de chaque panneau.
+    expect(renderChart(model, { live: true })).toContain('data-chart="now"');
   });
 
   it('abscisse et tick se répondent', () => {

@@ -92,6 +92,43 @@ function nameOf(type: string, catalog: Catalog): string {
   return metaphor ? `${tech} (${metaphor})` : tech;
 }
 
+const KIND_ICONS: Record<string, string> = { read: '📖', write: '✍️', async: '✉️' };
+const KIND_NAMES: Record<string, string> = { read: 'une lecture', write: 'une écriture', async: 'un événement' };
+
+/** Le trafic de la vague à son plus fort, par type : ce que le joueur doit dimensionner. */
+function trafficPeak(wave: Wave): string {
+  const peak = Math.max(...wave.profile.map((p) => p.factor));
+  return (['read', 'write', 'async'] as const)
+    .map((k) => ({ k, rps: wave.sources.reduce((a, src) => a + (src.rps[k] ?? 0), 0) * peak }))
+    .filter((x) => x.rps > 0)
+    .map((x) => `${KIND_ICONS[x.k]} ${fmt(x.rps)}`)
+    .join(' · ');
+}
+
+/** La capacité d'un bâtiment dans l'unité où se fait le calcul : le travail par seconde. */
+function capacityText(node: Architecture['nodes'][number], def: Catalog['components'][string], catalog: Catalog): string {
+  const level = (effect: string) =>
+    Object.values(catalog.upgrades)
+      .filter((u) => u.appliesTo === node.type && u.effect.type === effect)
+      .reduce((a, u) => a + (node.upgrades?.[u.id] ?? 0), 0);
+  const instances = 1 + level('instances');
+  const costs = Object.entries(def.workPerRequest)
+    .map(([k, v]) => `${KIND_NAMES[k] ?? k} ${fmt(v)}`)
+    .join(', ');
+  const replica = Object.values(catalog.upgrades).find((u) => u.appliesTo === node.type && u.effect.type === 'readReplicas');
+  const replicas = level('readReplicas');
+  return [
+    `Capacité : ${fmt(def.capacity)} unités de travail par seconde${instances > 1 ? ` × ${instances} instances = ${fmt(def.capacity * instances)}` : ''}.`,
+    costs ? `Coût en travail : ${costs}.` : '',
+    replica && replica.effect.type === 'readReplicas'
+      ? `Chaque réplica ajoute ${fmt(replica.effect.capacityPerReplica)} unités pour les lectures${replicas > 0 ? ` (ici ${replicas}, soit +${fmt(replica.effect.capacityPerReplica * replicas)})` : ''}.`
+      : '',
+    `Latence ${def.latencyMs} ms · prix ${def.cost} · complexité ${def.complexity}.`,
+  ]
+    .filter(Boolean)
+    .join('<br>');
+}
+
 const starIcons = (n: number) => '★'.repeat(n) + '☆'.repeat(3 - n);
 
 /** La barre du haut : la vague, ce que coûte la cité en construction, le score, le menu. */
@@ -111,6 +148,7 @@ export function renderHud(s: ViewState): string {
     gauges = [
       gauge('💰', 'Coût de la vague / budget', `${fmt(cost)} / ${wave.budget}`, cost > wave.budget),
       gauge('⚙️', 'Complexité / plafond', `${complexity} / ${wave.complexityCap}`, complexity > wave.complexityCap),
+      gauge('🧍', 'Trafic au plus fort de la vague, en requêtes par seconde : lectures, écritures, événements', trafficPeak(wave), false),
       gauge('🎯', 'SLA : échecs max, latence p95 max', `${(wave.sla.maxFailureRate * 100).toFixed(0)} % · ${wave.sla.maxP95LatencyMs} ms`, false),
     ].join('');
   }
@@ -159,7 +197,7 @@ export function renderToolbar(s: ViewState): string {
     )
     .join('');
   const palette = Object.values(catalog.components)
-    .filter((d) => d.behavior !== 'source')
+    .filter((d) => d.behavior !== 'source' && !d.prePlaced)
     .map((d) => {
       const style = theme.buildings[d.id];
       const on = tool.kind === 'place' && tool.type === d.id;
@@ -318,7 +356,7 @@ function renderNodeCard(s: ViewState): string {
       <h3>${esc(own.tech)} <small>${esc(own.metaphor)}</small></h3>
       ${node.fixed ? '<p class="muted">Service déjà en place, tenu par une autre équipe : il ne se démolit pas, mais ses évolutions sont à vous.</p>' : ''}
       ${theme.buildings[node.type] ? speech(theme.buildings[node.type]!.role.says, theme.buildings[node.type]!.role.real) : ''}
-      ${def ? `<p class="muted">cap. ${def.capacity}, ${def.latencyMs} ms, coût ${def.cost}, complexité ${def.complexity}</p>` : ''}
+      ${def && def.behavior !== 'source' ? `<p class="figures">${capacityText(node, def, s.catalog)}</p>` : ''}
       <p>${upgradeSelects(node, s.catalog) || '<span class="muted">aucune évolution</span>'}</p>
       ${links ? `<ul>${links}</ul>` : '<p class="muted">Aucun chemin.</p>'}
       <p>
@@ -392,7 +430,7 @@ function renderBuild(s: ViewState, wave: Wave): string {
     .join('');
 
   const addable = Object.values(catalog.components)
-    .filter((d) => d.behavior !== 'source')
+    .filter((d) => d.behavior !== 'source' && !d.prePlaced)
     .map((d) => `<option value="${esc(d.id)}">${esc(d.techName)} — coût ${d.cost}</option>`)
     .join('');
 

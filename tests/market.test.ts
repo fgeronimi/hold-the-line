@@ -22,19 +22,23 @@ describe('le grand marché', () => {
 
   it('vague 1 — les événements passent par une file vers le service e-mail', () => {
     expect(play(M.queued, 'market-open').won).toBe(true);
+    // Appelé en direct, le service e-mail livre tout, mais le client attend l'envoi du mail.
     const inline = play(M.inline, 'market-open');
     expect(inline.won).toBe(false);
-    expect(inline.failuresByReason.undelivered).toBeGreaterThan(0);
+    expect(inline.failuresByReason.undelivered).toBe(0);
+    expect(inline.gauges.latency.value).toBeGreaterThan(60);
   });
 
   it('vague 2 — un pub/sub copie chaque événement aux trois services ; une file les partage', () => {
     const fanned = play(M.fannedOut(), 'three-trades');
     expect(fanned.won).toBe(true);
-    expect(fanned.delivery).toEqual({ expected: 18000, delivered: 18000 });
+    const expected = fanned.delivery!.expected;
+    expect(fanned.delivery!.delivered).toBeCloseTo(expected);
+    // Un seul service sur trois servi, ou chacun un tiers : deux tiers des livraisons manquent.
     for (const arch of [M.queued, M.sharedQueue]) {
       const r = play(arch, 'three-trades');
       expect(r.won).toBe(false);
-      expect(r.failuresByReason.undelivered).toBeCloseTo(12000);
+      expect(r.failuresByReason.undelivered).toBeCloseTo((expected * 2) / 3);
     }
   });
 
@@ -65,7 +69,7 @@ describe('le grand marché', () => {
     expect(play(M.fannedOut({ ...answer, extraInstances: 2 }), 'sales').won).toBe(false);
   });
 
-  it('des services abonnés directement, sans file, noient la base', () => {
+  it('des services abonnés directement, sans file, font attendre le client', () => {
     const fanned = M.fannedOut();
     const direct: Architecture = {
       nodes: fanned.nodes.filter((n) => !n.id.startsWith('q-')),
@@ -73,12 +77,29 @@ describe('le grand marché', () => {
     };
     const r = play(direct, 'three-trades');
     expect(r.won).toBe(false);
-    expect(r.nodes.db!.peakUtilization).toBeGreaterThan(1);
+    expect(r.gauges.latency.value).toBeGreaterThan(60);
   });
 
   it('un service que rien n’alimente ne reçoit rien : ses événements comptent comme non livrés', () => {
     const r = play(without(M.fannedOut(), 'q-stock'), 'three-trades');
     expect(r.won).toBe(false);
-    expect(r.failuresByReason.undelivered).toBeCloseTo(6000);
+    expect(r.failuresByReason.undelivered).toBeCloseTo(r.delivery!.expected / 3);
+  });
+});
+
+describe('ce que le rendu montre des incidents du marché', () => {
+  const sum = (arch: Architecture, id: string, key: 'duplicates' | 'deduplicated' | 'lost') =>
+    play(arch, id).ticks.reduce((a, t) => a + Object.values(t.nodes).reduce((b, n) => b + (n[key] ?? 0), 0), 0);
+
+  it('compte les doublons traités deux fois, ou écartés par l’idempotence', () => {
+    expect(sum(M.fannedOut(), 'double-delivery', 'duplicates')).toBeGreaterThan(0);
+    expect(sum(M.fannedOut(), 'double-delivery', 'deduplicated')).toBe(0);
+    expect(sum(M.fannedOut({ idempotence: true }), 'double-delivery', 'duplicates')).toBe(0);
+    expect(sum(M.fannedOut({ idempotence: true }), 'double-delivery', 'deduplicated')).toBeGreaterThan(0);
+  });
+
+  it('compte les événements perdus avant publication, sauf avec l’outbox', () => {
+    expect(sum(M.fannedOut({ idempotence: true }), 'lost-orders', 'lost')).toBeGreaterThan(0);
+    expect(sum(M.fannedOut({ idempotence: true, outbox: true }), 'lost-orders', 'lost')).toBe(0);
   });
 });

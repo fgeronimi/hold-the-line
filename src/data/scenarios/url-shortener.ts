@@ -2,6 +2,8 @@ import type { Scenario, TrafficSource } from '../../engine/types.ts';
 
 const TICKS = 60;
 const flat = [{ until: TICKS, factor: 1 }];
+/** Le trafic monte au départ et retombe à la fin (décision S11). */
+const RAMP = { up: 8, down: 8 };
 
 const users = (rps: TrafficSource['rps']): TrafficSource => ({ id: 'users', clients: 1000, rps });
 
@@ -22,6 +24,7 @@ export const urlShortener: Scenario = {
       title: 'Lancement',
       briefing: 'Le service ouvre : 100 requêtes par seconde, 90 % de lectures (les redirections) et 10 % d’écritures (les raccourcis créés). Un serveur d’application et une base de données suffisent.',
       ticks: TICKS,
+      ramp: RAMP,
       profile: flat,
       sources: [users({ read: 90, write: 10 })],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
@@ -36,6 +39,7 @@ export const urlShortener: Scenario = {
       title: 'Les lectures explosent',
       briefing: 'Les liens circulent : 900 lectures par seconde, toujours 10 écritures. Une base seule encaisse 600 requêtes par seconde.',
       ticks: TICKS,
+      ramp: RAMP,
       profile: flat,
       sources: [users({ read: 900, write: 10 })],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
@@ -51,6 +55,7 @@ export const urlShortener: Scenario = {
       briefing:
         'Une campagne est lancée : le trafic monte en quelques secondes jusqu’à 5 fois la normale (4 500 lectures par seconde), pendant un tiers de la vague. Une instance de serveur d’application traite 1 500 requêtes par seconde.',
       ticks: TICKS,
+      ramp: RAMP,
       profile: [
         { until: 20, factor: 1 },
         { until: 22, factor: 2 },
@@ -72,6 +77,7 @@ export const urlShortener: Scenario = {
       briefing:
         'La campagne a marché, le trafic de pointe est devenu la norme. 50 partenaires intègrent l’API, à 30 requêtes par seconde chacun. Et un scraper, depuis 2 adresses, envoie 1 000 requêtes par seconde par adresse en visitant tous les liens.',
       ticks: TICKS,
+      ramp: RAMP,
       profile: flat,
       sources: [users({ read: 3000, write: 50 }), partners({ read: 1500 }), scraper],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
@@ -86,6 +92,7 @@ export const urlShortener: Scenario = {
       briefing:
         'Le marketing veut le nombre de clics de chaque lien. Chaque redirection doit être comptée, sans ralentir la redirection.',
       ticks: TICKS,
+      ramp: RAMP,
       profile: flat,
       sources: [users({ read: 3000, write: 50, async: 3000 }), partners({ read: 1500, async: 1500 }), scraper],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },

@@ -54,7 +54,7 @@ describe('guideStep', () => {
     const { market } = await import('../src/data/scenarios/market.ts');
     const M = await import('../src/data/scenarios/market.archetypes.ts');
     const first = market.waves[0]!;
-    const noQueue = { nodes: M.inline.nodes, links: M.inline.links };
+    const noQueue = { nodes: M.inline.nodes, links: M.inline.links.filter((l) => l.to !== 'mail') };
     expect(guideStep(noQueue, catalog, first, 0, { nodes: [], links: [] }, false).id).toBe('feed-consumer');
     expect(guideStep(M.queued, catalog, first, 0, { nodes: [], links: [] }, false).id).toBe('launch');
   });
@@ -62,11 +62,12 @@ describe('guideStep', () => {
   it('signale un bâtiment qui reçoit du travail sans rien pour l’évacuer', async () => {
     const { market } = await import('../src/data/scenarios/market.ts');
     const M = await import('../src/data/scenarios/market.archetypes.ts');
-    const mailToDb = M.queued.links.findIndex((l) => l.from === 'mail' && l.to === 'db');
-    const deadEnd = { ...M.queued, links: M.queued.links.filter((_, i) => i !== mailToDb) };
+    const deadEnd = { ...M.queued, links: M.queued.links.filter((l) => l.from !== 'queue') };
     const step = guideStep(deadEnd, catalog, market.waves[0]!, 0, { nodes: [], links: [] }, false);
     expect(step.id).toBe('dead-end');
-    expect(step.real).toContain('Service e-mail');
+    expect(step.real).toContain('Message queue');
+    // Un service métier termine l'événement lui-même : il n'est pas une impasse.
+    expect(guideStep(M.queued, catalog, market.waves[0]!, 0, { nodes: [], links: [] }, false).id).toBe('launch');
     // Le cache est consulté, pas traversé : sans lien sortant, il n'est pas une impasse.
     expect(guideStep(A.withCache, catalog, urlShortener.waves[1]!, 1, { nodes: [], links: [] }).id).toBe('launch');
   });
