@@ -4,7 +4,7 @@ import type { RequestKind } from '../engine/types.ts';
  * Formes low-poly que la scène sait construire. Le thème choisit une forme par composant :
  * les formes sont du code, mais leur attribution, les noms et les couleurs sont des données.
  */
-export type Shape = 'hamlet' | 'watchtower' | 'gatehouse' | 'tower' | 'lectern' | 'keep' | 'stables';
+export type Shape = 'hamlet' | 'watchtower' | 'gatehouse' | 'tower' | 'lectern' | 'keep' | 'stables' | 'belfry';
 
 export interface BuildingStyle {
   /** Nom dans la métaphore ; le nom technique du catalogue est toujours affiché à côté. */

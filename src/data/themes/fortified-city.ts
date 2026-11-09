@@ -53,9 +53,27 @@ export const fortifiedCity: Theme = {
         real: 'La file de messages découple : le serveur dépose le travail et répond tout de suite, un worker le traite à son rythme.',
       },
       metaphor: 'Relais de poste', icon: '🐎', shape: 'stables', color: '#9c6b3f', accent: '#6b4226' },
+    pubsub: {
+      role: {
+        says: 'Au pied du clocher, le crieur public annonce chaque nouvelle à tous ceux qui se sont abonnés à ses annonces : chacun l’entend, personne ne la prend aux autres.',
+        real: 'Le pub/sub diffuse chaque événement à tous ses abonnés : chaque service en reçoit une copie, sans que le serveur qui publie les connaisse.',
+      },
+      metaphor: 'Crieur public', icon: '📣', shape: 'belfry', color: '#c7bfae', accent: '#3d5a80' },
   },
   narrator: { name: 'Le chambellan', icon: '🎩' },
   narratives: {
+    // Le grand marché.
+    'market-open':
+      'Sire, le grand marché ouvre ses étals. Cent commandes chaque seconde, chacune à consigner au grand livre… et chacune réclame une lettre de confirmation. Les archives n’écriront pas tout à la fois.',
+    'three-trades':
+      'Le magasinier, le trésorier et le messager veulent tous apprendre chaque commande, et chacun la sienne. Si l’un l’apprend, les deux autres doivent l’apprendre aussi.',
+    'double-delivery':
+      'Les annonces se répètent parfois : il arrive qu’une même commande soit criée deux fois. Gare à ne pas la servir deux fois, ni à faire payer deux fois le client.',
+    'lost-orders':
+      'Les scribes consignent la commande, puis courent l’annoncer. Mais certains tombent en chemin : la commande est au grand livre, et personne n’en a rien su.',
+    sales:
+      'Les soldes, Sire ! Toute la ville vient voir où en sont ses commandes, les annonces se répètent et des scribes tombent en chemin. Tout ce que vous avez appris, il faudra le tenir ensemble.',
+    // Les portes de la cité.
     launch:
       'Sire, le bureau des raccourcis ouvre ses portes. Une centaine de voyageurs par seconde : presque tous demandent leur chemin, quelques-uns déposent un nouveau raccourci. Une tour de scribes et les archives devraient suffire… à condition de les relier.',
     'read-surge':

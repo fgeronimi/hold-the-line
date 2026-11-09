@@ -125,6 +125,20 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
   const limited = result.events.find((e) => e.type === 'rate-limited');
   if (result.failuresByReason['rate-limited'] > 0) tell(limited?.type === 'rate-limited' ? limited.tick : 0, fromLesson(problem, reasonLessons.legitLimited, {}));
   if (result.failuresByReason['lost-at-edge'] > 0) tell(0, fromLesson(problem, reasonLessons.lostAtEdge, {}));
+  // Doublons et pertes : racontés par leur incident quand il y en a un, sinon ici.
+  const told = (effect: string) => incidents.some((i) => i.effect.type === effect);
+  const firstFailing = (reason: string) => Object.entries(result.nodes).find(([, x]) => x.failed > 0)?.[0] ?? reason;
+  if (result.failuresByReason.duplicate > 0 && !told('duplicate-delivery')) {
+    tell(0, fromLesson(problem, reasonLessons.duplicate, { name: name(firstFailing('consommateur')) }));
+  }
+  if (result.failuresByReason['lost-event'] > 0 && !told('publish-loss')) {
+    tell(0, fromLesson(problem, reasonLessons.lostEvent, { name: name(firstFailing('serveur')) }));
+  }
+  if (result.failuresByReason.undelivered > 0 && result.delivery && wave.fanOut) {
+    const reached = (result.delivery.delivered / result.delivery.expected) * wave.fanOut;
+    tell(0, fromLesson(problem, reasonLessons.undelivered, { fanOut: String(wave.fanOut), reached: reached.toFixed(1).replace('.', ',') }));
+  }
+
   const overflowed = new Set<string>();
   for (const e of result.events) {
     if (e.type !== 'queue-overflow' || overflowed.has(e.node)) continue;
@@ -242,13 +256,34 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
         tech: `Le rate limiting a écarté ${Math.round(result.shed)} requêtes abusives du scraper, et aucune requête légitime.`,
       });
     }
-    for (const id of ofBehavior('queue')) {
-      if (flow(result.ticks, 'async', 'to', id) > 0) {
+    for (const id of ofBehavior('pubsub')) {
+      const subscribers = arch.links.filter((l) => l.from === id).length;
+      if (flow(result.ticks, 'async', 'to', id) > 0 && subscribers > 0) {
         worked.push({
-          says: `Votre ${metaphor(id)} a emporté les comptes de passages sans faire attendre un seul voyageur.`,
-          tech: 'La file sort le comptage des clics du chemin critique : la redirection répond tout de suite, un worker écrit en base à son rythme.',
+          says: `Votre ${metaphor(id)} a annoncé chaque commande à ${subscribers} corps de métier à la fois.`,
+          tech: `Le pub/sub a copié chaque événement à ses ${subscribers} abonnés : chaque service reçoit tout, sans que le serveur les connaisse.`,
         });
       }
+    }
+    if (arch.nodes.some((n) => (n.upgrades?.idempotence ?? 0) > 0) && result.failuresByReason.duplicate === 0) {
+      worked.push({
+        says: 'Vos ateliers reconnaissent une commande déjà servie : personne n’a été débité deux fois.',
+        tech: 'Les consommateurs idempotents écartent les messages déjà traités.',
+      });
+    }
+    if (arch.nodes.some((n) => (n.upgrades?.outbox ?? 0) > 0) && result.failuresByReason['lost-event'] === 0) {
+      worked.push({
+        says: 'Chaque commande est consignée au grand livre avec son annonce : aucune ne s’est perdue.',
+        tech: 'L’outbox écrit l’événement dans la même transaction que la commande.',
+      });
+    }
+    // Une phrase pour toutes les files : elles font le même travail.
+    const queues = ofBehavior('queue').filter((id) => flow(result.ticks, 'async', 'to', id) > 0);
+    if (queues.length > 0) {
+      worked.push({
+        says: `${queues.length > 1 ? `Vos ${queues.length} relais de poste ont` : `Votre ${metaphor(queues[0]!)} a`} emporté le travail de fond sans faire attendre personne.`,
+        tech: 'La file sort ce travail du chemin critique : la requête répond tout de suite, un worker traite les messages à son rythme, par lots.',
+      });
     }
     return worked;
   }

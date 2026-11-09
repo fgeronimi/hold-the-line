@@ -179,3 +179,12 @@ button.primary:hover { background: var(--wood-dark); }
 .dialog .tabs { display: flex; gap: 6px; margin: 4px 0 8px; }
 .dialog .tabs button.active { background: var(--wood); color: #fff; }
 .replay-charts { position: absolute; z-index: 2; top: 118px; right: 10px; width: min(600px, calc(100vw - 20px)); max-height: calc(100vh - 270px); overflow-y: auto; padding: 8px; background: var(--parchment); border: 2px solid var(--wood); border-radius: 10px; box-shadow: var(--shadow); }
+
+/* Écran de choix du scénario. */
+.scenario-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 10px; }
+.scenario-card { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 12px 14px; text-align: left; background: #fff8e6; border: 2px solid var(--wood); border-radius: 10px; }
+.scenario-card:hover:not(:disabled) { background: #f0dfb4; }
+.scenario-card small { text-transform: uppercase; letter-spacing: .06em; color: #7a6a55; font-size: 11px; }
+.scenario-card b { font-family: Georgia, serif; font-size: 18px; }
+.scenario-card p { margin: 4px 0; font-size: 13px; }
+.scenario-card em { font-style: normal; font-weight: bold; color: var(--wood-dark); }

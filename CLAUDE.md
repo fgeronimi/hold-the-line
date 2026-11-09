@@ -55,8 +55,9 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
 - `src/balance/` : outillage d'équilibrage (énumération canonique, rapport par vague) ;
   hors moteur, il ne fait qu'appeler `simulateWave`.
 - `src/data/catalog.ts` : composants et évolutions. `src/data/scenarios/` : un fichier
-  par scénario, plus ses architectures types (`*.archetypes.ts`).
-- `tests/url-shortener.test.ts` verrouille l'équilibrage : chaque vague gagnée avec la
+  par scénario, plus ses architectures types (`*.archetypes.ts`) ; `index.ts` liste les
+  scénarios de l'écran de choix. Une partie par scénario, sauvegardées ensemble.
+- `tests/url-shortener.test.ts` et `tests/market.test.ts` verrouillent l'équilibrage : chaque vague gagnée avec la
   réponse attendue, perdue sans elle et perdue sur-dimensionnée.
 
 ## Pièges
@@ -72,10 +73,12 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
   de palier, pas des quantités.
 - Imports relatifs avec l'extension `.ts` obligatoire : c'est ce qui permet à Node
   de lancer `scripts/` sans build.
+- `npm run balance` et `tests/balance.test.ts` ne connaissent que le raccourcisseur
+  (topologie canonique) ; le grand marché n'est verrouillé que par ses archétypes.
 - `tests/balance.test.ts` énumère un espace réduit qui doit contenir toutes les réponses
   attendues : si un recalibrage déplace une réponse hors de cet espace, l'agrandir.
 - Le MVP de la spec a été élargi au CDN et à l'autoscaling (`docs/decisions.md`, X1–X4).
-- Le calibrage et la partie sont gardés dans `localStorage` (clé `hold-the-line:v5`) :
+- Le calibrage et la partie sont gardés dans `localStorage` (clé `hold-the-line:v6`) :
   changer la version de la clé dès que la forme de la partie ou du catalogue change.
 - Tout texte venant de l'état passe par `esc()` (interface) ou `escapeHtml()` (rendu)
   avant d'entrer dans le HTML.

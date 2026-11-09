@@ -10,8 +10,10 @@ coût, complexité et fiabilité.
 
 ## Le principe
 
-Le premier scénario, *Les portes de la cité*, est un raccourcisseur d'URL raconté comme
-une cité médiévale. La métaphore aide à se représenter le système ; le vrai nom
+Deux scénarios, au choix dès le lancement : *Les portes de la cité*, un raccourcisseur
+d'URL (serveurs, base, cache, CDN, rate limiting, file de messages), et *Le grand marché*,
+la prise de commande d'une boutique en ligne (pub/sub, idempotence, outbox). Les deux
+sont racontés comme une cité médiévale. La métaphore aide à se représenter le système ; le vrai nom
 technique vient toujours en premier.
 
 | Dans l'architecture | Dans la cité |
@@ -23,6 +25,7 @@ technique vient toujours en premier.
 | Cache (cache-aside) | Carnet du scribe |
 | Database, et ses réplicas en lecture | Archives royales, et leurs copies |
 | Message queue | Relais de poste |
+| Pub/sub | Crieur public, au clocher |
 | Lectures, écritures, tâches async | Messagers, porteurs, mages |
 | Trafic abusif (scraper) | Pillards squelettes |
 
@@ -78,7 +81,7 @@ obligatoire, on le donne quand même. Seuls les modèles utilisés sont copiés 
 
 - [**KayKit Medieval Hexagon Pack 1.0**](https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0) :
   tuiles d'herbe, de route et de rivière, gués et pont, bâtiments (maisons, puits, tours,
-  caserne, château, marché, taverne, porte fortifiée), arbres, rochers, collines et
+  caserne, château, marché, taverne, église, porte fortifiée), arbres, rochers, collines et
   montagnes, caisses, sacs, barrières, drapeaux.
 - [**KayKit Character Pack : Adventurers 1.0**](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0) :
   Rogue, Barbarian et Mage, les requêtes.

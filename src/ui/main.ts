@@ -1,5 +1,5 @@
 import { catalog as defaultCatalog } from '../data/catalog.ts';
-import { urlShortener } from '../data/scenarios/url-shortener.ts';
+import { SCENARIOS, scenarioById } from '../data/scenarios/index.ts';
 import { scoring } from '../data/scoring.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { newGame, playWave, rewindTo } from '../engine/game.ts';
@@ -29,24 +29,59 @@ const START: Architecture = { nodes: [{ id: 'src', type: 'traffic-source', cell:
 
 type Saved = Pick<ViewState, 'catalog' | 'scenario' | 'game' | 'draft'>;
 
-function initialState(): ViewState {
-  const saved = load<Saved>();
-  const game = saved?.game ?? newGame();
+/** Une partie par scénario (décision S2), et le dernier scénario joué. */
+interface Store {
+  current?: string;
+  saves: Record<string, Saved>;
+}
+
+const store: Store = load<Store>() ?? { saves: {} };
+
+const defaultScenario = (id: string) => scenarioById(id) ?? SCENARIOS[0]!.scenario;
+
+/** La partie d'un scénario : celle sauvegardée, ou une nouvelle. */
+function gameOf(id: string): Saved {
+  const saved = store.saves[id];
   return {
     catalog: saved?.catalog ?? structuredClone(defaultCatalog),
-    scenario: saved?.scenario ?? structuredClone(urlShortener),
-    game,
+    scenario: saved?.scenario ?? structuredClone(defaultScenario(id)),
+    game: saved?.game ?? newGame(),
     // Un brouillon d'avant le plateau reçoit des cases et des chemins une fois pour toutes.
     draft: autoPlace(saved?.draft ?? START),
+  };
+}
+
+function initialState(): ViewState {
+  return {
+    ...gameOf(store.current ?? SCENARIOS[0]!.scenario.id),
     attempts: [],
     tool: { kind: 'select' },
-    // Chaque session s'ouvre sur le chambellan, sauf une partie terminée.
-    phase: game.finished ? 'build' : 'briefing',
+    // Chaque session s'ouvre sur l'écran de choix du scénario.
+    phase: 'choose',
     debug: new URLSearchParams(location.search).has('debug'),
     debugTab: 'attempts',
     debriefTab: 'analysis',
     showMenu: false,
+    choices: choices(),
   };
+}
+
+/** Ce que l'écran de choix montre de chaque scénario : sa progression et ses étoiles. */
+function choices(): ViewState['choices'] {
+  return SCENARIOS.map(({ scenario, level, pitch }) => {
+    const game = store.saves[scenario.id]?.game;
+    return {
+      id: scenario.id,
+      title: scenario.title,
+      subtitle: scenario.subtitle,
+      level,
+      pitch,
+      waves: scenario.waves.length,
+      reached: game?.waveIndex ?? 0,
+      stars: game?.stars.reduce((a, x) => a + x, 0) ?? 0,
+      finished: game?.finished ?? false,
+    };
+  });
 }
 
 const root = document.getElementById('app')!;
@@ -77,7 +112,12 @@ function update(patch: Partial<ViewState>): void {
   // Tout brouillon passe par le plateau : un bâtiment ajouté sans case (vue tableau) en reçoit une.
   if (patch.draft) patch = { ...patch, draft: autoPlace(patch.draft) };
   state = { ...state, ...patch };
-  save({ catalog: state.catalog, scenario: state.scenario, game: state.game, draft: state.draft } satisfies Saved);
+  if (state.phase !== 'choose') {
+    store.current = state.scenario.id;
+    store.saves[state.scenario.id] = { catalog: state.catalog, scenario: state.scenario, game: state.game, draft: state.draft };
+    save(store);
+    state.choices = choices();
+  }
   render();
 }
 
@@ -170,7 +210,7 @@ function onBoardClick(cell: BoardCell): void {
 /** Les tentatives ne sont pas sauvegardées : un résultat ne vaut que pour la calibration du moment. */
 function record(attempt: Omit<Attempt, 'id' | 'settings' | 'arch' | 'stars'>, replays: number): Partial<ViewState> & { current: number } {
   const id = nextAttemptId++;
-  const settings = changedSettings({ catalog: defaultCatalog, scenario: urlShortener }, state, attempt.waveIndex);
+  const settings = changedSettings({ catalog: defaultCatalog, scenario: defaultScenario(state.scenario.id) }, state, attempt.waveIndex);
   const stars = starsFor(attempt.result, replays, state.scenario.waves[attempt.waveIndex]!);
   return { attempts: [...state.attempts, { ...attempt, id, settings, arch: state.draft, stars }], selected: id, current: id };
 }
@@ -217,6 +257,22 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     update({ phase: 'briefing', showMenu: false });
   },
   'start-build': () => update({ phase: 'build' }),
+  'choose-scenario': () => {
+    leaveWave();
+    update({ phase: 'choose', showMenu: false });
+  },
+  'pick-scenario': (el) => {
+    const picked = gameOf(el.dataset.scenario!);
+    update({
+      ...picked,
+      attempts: [],
+      selected: undefined,
+      current: undefined,
+      selectedNode: undefined,
+      tool: { kind: 'select' },
+      phase: picked.game.finished ? 'build' : 'briefing',
+    });
+  },
   next: () => {
     leaveWave();
     update({ phase: state.game.finished ? 'build' : 'briefing', selectedNode: undefined });
@@ -293,7 +349,7 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     if (input.dataset.root === 'catalog') update({ catalog: setAt(state.catalog, input.dataset.path!, value) });
     else update({ scenario: setAt(state.scenario, input.dataset.path!, value) });
   },
-  'reset-calibration': () => update({ catalog: structuredClone(defaultCatalog), scenario: structuredClone(urlShortener) }),
+  'reset-calibration': () => update({ catalog: structuredClone(defaultCatalog), scenario: structuredClone(defaultScenario(state.scenario.id)) }),
   export: () => {
     const area = document.getElementById('export') as HTMLTextAreaElement;
     area.hidden = false;

@@ -66,6 +66,7 @@ const SHAPE_MODELS: Record<Shape, ModelId[]> = {
   lectern: ['building_market_blue', 'sack'].map(K),
   keep: ['building_castle_blue', 'building_tower_base_blue'].map(K),
   stables: ['building_tavern_blue', 'fence_wood_straight', 'crate_A_small', 'sack'].map(K),
+  belfry: ['building_church_blue', 'flag_blue'].map(K),
 };
 /** Décor du bord du plateau : reliefs et grands bois, pour fermer le paysage. */
 const EDGE_DECOR = ['mountain_A_grass_trees', 'hills_A_trees', 'trees_A_large', 'trees_B_medium', 'hill_single_A', 'trees_A_medium'];
@@ -626,6 +627,12 @@ export class CityScene {
         }
         break;
       }
+
+      case 'belfry':
+        // Le clocher du crieur, et son fanion.
+        this.put(g, K('building_church_blue'), {}, b);
+        this.put(g, K('flag_blue'), { x: 0.9, z: 0.5, scale: 0.8 }, b);
+        break;
 
       case 'stables':
         // La taverne du relais et son enclos : les colis en attente s'y empilent.

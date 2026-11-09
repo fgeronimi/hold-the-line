@@ -78,8 +78,16 @@ export function tutorialStep(arch: Architecture, catalog: Catalog): TutorialStep
  * le défi de la vague et ce qui bloque le lancement. Ne souffle jamais la parade : c'est
  * au joueur de la trouver, le chambellan l'explique au debrief.
  */
-export function guideStep(arch: Architecture, catalog: Catalog, wave: Wave, waveIndex: number, committed: Architecture): TutorialStep {
-  if (waveIndex === 0) {
+export function guideStep(
+  arch: Architecture,
+  catalog: Catalog,
+  wave: Wave,
+  waveIndex: number,
+  committed: Architecture,
+  /** Le pas-à-pas n'existe que pour la toute première vague du jeu. */
+  tutorial = waveIndex === 0,
+): TutorialStep {
+  if (tutorial) {
     const step = tutorialStep(arch, catalog);
     if (step.id !== 'launch') return step;
   }
@@ -104,7 +112,7 @@ export function guideStep(arch: Architecture, catalog: Catalog, wave: Wave, wave
     };
   }
   const incidents = (wave.incidents ?? []).map((i) => ` Incident annoncé : ${i.title.toLowerCase()} (ticks ${i.from + 1} à ${i.until}).`).join('');
-  if (waveIndex === 0) return { ...tutorialStep(arch, catalog), real: `${tutorialStep(arch, catalog).real}${incidents}` };
+  if (tutorial) return { ...tutorialStep(arch, catalog), real: `${tutorialStep(arch, catalog).real}${incidents}` };
   return {
     id: 'launch',
     says: `${wave.title} : la cité tiendra-t-elle ? Quand vous serez prêt, lancez la vague.`,

@@ -7,6 +7,7 @@ import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { calibrationGroups, formatField, getAt } from './calibration.ts';
 import { analyzeWave, type Finding } from './debrief.ts';
 import { guideStep } from './tutorial.ts';
+import { SCENARIOS } from '../data/scenarios/index.ts';
 import { chartModel, renderChart } from '../render/charts.ts';
 import type { Stars } from '../engine/score.ts';
 
@@ -36,7 +37,7 @@ export type Tool =
   | { kind: 'remove' };
 
 /** Où en est la partie : le chambellan parle, on construit, la vague se joue, on en tire la leçon. */
-export type Phase = 'briefing' | 'build' | 'wave' | 'debrief';
+export type Phase = 'choose' | 'briefing' | 'build' | 'wave' | 'debrief';
 
 export interface ViewState {
   catalog: Catalog;
@@ -60,6 +61,18 @@ export interface ViewState {
   /** Le debrief montre l'analyse du chambellan ou les courbes tick par tick. */
   debriefTab: 'analysis' | 'charts';
   showMenu: boolean;
+  /** L'écran de choix : chaque scénario et où en est sa partie. */
+  choices: {
+    id: string;
+    title: string;
+    subtitle: string;
+    level: string;
+    pitch: string;
+    waves: number;
+    reached: number;
+    stars: number;
+    finished: boolean;
+  }[];
 }
 
 export const esc = (s: unknown) =>
@@ -88,7 +101,7 @@ export function renderHud(s: ViewState): string {
   const wave = s.scenario.waves[shownIndex];
   const n = s.scenario.waves.length;
   let gauges = '';
-  if (wave && s.phase !== 'wave' && s.phase !== 'debrief') {
+  if (wave && s.phase !== 'wave' && s.phase !== 'debrief' && s.phase !== 'choose') {
     const lines = bill(s.draft, s.catalog);
     const cost = lines.reduce((a, l) => a + l.cost, 0) + migrationCost(s.game.committed, s.draft, s.catalog);
     const complexity = lines.reduce((a, l) => a + l.complexity, 0);
@@ -102,6 +115,7 @@ export function renderHud(s: ViewState): string {
   }
   const menu = s.showMenu
     ? `<div class="menu panel">
+        <button data-action="choose-scenario">Changer de scénario</button>
         <button data-action="reset-game">Nouvelle partie</button>
         ${s.game.history
           .slice(0, s.game.waveIndex)
@@ -131,7 +145,7 @@ export function renderToolbar(s: ViewState): string {
   if (s.phase !== 'build' || !wave) return '';
   const { catalog, draft, tool } = s;
   const active = (on: boolean) => (on ? ' active' : '');
-  const guide = guideStep(draft, catalog, wave, s.game.waveIndex, s.game.committed);
+  const guide = guideStep(draft, catalog, wave, s.game.waveIndex, s.game.committed, s.game.waveIndex === 0 && s.scenario.id === SCENARIOS[0]!.scenario.id);
   const hint = (on: boolean) => (on ? ' hint' : '');
   const tools = [
     { kind: 'select', icon: '👆', label: 'Sélection', hint: 'Cliquer un bâtiment pour ouvrir sa fiche' },
@@ -180,6 +194,7 @@ export function renderCard(s: ViewState): string {
 
 /** Les fenêtres : le briefing du chambellan, le debrief d'une vague. */
 export function renderDialog(s: ViewState): string {
+  if (s.phase === 'choose') return renderChoose(s);
   const wave = s.scenario.waves[s.game.waveIndex];
   if (s.phase === 'briefing' && wave) {
     return `<div class="dialog panel">
@@ -216,6 +231,33 @@ export function renderDialog(s: ViewState): string {
       : ''}
     ${a.played && !r.won && s.game.replays > 0 ? `<p class="muted">Chaque nouvel essai coûte 20 % des points de la vague. Si un choix plus ancien bloque, le menu ☰ permet de revenir à une vague antérieure.</p>` : ''}
     <p class="actions">${actions}</p>
+  </div>`;
+}
+
+const capitalize = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/** L'écran de choix du scénario, sans verrou (décision S2). */
+function renderChoose(s: ViewState): string {
+  const cards = s.choices
+    .map((c) => {
+      const progress = c.finished
+        ? `Terminé · ★ ${c.stars} / ${c.waves * 3}`
+        : c.reached > 0
+          ? `Vague ${c.reached + 1} / ${c.waves} · ★ ${c.stars}`
+          : `${c.waves} vagues`;
+      return `<button class="scenario-card" data-action="pick-scenario" data-scenario="${esc(c.id)}">
+        <small>${esc(c.level)}</small>
+        <b>${esc(capitalize(c.subtitle.replace(/^Hold the Line : /, '')))}</b>
+        <span>${esc(c.title)}</span>
+        <p>${esc(c.pitch)}</p>
+        <em>${esc(progress)}</em>
+      </button>`;
+    })
+    .join('');
+  return `<div class="dialog panel">
+    <h2>Hold the Line</h2>
+    ${speech('Sire, quelle partie de la cité voulez-vous défendre ?', 'Choisissez un scénario. Chacun a sa propre partie, vous pouvez passer de l’un à l’autre sans rien perdre.')}
+    <div class="scenario-cards">${cards}</div>
   </div>`;
 }
 
@@ -295,7 +337,9 @@ function upgradeSelects(n: Architecture['nodes'][number], catalog: Catalog): str
             ? i === 0 ? 'off' : `${u.effect.tiersPerClientRps[i - 1]} req/s/client`
             : u.effect.type === 'autoscaling'
               ? i === 0 ? 'off' : `≤ +${i}`
-              : String(i);
+              : u.maxLevel === 1
+                ? i === 0 ? 'non' : 'oui'
+                : String(i);
         return `<option value="${i}" ${i === level ? 'selected' : ''}>${esc(label)}</option>`;
       }).join('');
       return `<label>${esc(u.techName)} <select data-action="upgrade" data-node="${esc(n.id)}" data-upgrade="${esc(u.id)}">${options}</select></label>`;
