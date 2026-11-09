@@ -139,7 +139,11 @@ function format(p: ChartPanel, v: number): string {
 /** Les ids SVG sont globaux au document : deux figures affichées ne doivent pas partager leurs clipPath. */
 let renders = 0;
 
-export function renderChart(m: ChartModel): string {
+/**
+ * `live` : la figure se dévoile au fil de la vague. Un voile cache tout ce qui suit le
+ * curseur, et les pics ne sont pas annoncés : on découvre les échecs quand ils arrivent.
+ */
+export function renderChart(m: ChartModel, opts: { live?: boolean } = {}): string {
   const uid = `c${++renders}`;
   const H = chartHeight(m);
   const x0 = CHART.left;
@@ -169,7 +173,7 @@ export function renderChart(m: ChartModel): string {
     parts.push(
       `<text class="chart-title" x="0" y="${yTop + 12}">${escapeHtml(p.title)}</text>`,
       `<text class="chart-subtitle" x="0" y="${yTop + 25}">${escapeHtml(p.subtitle)}</text>`,
-      `<text class="chart-peak" x="0" y="${yTop + 38}">pic ${escapeHtml(format(p, p.peak))}</text>`,
+      opts.live ? '' : `<text class="chart-peak" x="0" y="${yTop + 38}">pic ${escapeHtml(format(p, p.peak))}</text>`,
       `<line class="chart-base" x1="${x0}" x2="${x1}" y1="${yBottom}" y2="${yBottom}"/>`,
     );
     if (p.threshold) {
@@ -209,6 +213,9 @@ export function renderChart(m: ChartModel): string {
   for (let t = 0; t <= m.ticks; t += 10) {
     parts.push(`<text class="chart-axis" x="${x0 + t * step}" y="${axisY}" text-anchor="middle">${t === 0 ? 'tick 0' : t}</text>`);
   }
+  if (opts.live) {
+    parts.push(`<rect class="chart-veil" data-chart="veil" x="${x0}" y="${CHART.top - 20}" width="${x1 - x0 + CHART.right}" height="${H - CHART.top + 20 - CHART.axis}"/>`);
+  }
   parts.push(
     `<line class="chart-cursor" data-chart="cursor" x1="${x0}" x2="${x0}" y1="${CHART.top - 4}" y2="${H - CHART.axis}" visibility="hidden"/>`,
     `<line class="chart-hair" data-chart="hair" x1="${x0}" x2="${x0}" y1="${CHART.top - 4}" y2="${H - CHART.axis}" visibility="hidden"/>`,
@@ -236,6 +243,9 @@ export function attachChart(root: HTMLElement, m: ChartModel, onSeek?: (tick: nu
   const hair = root.querySelector<SVGLineElement>('[data-chart="hair"]')!;
   const cursor = root.querySelector<SVGLineElement>('[data-chart="cursor"]')!;
   const tip = root.querySelector<HTMLElement>('[data-chart="tip"]')!;
+  const veil = root.querySelector<SVGRectElement>('[data-chart="veil"]');
+  // Sous un voile, on ne lit ni ne saute au-delà de ce qui a déjà été joué.
+  let revealed = veil ? 0 : m.ticks - 1;
 
   const toSvgX = (e: PointerEvent) => {
     const box = svg.getBoundingClientRect();
@@ -243,7 +253,7 @@ export function attachChart(root: HTMLElement, m: ChartModel, onSeek?: (tick: nu
   };
 
   hit.addEventListener('pointermove', (e) => {
-    const tick = tickAt(m, toSvgX(e));
+    const tick = Math.min(revealed, tickAt(m, toSvgX(e)));
     const x = tickX(m, tick);
     hair.setAttribute('x1', String(x));
     hair.setAttribute('x2', String(x));
@@ -275,7 +285,7 @@ export function attachChart(root: HTMLElement, m: ChartModel, onSeek?: (tick: nu
   });
   if (onSeek) {
     hit.style.cursor = 'pointer';
-    hit.addEventListener('click', (e) => onSeek(tickAt(m, toSvgX(e as PointerEvent))));
+    hit.addEventListener('click', (e) => onSeek(Math.min(revealed, tickAt(m, toSvgX(e as PointerEvent)))));
   }
 
   return {
@@ -285,6 +295,11 @@ export function attachChart(root: HTMLElement, m: ChartModel, onSeek?: (tick: nu
       cursor.setAttribute('x1', String(x));
       cursor.setAttribute('x2', String(x));
       cursor.setAttribute('visibility', 'visible');
+      if (veil) {
+        revealed = Math.max(0, Math.min(m.ticks - 1, Math.floor(time)));
+        veil.setAttribute('x', String(x));
+        veil.setAttribute('width', String(Math.max(0, CHART.width - x)));
+      }
     },
   };
 }

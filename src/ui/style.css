@@ -172,6 +172,7 @@ button.primary:hover { background: var(--wood-dark); }
 .chart-cursor { stroke: var(--ink); stroke-width: 1.5; }
 .chart-hair { stroke: #7a6a55; stroke-width: 1; }
 .chart-hit { fill: transparent; }
+.chart-veil { fill: var(--parchment); }
 .chart-tip { position: fixed; z-index: 20; pointer-events: none; padding: 6px 8px; background: #fffaf0; border: 1px solid var(--wood); border-radius: 6px; box-shadow: var(--shadow); font-size: 12px; white-space: nowrap; }
 .chart-tip strong { color: var(--ink); }
 .chart-tip span { color: #7a6a55; }

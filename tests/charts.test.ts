@@ -32,4 +32,11 @@ describe('courbes tick par tick', () => {
     for (const t of [0, 17, 59]) expect(tickAt(model, tickX(model, t))).toBe(t);
     expect(renderChart(model)).toContain('chart-incident');
   });
+
+  it('en direct, un voile cache la suite et les pics ne sont pas annoncés', () => {
+    const live = renderChart(model, { live: true });
+    expect(live).toContain('data-chart="veil"');
+    expect(live).not.toContain('pic ');
+    expect(renderChart(model)).toContain('pic ');
+  });
 });

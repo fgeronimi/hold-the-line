@@ -55,7 +55,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   const panel = document.createElement('div');
   panel.className = 'replay-charts';
   panel.hidden = true;
-  panel.innerHTML = renderChart(model);
+  panel.innerHTML = renderChart(model, { live: true });
   barHost.appendChild(panel);
   const chart = attachChart(panel.querySelector('[data-chart="root"]')!, model, (tick) => {
     time = tick;
