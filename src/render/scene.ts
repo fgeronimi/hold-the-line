@@ -5,6 +5,7 @@ import {
   Color,
   CylinderGeometry,
   DirectionalLight,
+  ExtrudeGeometry,
   Group,
   HemisphereLight,
   InstancedMesh,
@@ -17,6 +18,7 @@ import {
   Plane,
   Raycaster,
   Scene,
+  Shape as Outline,
   Vector2,
   Vector3,
   WebGLRenderer,
@@ -27,7 +29,7 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 import type { Architecture, ArchNode, Catalog, RequestKind, TickMetrics } from '../engine/types.ts';
 import { REQUEST_KINDS } from '../engine/types.ts';
 import { BOARD } from '../data/board.ts';
-import { BRIDGE_MODEL, bridgeRotation, crossingTile, riverCells, riverKeys, riverTile, roadSides, roadTile, TERRAIN_MODELS, type Tile } from './terrain.ts';
+import { BRIDGE_MODEL, bridgeRotation, crossingTile, isRiver, riverCells, riverKeys, riverTile, roadSides, roadTile, TERRAIN_MODELS, type Tile } from './terrain.ts';
 import { HEX_SIZE, HEX_WIDTH, hexAt, hexCenter, hexDistance, hexKey, hexNeighbours, type Hex } from './hex.ts';
 import { escapeHtml } from './html.ts';
 import { Effects } from './effects.ts';
@@ -60,6 +62,8 @@ const POP_TEXT: Record<Outcome['result'], { text: string; className: string }> =
   twice: { text: '×2', className: 'pop ko' },
   ignored: { text: '🔁 déjà reçu', className: 'pop dedup' },
 };
+/** Distance d'un panneau de sens au milieu de la route : sur le bas-côté. */
+const SIGN_OFFSET = 0.5;
 /** Un glisser de moins de quelques pixels reste un clic (le glisser déplace la vue). */
 const CLICK_TOLERANCE_PX = 5;
 
@@ -266,6 +270,7 @@ export class CityScene {
     for (const road of this.layout.roads) this.roads.set(road.key, road);
     this.annexes = this.findAnnexes(arch);
     this.addTerrain();
+    this.addArrows();
     for (const node of arch.nodes) this.addBuilding(node);
     this.addTrees();
     this.showTick(0, undefined, []);
@@ -540,6 +545,56 @@ export class CityScene {
    * rivière, les chemins (la tuile de route qui relie exactement les côtés empruntés, un
    * pont là où ils franchissent la rivière), et l'herbe partout ailleurs, instanciée.
    */
+  /**
+   * Des panneaux au bord de chaque chemin, flèche tournée vers l'arrivée : le sens du lien se
+   * lit sans relancer la vague. Un panneau en sortie de départ, un second sur un long chemin ;
+   * jamais sur un pont. Ils se plantent sur le bas-côté tourné vers la caméra.
+   */
+  private addArrows(): void {
+    const signs: { x: number; z: number; angle: number }[] = [];
+    for (const road of this.layout.roads) {
+      const length = pathLength(road.path);
+      if (length < HEX_WIDTH * 0.9) continue;
+      // Le premier emplacement hors de l'eau, en partant du départ ; un second sur un long chemin.
+      const candidates = Array.from({ length: 9 }, (_, i) => (i + 1) / 10).map((f) => pointAlong(road.path, f));
+      const dry = candidates.filter((c) => !isRiver(hexAt(c.point)));
+      const picks = length > HEX_WIDTH * 4 ? [dry[0], dry.at(-2)] : [dry[Math.floor(dry.length / 3)]];
+      for (const pick of picks) {
+        if (!pick) continue;
+        const { point, angle } = pick;
+        let side = new Vector3(Math.cos(angle), 0, -Math.sin(angle));
+        if (side.x + side.z < 0) side = side.negate();
+        signs.push({ x: point.x + side.x * SIGN_OFFSET, z: point.z + side.z * SIGN_OFFSET, angle });
+      }
+    }
+    if (signs.length === 0) return;
+    // La planche, en flèche vers +x, épaissie en z ; tournée pour pointer vers +z.
+    const board = new Outline();
+    board.moveTo(-0.36, -0.12);
+    board.lineTo(0.18, -0.12);
+    board.lineTo(0.36, 0);
+    board.lineTo(0.18, 0.12);
+    board.lineTo(-0.36, 0.12);
+    board.closePath();
+    const boardGeometry = new ExtrudeGeometry(board, { depth: 0.05, bevelEnabled: false }).translate(0, 0, -0.025).rotateY(-Math.PI / 2);
+    const boards = new InstancedMesh(boardGeometry, new MeshLambertMaterial({ color: '#efe0b9' }), signs.length);
+    const posts = new InstancedMesh(new BoxGeometry(0.07, 0.75, 0.07).translate(0, 0.375, 0), new MeshLambertMaterial({ color: '#6b4226' }), signs.length);
+    signs.forEach((s, i) => {
+      this.dummy.rotation.set(0, s.angle, 0);
+      this.dummy.scale.setScalar(1);
+      this.dummy.position.set(s.x, 0, s.z);
+      this.dummy.updateMatrix();
+      posts.setMatrixAt(i, this.dummy.matrix);
+      this.dummy.position.set(s.x, 0.66, s.z);
+      this.dummy.updateMatrix();
+      boards.setMatrixAt(i, this.dummy.matrix);
+    });
+    for (const m of [posts, boards]) {
+      m.castShadow = true;
+      this.dynamic.add(m);
+    }
+  }
+
   private addTerrain(): void {
     const roads = roadSides(this.layout.roads.map((r) => r.cells));
     const river = riverCells();
