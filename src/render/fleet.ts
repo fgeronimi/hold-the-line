@@ -61,6 +61,10 @@ export class Fleet {
     );
     for (const m of [...this.frames, this.disc]) {
       m.instanceMatrix.setUsage(DynamicDrawUsage);
+      // Three calcule une fois pour toutes la sphère englobante d'un maillage instancié, d'après
+      // les positions du moment : les voyageurs bougent, et au zoom toute la flotte était
+      // jugée hors champ et disparaissait. Ils sont toujours sur le plateau : on ne découpe pas.
+      m.frustumCulled = false;
       m.count = 0;
       scene.add(m);
     }

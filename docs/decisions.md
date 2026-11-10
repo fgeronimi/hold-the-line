@@ -119,7 +119,7 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 
 ## Prochaines étapes
 
-1. Faire jouer 2 ou 3 personnes de la cible : le jeu est publié sur GitHub Pages.
+1. Faire jouer 2 ou 3 personnes de la cible, avec `docs/test-de-jeu.md`.
 2. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
    comprise (B4). Incidents en vagues 4 et 5 du raccourcisseur (demande un recalibrage).
 3. Reproduire les fiches du calendrier dans le jeu (I2, P3).
