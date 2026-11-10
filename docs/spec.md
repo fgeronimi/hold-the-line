@@ -262,8 +262,12 @@ et déterministe, séparée de l'affichage.
   On pose en cliquant ou en glissant depuis la palette ; posé sur un chemin, un bâtiment
   s'insère dans le lien quand c'est sensé (I11) ; on déplace un bâtiment en le
   glissant ; on relie en cliquant A puis B, et le plus court chemin de cases se trace seul.
-  Annuler et rétablir (⌘Z, ⇧⌘Z). Les chemins sont de la mise en scène : la simulation les
-  ignore, et il n'y a pas de géographie (P2).
+  Annuler et rétablir (⌘Z, ⇧⌘Z). Cliquer une case vide ouvre les fiches des bâtiments à y
+  construire ; au pied du bâtiment sélectionné, des pastilles pour le déplacer, le retirer et
+  acheter ses évolutions (I12). Les évolutions se voient : fondations et chantier de
+  l'autoscaling sur une case voisine, guérite du disjoncteur, icônes sous le nom. Des
+  panneaux au bord des chemins donnent le sens des liens (I13). Les chemins sont de la mise
+  en scène : la simulation les ignore, et il n'y a pas de géographie (P2).
 - **Vague** (R7, R8, R10, R14, R15) : chaque requête est un personnage qui marche des
   hameaux au bâtiment qui la sert, puis revient avec la réponse ; un disque au sol dit son
   type. Pastilles +1, ✕ −1, 🛡. Les problèmes se voient sur place : bâtiment qui tremble et
