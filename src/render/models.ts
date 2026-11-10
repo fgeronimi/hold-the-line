@@ -77,15 +77,40 @@ export class ModelLibrary {
     return { object, materials };
   }
 
-  /**
-   * Fige un personnage animé dans une pose de sa première animation, et le fusionne en une
-   * seule géométrie (un groupe par matériau). Des centaines de personnages squelettés
-   * coûteraient trop cher ; une géométrie figée s'instancie comme une simple boîte.
-   * La géométrie est ramenée à la hauteur voulue, pieds au sol et centrée.
-   */
+  /** Un personnage figé dans une seule pose de sa marche (voir `bakeWalk`). */
   bakeCharacter(id: ModelId, height: number, poseAt = 0.25): { geometry: BufferGeometry; materials: Material[] } {
+    const { frames, materials } = this.bakeWalk(id, height, 1, poseAt);
+    return { geometry: frames[0]!, materials };
+  }
+
+  /**
+   * Fige un personnage animé dans `count` poses régulièrement réparties sur sa première
+   * animation (la marche), chacune fusionnée en une seule géométrie (un groupe par matériau).
+   * Des centaines de personnages squelettés coûteraient trop cher ; quelques poses figées
+   * s'instancient comme de simples boîtes, et les alterner fait marcher. Toutes les poses
+   * sont ramenées à la hauteur voulue avec la même transformation, celle de la première :
+   * sinon le personnage tressauterait d'une pose à l'autre.
+   */
+  bakeWalk(id: ModelId, height: number, count: number, firstPose = 0): { frames: BufferGeometry[]; materials: Material[] } {
     const source = this.models.get(id);
     if (!source) throw new Error(`Modèle non chargé : ${id}`);
+    let materials: Material[] = [];
+    const posed = Array.from({ length: count }, (_, i) => {
+      const baked = this.pose(source, (firstPose + i / count) % 1, id);
+      materials = baked.materials;
+      return baked.geometry;
+    });
+    const box = new Box3().setFromBufferAttribute(posed[0]!.getAttribute('position') as BufferAttribute);
+    const scale = height / (box.max.y - box.min.y);
+    const center = box.getCenter(new Vector3());
+    for (const g of posed) {
+      g.translate(-center.x, -box.min.y, -center.z);
+      g.scale(scale, scale, scale);
+    }
+    return { frames: posed, materials };
+  }
+
+  private pose(source: Loaded, poseAt: number, id: ModelId): { geometry: BufferGeometry; materials: Material[] } {
     const scene = source.scene;
     const clip = source.animations[0];
     if (clip) {
@@ -105,14 +130,14 @@ export class ModelLibrary {
       if (o instanceof SkinnedMesh) {
         // Pose figée : chaque sommet est déplacé par ses os, puis mis en coordonnées du monde.
         o.skeleton.update();
-        const posed = new Float32Array(position.count * 3);
+        const moved = new Float32Array(position.count * 3);
         for (let i = 0; i < position.count; i++) {
           v.fromBufferAttribute(position, i);
           o.applyBoneTransform(i, v);
           v.applyMatrix4(o.matrixWorld);
-          posed.set([v.x, v.y, v.z], i * 3);
+          moved.set([v.x, v.y, v.z], i * 3);
         }
-        g.setAttribute('position', new BufferAttribute(posed, 3));
+        g.setAttribute('position', new BufferAttribute(moved, 3));
       } else {
         g.applyMatrix4(o.matrixWorld);
       }
@@ -131,11 +156,6 @@ export class ModelLibrary {
 
     const geometry = mergeGeometries(parts, true);
     if (!geometry) throw new Error(`Impossible de fusionner le personnage : ${id}`);
-    const box = new Box3().setFromBufferAttribute(geometry.getAttribute('position') as BufferAttribute);
-    const scale = height / (box.max.y - box.min.y);
-    const center = box.getCenter(new Vector3());
-    geometry.translate(-center.x, -box.min.y, -center.z);
-    geometry.scale(scale, scale, scale);
     return { geometry, materials };
   }
 }

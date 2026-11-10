@@ -111,6 +111,7 @@ button.primary:hover { background: var(--wood-dark); }
 .pop.ok { background: var(--ok); }
 .pop.ko { background: #d62828; }
 .pop.shield { background: #2b2d42; }
+.pop.dedup { background: #9b5de5; }
 /* Incidents sur le plateau (vitrine.html les montre un par un). */
 .city-label .hourglass { display: inline-block; color: inherit; animation: hourglass 1.6s ease-in-out infinite; }
 @keyframes hourglass { 0%, 70% { transform: rotate(0); } 100% { transform: rotate(180deg); } }

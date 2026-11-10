@@ -80,6 +80,7 @@ function initialState(): ViewState {
     ...gameOf(store.current ?? SCENARIOS[0]!.scenario.id),
     attempts: [],
     tool: { kind: 'select' },
+    history: { undo: 0, redo: 0 },
     // Chaque session s'ouvre sur l'écran de choix du scénario.
     phase: 'choose',
     debug: new URLSearchParams(location.search).has('debug'),
@@ -132,10 +133,30 @@ let stopWave: (() => void) | undefined;
 /** Ce que le plateau affiche déjà : on ne le reconstruit que si le brouillon ou le catalogue change. */
 let shown: { draft: Architecture; catalog: ViewState['catalog'] } | undefined;
 
+/**
+ * Annuler et rétablir, pendant la construction. Pas sauvegardé : une session qui recommence
+ * repart de son brouillon. Remis à zéro dès que le brouillon change de nature (vague lancée,
+ * autre scénario, retour en arrière dans la partie).
+ */
+const undo: Architecture[] = [];
+const redo: Architecture[] = [];
+const MAX_UNDO = 50;
+let restoring = false;
+
+function forgetHistory(): void {
+  undo.length = 0;
+  redo.length = 0;
+}
+
 function update(patch: Partial<ViewState>): void {
   // Tout brouillon passe par le plateau : un bâtiment ajouté sans case (vue tableau) en reçoit une.
   if (patch.draft) patch = { ...patch, draft: autoPlace(patch.draft) };
-  state = { ...state, ...patch };
+  if (patch.draft && patch.draft !== state.draft && state.phase === 'build' && !restoring) {
+    undo.push(state.draft);
+    if (undo.length > MAX_UNDO) undo.shift();
+    redo.length = 0;
+  }
+  state = { ...state, ...patch, history: { undo: undo.length, redo: redo.length } };
   if (state.phase !== 'choose') {
     store.current = state.scenario.id;
     const id = state.scenario.id;
@@ -209,6 +230,59 @@ function applied(result: BoardResult, extra: Partial<ViewState> = {}): void {
   if (result.ok) update({ draft: result.arch, boardMessage: undefined, ...extra });
   else update({ boardMessage: result.reason });
 }
+
+/** Revient au brouillon d'avant (ou d'après) : la dernière action de construction. */
+function travel(from: Architecture[], to: Architecture[]): void {
+  const draft = from.pop();
+  if (!draft || state.phase !== 'build') return;
+  to.push(state.draft);
+  restoring = true;
+  update({ draft, selectedNode: undefined, tool: { kind: 'select' }, boardMessage: undefined });
+  restoring = false;
+}
+
+/** On saisit un bâtiment en mode sélection ; les clients restent à l'entrée du plateau. */
+function canDrag(cell: BoardCell): boolean {
+  if (state.phase !== 'build' || state.tool.kind !== 'select') return false;
+  const here = nodeAt(state.draft, cell);
+  return here !== undefined && state.catalog.components[here.type]?.behavior !== 'source';
+}
+
+function onDragStart(cell: BoardCell): void {
+  const here = nodeAt(state.draft, cell);
+  if (here) update({ tool: { kind: 'move', id: here.id }, selectedNode: here.id, boardMessage: undefined });
+}
+
+function onDrop(cell: BoardCell | undefined): void {
+  const tool = state.tool;
+  if (tool.kind !== 'move') return;
+  const node = state.draft.nodes.find((n) => n.id === tool.id);
+  const back = { tool: { kind: 'select' } as Tool, selectedNode: tool.id };
+  // Lâché hors du plateau ou sur sa propre case : rien ne bouge.
+  if (!cell || !node || (node.cell && node.cell.q === cell.q && node.cell.r === cell.r)) return update(back);
+  const result = moveNode(state.draft, tool.id, cell);
+  update(result.ok ? { draft: result.arch, boardMessage: undefined, ...back } : { boardMessage: result.reason, ...back });
+}
+
+/** Un bâtiment de la palette glissé jusqu'au plateau y est posé, comme avec l'outil Poser. */
+let paletteDrag: { type: string; x: number; y: number; moved: boolean } | undefined;
+root.addEventListener('pointerdown', (e) => {
+  const button = (e.target as Element).closest<HTMLElement>('[data-tool="place"][data-type]');
+  if (!button || state.phase !== 'build') return;
+  paletteDrag = { type: button.dataset.type!, x: e.clientX, y: e.clientY, moved: false };
+});
+window.addEventListener('pointermove', (e) => {
+  if (!paletteDrag || paletteDrag.moved || Math.hypot(e.clientX - paletteDrag.x, e.clientY - paletteDrag.y) < 6) return;
+  paletteDrag.moved = true;
+  update({ tool: { kind: 'place', type: paletteDrag.type }, boardMessage: undefined });
+});
+window.addEventListener('pointerup', (e) => {
+  const drag = paletteDrag;
+  paletteDrag = undefined;
+  if (!drag?.moved || !scene || !(e.target instanceof HTMLCanvasElement)) return;
+  const cell = scene.cellAt(e.clientX, e.clientY);
+  if (cell) applied(placeNode(state.draft, drag.type, cell), { tool: { kind: 'select' } });
+});
 
 function onBoardClick(cell: BoardCell): void {
   if (state.phase !== 'build') return;
@@ -288,6 +362,7 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     update({ phase: 'choose', showMenu: false });
   },
   'pick-scenario': (el) => {
+    forgetHistory();
     const picked = gameOf(el.dataset.scenario!);
     update({
       ...picked,
@@ -308,6 +383,8 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     update({ phase: 'build' });
   },
   deselect: () => update({ selectedNode: undefined }),
+  undo: () => travel(undo, redo),
+  redo: () => travel(redo, undo),
 
   tool: (el) => {
     const kind = el.dataset.tool as Tool['kind'];
@@ -346,6 +423,7 @@ const actions: Record<string, (el: HTMLElement) => void> = {
   revert: () => update({ draft: committedOrStart(), selectedNode: undefined }),
 
   play: () => {
+    forgetHistory();
     const waveIndex = state.game.waveIndex;
     const wave = state.scenario.waves[waveIndex]!;
     const replays = state.game.replays;
@@ -390,11 +468,13 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     area.select();
   },
   rewind: (el) => {
+    forgetHistory();
     leaveWave();
     const game = rewindTo(state.game, Number(el.dataset.wave));
     update({ game, draft: committedOrStart(game), selectedNode: undefined, phase: 'briefing', showMenu: false });
   },
   'reset-game': () => {
+    forgetHistory();
     leaveWave();
     update({
       game: newGame(),
@@ -424,6 +504,11 @@ window.addEventListener('keydown', (e) => {
   // Pas de raccourci pendant la saisie d'un champ (calibrage, vue tableau).
   if (e.target instanceof Element && e.target.closest('input, select, textarea')) return;
   if (e.key === 'Escape' && state.phase === 'build') update({ tool: { kind: 'select' }, boardMessage: undefined, showMenu: false });
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z' || e.key === 'y')) {
+    e.preventDefault();
+    if (e.key === 'y' || e.shiftKey) travel(redo, undo);
+    else travel(undo, redo);
+  }
   if (e.key === 'd' || e.key === 'D') update({ debug: !state.debug });
 });
 render();
@@ -434,7 +519,7 @@ void (async () => {
     const { CityScene } = await import('../render/scene.ts');
     scene = await CityScene.create(regions.board, state.catalog, theme, import.meta.env.BASE_URL);
     regions.board.querySelector('.replay-loading')?.remove();
-    scene.events = { canUse, onClick: onBoardClick };
+    scene.events = { canUse, onClick: onBoardClick, canDrag, onDragStart, onDrop };
     syncBoard();
   } catch (e) {
     regions.board.querySelector('.replay-loading')!.textContent = `Impossible de charger le plateau : ${String(e)}`;

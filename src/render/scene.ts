@@ -1,18 +1,14 @@
 import {
   AmbientLight,
   Box3,
-  BoxGeometry,
   Color,
   CylinderGeometry,
   DirectionalLight,
-  DynamicDrawUsage,
   Group,
   HemisphereLight,
   InstancedMesh,
   Mesh,
-  CircleGeometry,
   MeshBasicMaterial,
-  MeshLambertMaterial,
   Object3D,
   OrthographicCamera,
   PCFSoftShadowMap,
@@ -33,6 +29,7 @@ import { BRIDGE_MODEL, bridgeRotation, crossingTile, riverCells, riverKeys, rive
 import { HEX_SIZE, HEX_WIDTH, hexAt, hexCenter, hexDistance, hexKey, type Hex } from './hex.ts';
 import { escapeHtml } from './html.ts';
 import { Effects } from './effects.ts';
+import { Fleet, WALK_FRAMES, type FleetStyle } from './fleet.ts';
 import { layoutArchitecture, pathLength, pointAlong, type Layout, type Road } from './layout.ts';
 import { ModelLibrary, type ModelId } from './models.ts';
 import { nodeNames, type BuildingStyle, type Shape, type Theme } from './theme.ts';
@@ -58,6 +55,8 @@ const POP_TEXT: Record<Outcome['result'], { text: string; className: string }> =
   served: { text: '+1 👍', className: 'pop ok' },
   refused: { text: '✕ −1', className: 'pop ko' },
   repelled: { text: '🛡', className: 'pop shield' },
+  twice: { text: '×2', className: 'pop ko' },
+  ignored: { text: '🔁 déjà reçu', className: 'pop dedup' },
 };
 /** Un glisser de moins de quelques pixels reste un clic (le glisser déplace la vue). */
 const CLICK_TOLERANCE_PX = 5;
@@ -108,6 +107,11 @@ export interface BoardEvents {
   /** La case survolée, et si l'action en cours y est possible (teinte du curseur). */
   canUse?: (cell: Hex) => boolean;
   onClick?: (cell: Hex) => void;
+  /** Peut-on saisir ce qui est sur cette case pour le glisser ? Le plateau ne défile plus alors. */
+  canDrag?: (cell: Hex) => boolean;
+  /** Le glisser commence vraiment (au-delà de quelques pixels), puis se lâche sur une case. */
+  onDragStart?: (cell: Hex) => void;
+  onDrop?: (cell: Hex | undefined) => void;
 }
 
 /**
@@ -126,15 +130,15 @@ export class CityScene {
   private readonly dynamic = new Group();
   private readonly buildings = new Map<string, Building>();
   private readonly roads = new Map<string, Road>();
-  private readonly fleets = new Map<RequestKind, InstancedMesh>();
+  private readonly fleets = new Map<RequestKind, Fleet>();
   /** Véhicules qui font demi-tour : une flotte à part, à la couleur d'alerte du thème. */
-  private wrecks!: InstancedMesh;
+  private wrecks!: Fleet;
   /** Trafic abusif repoussé, à la couleur de l'ennemi. */
-  private hostiles!: InstancedMesh;
+  private hostiles!: Fleet;
   private readonly dummy = new Object3D();
   private readonly effects: Effects;
   /** Coursiers arrêtés devant une file qui déborde. */
-  private waiters!: InstancedMesh;
+  private waiters!: Fleet;
   /** Latence visée par la vague (ms) : au-delà, le bâtiment le plus lent montre son sablier. */
   slaLatencyMs: number | undefined;
   private readonly alert: Color;
@@ -154,6 +158,8 @@ export class CityScene {
   private readonly raycaster = new Raycaster();
   private readonly ground = new Plane(new Vector3(0, 1, 0), 0);
   private pressedAt: Vector2 | undefined;
+  /** Case du bâtiment saisi, et si le glisser a vraiment commencé. */
+  private grabbed: { cell: Hex; dragging: boolean } | undefined;
   private frameId = 0;
   private last = performance.now();
   /** Cadrage visé par un recentrage en cours : la caméra glisse vers lui à chaque image. */
@@ -219,7 +225,8 @@ export class CityScene {
     window.addEventListener('resize', this.fit);
     const canvas = this.renderer.domElement;
     canvas.addEventListener('pointermove', this.pointerMove);
-    canvas.addEventListener('pointerdown', this.pointerDown);
+    // En capture : décider avant MapControls si l'on saisit un bâtiment ou si l'on fait défiler.
+    canvas.addEventListener('pointerdown', this.pointerDown, { capture: true });
     canvas.addEventListener('pointerup', this.pointerUp);
     canvas.addEventListener('pointerleave', this.pointerLeave);
     this.frameId = requestAnimationFrame(this.frame);
@@ -383,7 +390,12 @@ export class CityScene {
   };
 
   /** Case du plateau sous un point de l'écran : rayon de la caméra contre le sol (y = 0). */
-  private cellUnder(e: PointerEvent): Hex | undefined {
+  /** Case sous un point de l'écran, pour un glisser parti d'ailleurs (la palette). */
+  cellAt(clientX: number, clientY: number): Hex | undefined {
+    return this.cellUnder({ clientX, clientY });
+  }
+
+  private cellUnder(e: { clientX: number; clientY: number }): Hex | undefined {
     const rect = this.renderer.domElement.getBoundingClientRect();
     const ndc = new Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
@@ -393,6 +405,10 @@ export class CityScene {
 
   private readonly pointerMove = (e: PointerEvent) => {
     if (this.mode !== 'build') return;
+    if (this.grabbed && !this.grabbed.dragging && this.pressedAt && this.pressedAt.distanceTo(new Vector2(e.clientX, e.clientY)) > CLICK_TOLERANCE_PX) {
+      this.grabbed.dragging = true;
+      this.events.onDragStart?.(this.grabbed.cell);
+    }
     this.hovered = this.cellUnder(e);
     if (!this.hovered) return this.pointerLeave();
     const ok = this.events.canUse?.(this.hovered) ?? true;
@@ -408,9 +424,24 @@ export class CityScene {
 
   private readonly pointerDown = (e: PointerEvent) => {
     this.pressedAt = new Vector2(e.clientX, e.clientY);
+    const cell = this.mode === 'build' ? this.cellUnder(e) : undefined;
+    if (cell && this.events.canDrag?.(cell)) {
+      this.grabbed = { cell, dragging: false };
+      this.controls.enabled = false;
+      // Lâché hors du plateau, le bâtiment doit quand même retomber quelque part.
+      this.renderer.domElement.setPointerCapture(e.pointerId);
+    }
   };
 
   private readonly pointerUp = (e: PointerEvent) => {
+    const grabbed = this.grabbed;
+    this.grabbed = undefined;
+    this.controls.enabled = true;
+    if (grabbed?.dragging) {
+      this.pressedAt = undefined;
+      this.events.onDrop?.(this.cellUnder(e));
+      return;
+    }
     const moved = this.pressedAt ? this.pressedAt.distanceTo(new Vector2(e.clientX, e.clientY)) : Infinity;
     this.pressedAt = undefined;
     if (this.mode !== 'build' || moved > CLICK_TOLERANCE_PX) return;
@@ -704,42 +735,9 @@ export class CityScene {
     }
   }
 
-  /**
-   * Une flotte instanciée par sorte de voyageur : le personnage du thème figé en pleine
-   * marche, ou une boîte de couleur s'il n'en a pas. `tint` recolore le personnage
-   * (les requêtes en échec reprennent le messager, en rouge).
-   */
-  private fleet(style: { color: string; size: [number, number, number]; model?: string }, tint?: string): InstancedMesh {
-    const [w, h, l] = style.size;
-    let mesh: InstancedMesh;
-    if (style.model) {
-      const { geometry, materials } = this.models.bakeCharacter(style.model, h);
-      const own = materials.map((m) => {
-        const c = m.clone();
-        if (tint && 'color' in c && c.color instanceof Color) c.color.set(tint);
-        return c;
-      });
-      mesh = new InstancedMesh(geometry, own, MAX_VEHICLES_PER_KIND);
-      mesh.userData.grounded = true;
-    } else {
-      mesh = new InstancedMesh(new BoxGeometry(w, h, l), new MeshLambertMaterial({ color: tint ?? style.color }), MAX_VEHICLES_PER_KIND);
-    }
-    mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-    mesh.castShadow = true;
-    mesh.count = 0;
-    this.scene.add(mesh);
-    // Les personnages gardent leurs couleurs : c'est le disque à leurs pieds qui dit le type
-    // de requête, aux couleurs de la légende.
-    const disc = new InstancedMesh(
-      new CircleGeometry(w * 0.75, 16).rotateX(-Math.PI / 2),
-      new MeshBasicMaterial({ color: tint ?? style.color, transparent: true, opacity: 0.85, depthWrite: false }),
-      MAX_VEHICLES_PER_KIND,
-    );
-    disc.instanceMatrix.setUsage(DynamicDrawUsage);
-    disc.count = 0;
-    this.scene.add(disc);
-    mesh.userData.disc = disc;
-    return mesh;
+  /** Une flotte par sorte de voyageur ; `tint` recolore le personnage (les requêtes en échec). */
+  private fleet(style: FleetStyle, tint?: string): Fleet {
+    return new Fleet(this.scene, this.models, style, MAX_VEHICLES_PER_KIND, tint);
   }
 
   private addFleets(): void {
@@ -858,7 +856,7 @@ export class CityScene {
 
   /** Une file qui déborde : les coursiers attendent en rang sur le chemin qui y mène. */
   private updateWaiting(tick: TickMetrics | undefined): void {
-    let used = 0;
+    this.waiters.begin();
     for (const id of this.buildings.keys()) {
       const backlog = tick?.nodes[id]?.backlog ?? 0;
       if (backlog <= 0) continue;
@@ -866,7 +864,7 @@ export class CityScene {
       if (!road) continue;
       const length = pathLength(road.path);
       const count = Math.min(MAX_WAITING, Math.ceil(Math.log10(1 + backlog) * 2));
-      for (let k = 0; k < count && used < MAX_VEHICLES_PER_KIND; k++) {
+      for (let k = 0; k < count; k++) {
         const f = 1 - (0.95 + k * 0.42) / length;
         if (f <= 0) break;
         const { point, angle } = pointAlong(road.path, f);
@@ -874,37 +872,34 @@ export class CityScene {
         this.dummy.position.set(point.x + Math.cos(angle) * 0.18, 0.06 + bob, point.z - Math.sin(angle) * 0.18);
         this.dummy.rotation.set(0, angle, 0);
         this.dummy.updateMatrix();
-        this.waiters.setMatrixAt(used, this.dummy.matrix);
-        (this.waiters.userData.disc as InstancedMesh).setMatrixAt(used, this.dummy.matrix.clone().setPosition(this.dummy.position.x, 0.065, this.dummy.position.z));
-        used++;
+        // Ils attendent : une seule pose, celle du premier pas.
+        this.waiters.add(this.dummy.matrix, 0, this.dummy.matrix.clone().setPosition(this.dummy.position.x, 0.065, this.dummy.position.z));
       }
     }
-    for (const m of [this.waiters, this.waiters.userData.disc as InstancedMesh]) {
-      m.count = used;
-      m.instanceMatrix.needsUpdate = true;
-    }
+    this.waiters.end();
   }
 
   private updateTravellers(time: number, journeys: Journey[]): void {
-    const counts = new Map<RequestKind, number>(REQUEST_KINDS.map((k) => [k, 0]));
-    let wrecked = 0;
-    let repelled = 0;
+    const all = [...this.fleets.values(), this.wrecks, this.hostiles];
+    for (const f of all) f.begin();
     for (const j of journeys) {
       const at = journeyAt(j, time);
       const road = at && this.roads.get(at.link);
       if (!at || !road) continue;
       // Un pillard reste un pillard ; une requête refusée ne rougit qu'en repartant.
       const fleet = j.hostile ? this.hostiles : at.failed ? this.wrecks : this.fleets.get(j.kind);
-      const i = j.hostile ? repelled : at.failed ? wrecked : counts.get(j.kind)!;
-      if (!fleet || i >= MAX_VEHICLES_PER_KIND) continue;
+      if (!fleet) continue;
 
       const { point, angle } = pointAlong(road.path, at.f);
       // L'aller tient la droite, le retour l'autre côté : les deux sens se croisent sans se gêner.
-      const lane = (0.18 + REQUEST_KINDS.indexOf(j.kind) * LANE) * (at.returning ? -1 : 1);
+      // Une copie marche à côté de l'original, sur la file voisine.
+      const lane = (0.18 + REQUEST_KINDS.indexOf(j.kind) * LANE + (at.copy ? 0.22 : 0)) * (at.returning ? -1 : 1);
       const [, h] = this.theme.vehicles[j.kind].size;
-      // Les personnages ont les pieds à zéro et sautillent en marchant ; une boîte est centrée.
-      const hop = Math.abs(Math.sin((time + j.start * 7.3) * 9)) * 0.06;
-      const y = fleet.userData.grounded ? 0.06 + hop : 0.04 + h / 2;
+      // Les personnages ont les pieds à zéro ; une boîte de secours est centrée.
+      const y = fleet.grounded ? 0.06 : 0.04 + h / 2;
+      // Chacun marche à son pas : la pose avance avec le temps du rejeu, décalée par voyageur.
+      const stride = time * 0.75 + j.start * 3.1;
+      const frame = Math.floor((stride - Math.floor(stride)) * WALK_FRAMES);
       this.dummy.position.set(point.x + Math.cos(angle) * lane, y, point.z - Math.sin(angle) * lane);
       // Un pillard repoussé culbute en arrière en quittant le bouclier.
       // Au retour, f va de 1 à 0 : la culbute occupe le premier tiers du chemin.
@@ -912,26 +907,27 @@ export class CityScene {
       const tumble = j.hostile && at.returning && back < 1 ? back : 0;
       this.dummy.rotation.set(-tumble * Math.PI * 2, at.returning ? angle + Math.PI : angle, 0, 'YXZ');
       if (tumble > 0) this.dummy.position.y += Math.sin(tumble * Math.PI) * 0.4;
+      // Refoulé, il se cogne à la porte et rebondit avant de repartir.
+      if (at.bounce !== undefined) {
+        this.dummy.position.y += Math.sin(at.bounce * Math.PI) * 0.22;
+        this.dummy.rotation.x = -Math.sin(at.bounce * Math.PI) * 0.5;
+      }
+      // Perdu, il s'évapore ; une copie de doublon apparaît en grandissant, dans un nuage violet.
+      const size = at.vanish !== undefined ? 1 - at.vanish : at.split !== undefined ? 0.3 + 0.7 * at.split : 1;
+      this.dummy.scale.setScalar(Math.max(0.01, size));
+      if ((at.vanish ?? 0) > 0) this.effects.puff(this.dummy.position.clone().setY(0.35));
+      if (at.split !== undefined) this.effects.puff(this.dummy.position.clone().setY(0.3), DUPLICATE_TINT);
       this.dummy.updateMatrix();
-      fleet.setMatrixAt(i, this.dummy.matrix);
+      const body = this.dummy.matrix.clone();
       this.dummy.rotation.set(0, this.dummy.rotation.y, 0, 'XYZ');
+      this.dummy.scale.setScalar(Math.max(0.01, size));
       // Le disque reste au sol pendant que le personnage sautille.
       this.dummy.position.y = 0.065;
       this.dummy.updateMatrix();
-      (fleet.userData.disc as InstancedMesh).setMatrixAt(i, this.dummy.matrix);
-      if (j.hostile) repelled++;
-      else if (at.failed) wrecked++;
-      else counts.set(j.kind, i + 1);
+      fleet.add(body, frame, this.dummy.matrix);
+      this.dummy.scale.setScalar(1);
     }
-    const show = (fleet: InstancedMesh, count: number) => {
-      for (const m of [fleet, fleet.userData.disc as InstancedMesh]) {
-        m.count = count;
-        m.instanceMatrix.needsUpdate = true;
-      }
-    };
-    for (const [kind, fleet] of this.fleets) show(fleet, counts.get(kind)!);
-    show(this.wrecks, wrecked);
-    show(this.hostiles, repelled);
+    for (const f of all) f.end();
   }
 }
 

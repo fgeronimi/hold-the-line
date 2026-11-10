@@ -79,3 +79,11 @@ describe('calibration', () => {
     expect(parseField('10, x', { ...f, list: true })).toBeUndefined();
   });
 });
+
+describe('pénalité de rejeu', () => {
+  it('ne retire jamais plus que les points de la vague', async () => {
+    const { replayCut } = await import('../src/ui/views.ts');
+    expect(replayCut(2)).toBe('−40 % au score');
+    expect(replayCut(13)).toBe('la vague ne rapporte plus de points');
+  });
+});

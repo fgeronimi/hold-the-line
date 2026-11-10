@@ -174,3 +174,40 @@ describe('trajets', () => {
     expect(Math.max(...counts)).toBeGreaterThan(counts[0]! * 2);
   });
 });
+
+describe('trajets des incidents du grand marché', () => {
+  const journeysOf = async (archOpts: { idempotence?: boolean; outbox?: boolean }, waveId: string) => {
+    const { market } = await import('../src/data/scenarios/market.ts');
+    const M = await import('../src/data/scenarios/market.archetypes.ts');
+    const result = simulateWave(M.fannedOut(archOpts), market.waves.find((w) => w.id === waveId)!, catalog);
+    const scale = trafficScale(result.ticks);
+    return result.ticks.flatMap((t, i) => journeysForTick(t, i, scale));
+  };
+
+  it('un message livré deux fois a sa copie, traitée ou écartée selon l’idempotence', async () => {
+    const without = await journeysOf({}, 'double-delivery');
+    expect(without.some((j) => j.copy === 'twice')).toBe(true);
+    expect(without.some((j) => j.copy === 'ignored')).toBe(false);
+    const copy = without.find((j) => j.copy)!;
+    expect(outcomeOf(copy)!.result).toBe('twice');
+    expect(journeyAt(copy, copy.start + 0.01)!.split).toBeGreaterThanOrEqual(0);
+    const withIt = await journeysOf({ idempotence: true }, 'double-delivery');
+    expect(withIt.some((j) => j.copy === 'ignored')).toBe(true);
+  });
+
+  it('un événement perdu s’évapore à mi-chemin et compte comme un refus du serveur', async () => {
+    const lost = (await journeysOf({ idempotence: true }, 'lost-orders')).find((j) => j.lost)!;
+    expect(lost).toBeDefined();
+    const last = lost.legs.at(-1)!;
+    expect(journeyDuration(lost)).toBeCloseTo(lost.legs.slice(0, -1).reduce((a, l) => a + l.duration, 0) + last.duration / 2);
+    expect(journeyAt(lost, lost.start + journeyDuration(lost) - 0.01)!.vanish).toBeGreaterThan(0.9);
+    expect(outcomeOf(lost)).toMatchObject({ result: 'refused', node: last.link.split('→')[0] });
+    expect((await journeysOf({ idempotence: true, outbox: true }, 'lost-orders')).some((j) => j.lost)).toBe(false);
+  });
+
+  it('une requête refusée rebondit à la porte avant de repartir', () => {
+    const j: Journey = { kind: 'read', start: 0, legs: [{ link: 'a→b', back: false, duration: 1 }, { link: 'a→b', back: true, duration: 1 }], failedFrom: 1 };
+    expect(journeyAt(j, 1.1)!.bounce).toBeCloseTo(0.4);
+    expect(journeyAt(j, 1.5)!.bounce).toBeUndefined();
+  });
+});

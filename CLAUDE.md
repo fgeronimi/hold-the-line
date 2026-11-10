@@ -1,12 +1,11 @@
 # Hold the Line
 
 Tower defense de system design : on construit une architecture, des vagues de trafic
-la testent. Spec : `Hold the Line — Spécification MVP` (hors repo). Phase 1 en cours :
-moteur et équilibrage, aucune interface soignée.
+la testent. Spec à jour : `docs/spec.md`. Phase 2 : le jeu en 3D sur un plateau hexagonal.
 
-**`docs/decisions.md` prime sur la spec.** Le lire avant de toucher au moteur ou au
-calibrage ; les décisions marquées « à appliquer » ne sont pas encore dans le code.
-Toute nouvelle décision de design y est consignée, avec son pourquoi.
+**`docs/decisions.md` garde le pourquoi de chaque choix.** Le lire avant de toucher au
+moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reportée dans
+`docs/spec.md`.
 
 ## Commandes
 
@@ -46,7 +45,8 @@ Toute nouvelle décision de design y est consignée, avec son pourquoi.
 - `src/render/` : rejeu 3D isométrique (Three.js), chargé à la demande depuis le debrief.
   `hex.ts` (grille hexagonale), `layout.ts` et `traffic.ts` sont purs et testés ; `scene.ts` ne fait qu'afficher un tick
   déjà calculé. La métaphore vient d'un thème en données (`src/data/themes/fortified-city.ts`).
-  `effects.ts` dessine les incidents (fumée, feu, lettres, bouclier) sans état. `vitrine.html`
+  `effects.ts` dessine les incidents (fumée, feu, lettres, bouclier) sans état ; `fleet.ts`
+  range les personnages, une géométrie instanciée par pose de marche. `vitrine.html`
   (`npm run dev`, puis `/vitrine.html`) les montre un par un sur des îlots de démonstration
   (`showcase.ts`) : à garder à jour quand un effet change. Hors build.
 - `public/models/kaykit/` : modèles glTF du KayKit Medieval Hexagon Pack (CC0), chargés

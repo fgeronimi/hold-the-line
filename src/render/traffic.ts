@@ -24,6 +24,13 @@ export interface Journey {
   failedFrom?: number;
   /** Trafic abusif repoussé par le rate limiting. */
   hostile?: boolean;
+  /** Événement perdu avant publication : le messager s'évapore à mi-chemin de son dernier tronçon. */
+  lost?: boolean;
+  /**
+   * Copie d'un message livré deux fois : elle part du lien où le bus l'a dupliqué. Traitée
+   * une seconde fois (`twice`) ou reconnue et écartée par l'idempotence (`ignored`).
+   */
+  copy?: 'twice' | 'ignored';
 }
 
 export interface TrafficScale {
@@ -37,6 +44,13 @@ export interface Position {
   f: number;
   returning: boolean;
   failed: boolean;
+  /** Refoulé à la porte : de 0 à 1 pendant le rebond, au début du retour. */
+  bounce?: number;
+  /** Événement perdu : de 0 à 1 pendant qu'il s'évapore. */
+  vanish?: number;
+  copy?: Journey['copy'];
+  /** Copie qui vient de se détacher : de 0 à 1 au début de son premier tronçon. */
+  split?: number;
 }
 
 /** Les nœuds d'où part le trafic d'un tick : ceux qui envoient sans jamais recevoir. */
@@ -121,6 +135,7 @@ export function journeysForTick(tick: TickMetrics, t: number, scale: TrafficScal
       for (let i = 0; i < n; i++) {
         const legs: Leg[] = [];
         let failedFrom: number | undefined;
+        let lost = false;
         let node = source;
         const seen = new Set([source]);
         for (let step = 0; step < 12; step++) {
@@ -132,6 +147,12 @@ export function journeysForTick(tick: TickMetrics, t: number, scale: TrafficScal
           if (seen.has(pick.to)) break;
           seen.add(pick.to);
           legs.push(legTo(pick.link));
+          // Le serveur tombe entre l'écriture et la publication : l'événement ne part jamais.
+          const lostHere = kind === 'async' ? (tick.nodes[node]?.lost ?? 0) : 0;
+          if (lostHere > 0 && rand(t, i, k, step, 3) < lostHere / (lostHere + total)) {
+            lost = true;
+            break;
+          }
           node = pick.to;
           const failed = tick.nodes[node]?.failed ?? 0;
           if (failed > 0 && rand(t, i, k, step, 2) < Math.min(1, failed / Math.max(inbound(tick, node), 1e-9))) {
@@ -140,13 +161,20 @@ export function journeysForTick(tick: TickMetrics, t: number, scale: TrafficScal
           }
         }
         if (legs.length === 0) continue;
+        const start = t + i / n;
+        if (lost) {
+          out.push({ kind, start, legs, lost: true });
+          continue;
+        }
         const journey: Journey = {
           kind,
-          start: t + i / n,
+          start,
           legs: kind === 'async' && failedFrom === undefined ? legs : withReturn(legs),
         };
         if (failedFrom !== undefined) journey.failedFrom = failedFrom;
         out.push(journey);
+        const copy = kind === 'async' && failedFrom === undefined ? copyOf(tick, legs, start, node, rand(t, i, k, 4), rand(t, i, k, 5)) : undefined;
+        if (copy) out.push(copy);
       }
     });
   }
@@ -161,6 +189,24 @@ export function journeysForTick(tick: TickMetrics, t: number, scale: TrafficScal
     }
   }
   return out;
+}
+
+/**
+ * Le double d'un message arrivé à un service qui reçoit des doublons, dans leur proportion.
+ * Le rendu ne connaît pas les types de bâtiments : la copie se détache sur l'avant-dernier
+ * lien, celui qui sort du bus quand chaque service a sa file.
+ */
+function copyOf(tick: TickMetrics, legs: Leg[], start: number, service: string, roll: number, which: number): Journey | undefined {
+  const twice = tick.nodes[service]?.duplicates ?? 0;
+  const ignored = tick.nodes[service]?.deduplicated ?? 0;
+  if (twice + ignored <= 0 || roll >= (twice + ignored) / Math.max(inbound(tick, service), 1e-9)) return undefined;
+  const from = Math.max(0, legs.length - 2);
+  return {
+    kind: 'async',
+    start: start + legs.slice(0, from).reduce((a, l) => a + l.duration, 0),
+    legs: legs.slice(from),
+    copy: which < twice / (twice + ignored) ? 'twice' : 'ignored',
+  };
 }
 
 /** Un chemin de liens actifs depuis une source jusqu'à `node`, s'il existe. */
@@ -180,8 +226,11 @@ function pathTo(tick: TickMetrics, node: string): string[] | undefined {
   return undefined;
 }
 
+/** Un événement perdu ne fait que la moitié de son dernier tronçon. */
+const legDuration = (j: Journey, i: number) => j.legs[i]!.duration * (j.lost && i === j.legs.length - 1 ? 0.5 : 1);
+
 export function journeyDuration(j: Journey): number {
-  return j.legs.reduce((a, l) => a + l.duration, 0);
+  return j.legs.reduce((a, _, i) => a + legDuration(j, i), 0);
 }
 
 /** Où est le voyageur à l'instant `time`, ou `undefined` s'il n'est pas (ou plus) en route. */
@@ -190,16 +239,23 @@ export function journeyAt(j: Journey, time: number): Position | undefined {
   if (elapsed < 0) return undefined;
   for (let i = 0; i < j.legs.length; i++) {
     const leg = j.legs[i]!;
-    if (elapsed < leg.duration) {
+    if (elapsed < legDuration(j, i)) {
       const f = elapsed / leg.duration;
-      return {
+      const at: Position = {
         link: leg.link,
         f: leg.back ? 1 - f : f,
         returning: leg.back,
         failed: j.failedFrom !== undefined && i >= j.failedFrom,
       };
+      if (i === j.failedFrom && !j.hostile && f < 0.25) at.bounce = f / 0.25;
+      if (j.lost && i === j.legs.length - 1) at.vanish = Math.min(1, Math.max(0, (f - 0.3) / 0.2));
+      if (j.copy) {
+        at.copy = j.copy;
+        if (i === 0 && f < 0.25) at.split = f / 0.25;
+      }
+      return at;
     }
-    elapsed -= leg.duration;
+    elapsed -= legDuration(j, i);
   }
   return undefined;
 }
@@ -209,7 +265,8 @@ export interface Outcome {
   node: string;
   /** Instant, en ticks, où la requête atteint le bâtiment qui la sert ou la refuse. */
   at: number;
-  result: 'served' | 'refused' | 'repelled';
+  /** `twice` et `ignored` : la copie d'un doublon, traitée une seconde fois ou écartée. */
+  result: 'served' | 'refused' | 'repelled' | 'twice' | 'ignored';
 }
 
 /**
@@ -224,6 +281,9 @@ export function outcomeOf(j: Journey): Outcome | undefined {
   if (!last) return undefined;
   const reached = { node: last.link.split('→')[1]!, at: j.start + forward.reduce((a, l) => a + l.duration, 0) };
   if (j.hostile) return { ...reached, result: 'repelled' };
+  if (j.copy) return { ...reached, result: j.copy };
+  // Perdu en route : le −1 tombe sur le serveur qui n'a pas publié.
+  if (j.lost) return { node: last.link.split('→')[0]!, at: j.start + journeyDuration(j), result: 'refused' };
   if (j.failedFrom !== undefined) return { ...reached, result: 'refused' };
   const returns = j.legs.length > forward.length;
   if (!returns) return { ...reached, result: 'served' };

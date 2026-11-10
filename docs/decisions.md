@@ -1,7 +1,8 @@
 # Décisions de design — phase 1
 
-Tranchées le 8 novembre 2026, après le premier jet du moteur. Elles complètent ou
-corrigent la spec MVP ; en cas de conflit, ce fichier l'emporte.
+Tranchées à partir du 8 novembre 2026, après le premier jet du moteur. La spec, réécrite
+le 10 novembre dans `docs/spec.md`, les intègre toutes ; ce fichier garde le pourquoi de
+chaque choix. Une nouvelle décision s'ajoute ici et se reporte dans la spec.
 
 Statut : **à appliquer** = décidé mais pas encore dans le code.
 
@@ -19,13 +20,13 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 
 | # | Décision | Pourquoi | Statut |
 |---|---|---|---|
-| E1 | Le coût est une facture par vague sous un plafond, sans réserve qui s'accumule. Retirer « or gagné entre les vagues » de la table des métaphores de la spec. | Colle au cloud réel : on paie ce qui tourne. Une épargne n'apprend rien en system design. | Fait (spec à corriger) |
+| E1 | Le coût est une facture par vague sous un plafond, sans réserve qui s'accumule. Retirer « or gagné entre les vagues » de la table des métaphores de la spec. | Colle au cloud réel : on paie ce qui tourne. Une épargne n'apprend rien en system design. | Fait |
 | E2 | Retirer ou remplacer un composant coûte une fois sa valeur d'achat. Réduire les instances est gratuit ; retirer un réplica ou désactiver le rate limiting coûte. Réglé par évolution dans les données (`removalCost`). | Sans friction, défaire ne coûte rien et le réflexe « anticiper le coût d'une décision passée » disparaît. | Fait |
 | E3 | Le coût de migration entre dans la facture de la vague, contre le même plafond ; le debrief l'affiche sur une ligne « migration ». | C'est la leçon : un choix de la vague 2 peut coûter la vague 3. | Fait (affichage debrief à faire) |
 | E4 | Une vague perdue se rejoue sans limite, depuis l'architecture de fin de la vague précédente. Pas de défaite définitive en phase 1. | Refaire les vagues déjà gagnées n'apprend rien. | Fait (`engine/game.ts`) |
 | E6 | On peut revenir au début de toute vague déjà atteinte, avec l'architecture validée à ce moment-là ; le retour compte comme un rejeu de la vague visée et efface les scores suivants. | Sans ça, un choix passé peut bloquer la partie : depuis le parcours CDN (vagues 3 et 4), aucune architecture ne gagne la vague 5, et le rejeu repartait toujours de la vague 4. | Fait |
 | E7 | **Trois étoiles par vague**, une par objectif : tenir la vague, la tenir du premier coup, et rester économe (facture ≤ `thriftyCost`, calé sur la stratégie gagnante la moins chère). Le score reste à côté. | Des objectifs lisibles avant de jouer, là où le score est une moyenne de marges opaque. L'étoile d'économie récompense la réponse la plus fine sans punir les autres stratégies, qui gagnent quand même. | Fait |
-| E5 | Score d'une vague = 100 × moyenne des marges (coût, complexité, échecs, latence), bornée à [0, 1], moins 20 % par rejeu. Score de partie = somme des vagues. Coefficients en données. | Récompense la marge, comme le dit la spec, et pénalise les essais à l'aveugle. | Fait |
+| E5 | Score d'une vague = 100 × moyenne des marges (coût, complexité, échecs, latence), bornée à [0, 1], moins 20 % par rejeu, sans descendre sous zéro. Score de partie = somme des vagues. Coefficients en données. L'écran ne montre jamais une pénalité au-delà de 100 % : passé cinq rejeux, il dit « la vague ne rapporte plus de points ». | Récompense la marge, comme le dit la spec, et pénalise les essais à l'aveugle. Le « −260 % » affiché après 13 rejeux ne voulait rien dire. | Fait |
 
 ## Compromis
 
@@ -59,6 +60,7 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 | I7 | **Tutoriel de la vague 1**, déduit du brouillon (`tutorialStep`) : poser le serveur, relier les clients, poser la base, relier, lancer. Le bouton à utiliser clignote. | Sans compteur d'étapes, le guide suit un joueur qui construit dans le désordre, défait ou passe par la vue tableau. | Fait |
 | I8 | **Le debrief raconte la vague en trois temps** : ce qui a marché (la part de chaque bâtiment, chiffrée), ce qui a failli casser dans l'ordre où c'est arrivé, puis ce qu'on pourrait alléger. Rouge seulement si la vague est perdue ; un incident encaissé est une alerte orange. Une saturation pendant un incident est racontée par l'incident, pas comme un goulot. Un bâtiment est jugé superflu si la vague, rejouée sans lui, respecte encore le SLA. Chaque bâtiment a une phrase « à quoi ça sert », dans la métaphore et en vrai. | Le premier debrief empilait des constats en rouge sur une vague gagnée et conseillait de retirer le cache parce qu'il était peu chargé, alors qu'il servait 95 % des lectures. | Fait |
 | I9 | **La fenêtre « que faire » reste affichée à toutes les vagues** (`guideStep`) : le pas-à-pas en vague 1, puis le défi de la vague et l'incident annoncé, ou ce qui bloque le lancement (plan invalide, budget, complexité). Elle ne souffle jamais la parade. | Hors de la vague 1, le joueur perdait le fil de l'objectif une fois le briefing fermé. | Fait |
+| I10 | **Glisser-déposer et annulation.** On déplace un bâtiment en le glissant (les clients restent à l'entrée) ; on pose un bâtiment en le glissant depuis la palette, ou en cliquant puis posant comme avant. Annuler et rétablir (boutons, ⌘Z, ⇧⌘Z ou ⌘Y), 50 pas, en construction seulement ; l'historique s'efface quand la vague est lancée ou qu'on change de scénario, et n'est pas sauvegardé. | Reportés depuis I4. Défaire une erreur de construction coûtait un aller-retour d'outils. | Fait |
 | I2 | Pas de lien vers le calendrier dans le debrief. Le champ `conceptRef` des vagues reste : le contenu des fiches servira à écrire des explications dans le jeu. | Envoyer le joueur hors du jeu casse la boucle ; l'explication doit venir au moment où la vague casse. | Lien retiré ; explications à faire (lire `concepts.js`, repo voisin, `--add-dir` nécessaire) |
 
 ## Phase 2 : rendu
@@ -78,6 +80,7 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 | R12 | **Routes et rivière en tuiles KayKit.** Chaque case de chemin reçoit la tuile de route qui relie exactement les côtés empruntés (13 tuiles couvrent les 63 combinaisons, à la rotation près ; côtés relevés sur les modèles). Une rivière fixe traverse le plateau du haut en bas en tronçons droits : on ne bâtit pas dessus, et un chemin ne la franchit que tout droit, sur un tronçon droit, par un pont (tuile de gué et modèle de pont). Aucun effet sur la simulation. | Des chemins lisibles comme des routes, et un obstacle qui donne du relief au plateau sans toucher à l'équilibrage (les chemins restent décoratifs, I4). La traversée droite est la seule que les tuiles KayKit savent dessiner. | Fait |
 | R13 | **Courbes tick par tick** : une seule figure SVG, un axe des ticks partagé. Trafic, taux d'échec cumulé face au SLA, puis la charge de chaque bâtiment dans l'ordre du trafic, rouge au-delà de la capacité, échecs en barres, incidents en bandes. Réticule et infobulle au survol. Onglet du debrief, et panneau en direct pendant la vague (curseur synchronisé, clic pour y aller). Dessinée à la main, sans bibliothèque. | Voir pourquoi ça casse, et quand : le moteur calcule déjà tout par tick, il suffisait de l'afficher. | Fait |
 | R14 | **Les incidents se voient sur le plateau.** Chaque personnage porte un disque au sol à la couleur de la légende. Saturation : le bâtiment tremble, rougit et fume. Refus : la porte clignote, pastille ✕. Arriéré : coursiers en rang sur le chemin de la file, jauge dans l'étiquette. Latence au-delà du SLA : sablier sur le bâtiment le plus lent. Doublon : nuage violet et « ×2 » (ou « doublons écartés » avec l'idempotence). Événement perdu : lettres qui tombent sur le chemin de sortie. Panne : la tour en panne reste debout, noircit et brûle. Rate limiting : dôme de la garde qui s'allume, pillards qui culbutent. SLA franchi : la cloche sonne, les bords de l'écran rougissent, bannière « SLA rompu ». Effets sans état (`src/render/effects.ts`) : ils ne dépendent que du tick affiché et de l'heure. Chacun est montré seul dans `vitrine.html` (debug, hors build). | François ne voyait pas assez les problèmes pendant la vague ; les couleurs de la légende ne se retrouvaient pas sur les personnages. Il a choisi les neuf effets sur la vitrine, le feu plutôt que la foudre pour la panne. | Fait |
+| R15 | **Personnages qui marchent, et trajets des incidents comme dans la vitrine.** Chaque personnage est cuit en six poses de sa marche, normalisées ensemble ; chacun prend la pose de son pas. Un refus rebondit à la porte avant de repartir en rouge ; un événement perdu s'évapore à mi-chemin du bus (et compte comme un refus du serveur) ; un doublon fait naître une copie du mage, sur la file voisine, à la sortie du bus, avec la pastille « ×2 » ou « 🔁 déjà reçu ». Logique dans `traffic.ts`, pure et testée. | François voulait le plateau au niveau de la vitrine ; les poses figées faisaient glisser les personnages. Six poses gardent le coût d'une géométrie instanciée. | Fait |
 | R3 | Additions au moteur pour la phase 2, en sortie seulement : `TickMetrics.links` (débit par lien et par type à chaque tick) et `NodeTick.shed` (trafic abusif écarté par nœud). | Le rejeu doit savoir ce qui roule sur chaque route et qui est repoussé à la porte ; la simulation elle-même ne change pas. Ajouts de R14 : `NodeTick.duplicates`, `deduplicated` et `lost`, que les échecs confondaient. | Fait |
 
 ## Élargissement du MVP
@@ -113,15 +116,12 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 
 ## Prochaines étapes
 
-0. Phase 2 : glisser-déposer et annulation ; marche animée ; incidents en vagues 4 et 5
-   (demande un recalibrage). Pas de géographie (P2).
-
-1. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
-   comprise (B4).
-2. Faire jouer 2 ou 3 personnes de la cible : publier sur GitHub Pages (dépôt distant
-   et workflow de déploiement à créer).
-3. Reproduire les fiches du calendrier dans le jeu (I2, P3), plus tard.
-4. Corriger la spec : colonne MVP du CDN et de l'autoscaling, « or gagné » (E1).
+1. Faire jouer 2 ou 3 personnes de la cible : le jeu est publié sur GitHub Pages.
+2. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
+   comprise (B4). Incidents en vagues 4 et 5 du raccourcisseur (demande un recalibrage).
+3. Reproduire les fiches du calendrier dans le jeu (I2, P3).
+4. Questions ouvertes de `docs/spec.md` : arriéré de file jamais visible, alarme de
+   latence.
 
 ## Positionnement
 

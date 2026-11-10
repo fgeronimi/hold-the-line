@@ -11,6 +11,7 @@ import { SCENARIOS } from '../data/scenarios/index.ts';
 import { chartModel, renderChart } from '../render/charts.ts';
 import { nodeNames } from '../render/theme.ts';
 import type { Stars } from '../engine/score.ts';
+import { scoring } from '../data/scoring.ts';
 
 
 export interface Attempt {
@@ -58,6 +59,8 @@ export interface ViewState {
   current?: number | undefined;
   /** Mode debug : essais, vue tableau, calibrage, détail chiffré. `?debug` ou la touche D. */
   debug: boolean;
+  /** Combien de pas de construction on peut annuler, ou rétablir. */
+  history: { undo: number; redo: number };
   debugTab: 'attempts' | 'table' | 'calibrate';
   /** Le debrief montre l'analyse du chambellan ou les courbes tick par tick. */
   debriefTab: 'analysis' | 'charts';
@@ -187,7 +190,7 @@ export function renderToolbar(s: ViewState): string {
   const guide = guideStep(draft, catalog, wave, s.game.waveIndex, s.game.committed, s.game.waveIndex === 0 && s.scenario.id === SCENARIOS[0]!.scenario.id);
   const hint = (on: boolean) => (on ? ' hint' : '');
   const tools = [
-    { kind: 'select', icon: '👆', label: 'Sélection', hint: 'Cliquer un bâtiment pour ouvrir sa fiche' },
+    { kind: 'select', icon: '👆', label: 'Sélection', hint: 'Cliquer un bâtiment pour ouvrir sa fiche, le glisser pour le déplacer' },
     { kind: 'link', icon: '🛤️', label: 'Relier', hint: 'Cliquer le départ, puis l’arrivée' },
     { kind: 'remove', icon: '🧨', label: 'Retirer', hint: 'Cliquer un bâtiment pour le démolir' },
   ]
@@ -195,7 +198,9 @@ export function renderToolbar(s: ViewState): string {
       (t) => `<button class="tool${active(tool.kind === t.kind)}${hint(guide?.highlight?.tool === t.kind)}" data-action="tool" data-tool="${t.kind}" title="${esc(t.hint)}">
         <span class="icon">${t.icon}</span><span>${t.label}</span></button>`,
     )
-    .join('');
+    .join('') +
+    `<button class="tool" data-action="undo" ${s.history.undo ? '' : 'disabled'} title="Annuler (⌘Z)"><span class="icon">↶</span><span>Annuler</span></button>` +
+    `<button class="tool" data-action="redo" ${s.history.redo ? '' : 'disabled'} title="Rétablir (⇧⌘Z)"><span class="icon">↷</span><span>Rétablir</span></button>`;
   const palette = Object.values(catalog.components)
     .filter((d) => d.behavior !== 'source' && !d.prePlaced)
     .map((d) => {
@@ -203,7 +208,7 @@ export function renderToolbar(s: ViewState): string {
       const on = tool.kind === 'place' && tool.type === d.id;
       const guided = guide?.highlight?.tool === 'place' && guide.highlight.type === d.id;
       return `<button class="tool build${active(on)}${hint(guided)}" data-action="tool" data-tool="place" data-type="${esc(d.id)}"
-        title="${esc(`${d.techName}${style ? ` — ${style.metaphor}` : ''}. ${style?.role.real ?? ''} Coût ${d.cost}, complexité ${d.complexity}.`)}">
+        title="${esc(`${d.techName}${style ? ` — ${style.metaphor}` : ''}. ${style?.role.real ?? ''} Coût ${d.cost}, complexité ${d.complexity}. Cliquer puis poser, ou glisser sur le plateau.`)}">
         <span class="icon">${style?.icon ?? '🏠'}</span><span>${esc(d.techName)}</span><small>${esc(style?.metaphor ?? '')}</small><small>💰 ${d.cost}</small></button>`;
     })
     .join('');
@@ -268,7 +273,7 @@ export function renderDialog(s: ViewState): string {
         ? `${renderChart(chartModel(r, a.arch, attemptWave, s.catalog, theme))}<p class="muted">Survoler pour lire chaque tick. La courbe d’un bâtiment passe en rouge au-delà de sa capacité ; les barres rouges sont les requêtes en échec, les bandes orange les incidents.</p>`
         : renderFindings(analyzeWave(r, a.arch, attemptWave, s.catalog, theme))
       : ''}
-    ${a.played && !r.won && s.game.replays > 0 ? `<p class="muted">Chaque nouvel essai coûte 20 % des points de la vague. Si un choix plus ancien bloque, le menu ☰ permet de revenir à une vague antérieure.</p>` : ''}
+    ${a.played && !r.won && s.game.replays > 0 ? `<p class="muted">Chaque nouvel essai coûte ${Math.round(scoring.replayPenalty * 100)} % des points de la vague, jusqu’à ne plus en rapporter ; les étoiles restent à prendre. Si un choix plus ancien bloque, le menu ☰ permet de revenir à une vague antérieure.</p>` : ''}
     <p class="actions">${actions}</p>
   </div>`;
 }
@@ -398,7 +403,7 @@ function renderBriefing(wave: Wave, s: ViewState): string {
       <p>⭐ Objectifs : tenir · du premier coup · facture ≤ ${wave.thriftyCost ?? wave.budget}</p>
       <p>Budget ${wave.budget} · complexité max ${wave.complexityCap}
         · SLA : ${pct(wave.sla.maxFailureRate)} d'échecs, ${wave.sla.maxP95LatencyMs} ms p95 (approx.)
-        ${s.game.replays > 0 ? ` · <b>${s.game.replays} rejeu(x)</b>, −${s.game.replays * 20} % au score` : ''}</p>
+        ${s.game.replays > 0 ? ` · <b>${s.game.replays} rejeu(x)</b>, ${replayCut(s.game.replays)}` : ''}</p>
       <p class="muted">Trafic : ${wave.sources
         .map((src) => `${esc(src.id)} (${src.clients} clients${src.abusive ? ', abusif' : ''}${src.longTail ? ', longue traîne' : ''}) : ${Object.entries(src.rps).map(([k, v]) => `${k} ${v}`).join(', ')} req/s`)
         .join(' · ')}</p>
@@ -636,4 +641,10 @@ function renderComparison(attempts: Attempt[]): string {
     ${row('score', (a) => (a.played ? fmt(a.score) : '—'))}
     ${row('réglages modifiés', (a) => (a.settings.length > 0 ? a.settings.map(esc).join('<br>') : '<span class="muted">aucun</span>'))}
   </table>`;
+}
+
+/** Ce que les rejeux retirent au score de la vague : jamais plus que ses points (décision E5). */
+export function replayCut(replays: number): string {
+  const cut = Math.min(1, replays * scoring.replayPenalty);
+  return cut >= 1 ? 'la vague ne rapporte plus de points' : `−${Math.round(cut * 100)} % au score`;
 }
