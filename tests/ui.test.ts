@@ -4,6 +4,8 @@ import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { calibrationGroups, changedSettings, getAt, parseField, setAt } from '../src/ui/calibration.ts';
 import { addLink, addNode, nextNodeId, removeLink, removeNode, setUpgrade } from '../src/ui/editor.ts';
+import { renderBuildMenu, upgradePips, type ViewState } from '../src/ui/views.ts';
+import { newGame } from '../src/engine/game.ts';
 
 describe('editor', () => {
   it('numérote les nœuds du même type', () => {
@@ -85,5 +87,65 @@ describe('pénalité de rejeu', () => {
     const { replayCut } = await import('../src/ui/views.ts');
     expect(replayCut(2)).toBe('−40 % au score');
     expect(replayCut(13)).toBe('la vague ne rapporte plus de points');
+  });
+});
+
+describe('pastilles d’évolution', () => {
+  // Pas de DOM dans les tests : on lit le HTML produit, pastille par pastille.
+  const pipsOf = (node: Parameters<typeof upgradePips>[0]) => upgradePips(node, catalog).split(/(?=<(?:div|button) class="pip)/).slice(1);
+
+  it('une pastille par évolution du bâtiment ; − et + pour les niveaux, bascule pour le reste', () => {
+    const [scaling, auto, breaker] = pipsOf({ id: 'app', type: 'app-server', upgrades: { 'horizontal-scaling': 2, 'circuit-breaker': 1 } });
+    expect(scaling).toContain('data-upgrade="horizontal-scaling"');
+    expect(scaling).toContain('data-delta="-1"');
+    expect(scaling).toContain('data-delta="1"');
+    expect(scaling).toContain('<b>+2</b>');
+    expect(auto).toContain('data-upgrade="autoscaling"');
+    expect(auto).toContain('<b></b>');
+    expect(breaker).toContain('data-upgrade="circuit-breaker"');
+    expect(breaker).toContain('data-delta="toggle"');
+    expect(breaker).toMatch(/^<button class="pip on"/);
+  });
+
+  it('grise − au plus bas et + au plus haut ; le rate limiting affiche son palier', () => {
+    const [limit] = pipsOf({ id: 'lb', type: 'load-balancer', upgrades: { 'rate-limiting': 5 } });
+    expect(limit).toMatch(/data-delta="1" disabled/);
+    expect(limit).not.toMatch(/data-delta="-1" disabled/);
+    expect(limit).toContain('<b>160/s</b>');
+    expect(pipsOf({ id: 'db', type: 'database' })[0]).toMatch(/data-delta="-1" disabled/);
+  });
+
+  it('un bâtiment sans évolution n’a pas de pastille', () => {
+    expect(upgradePips({ id: 'q', type: 'pubsub' }, catalog)).toBe('');
+  });
+});
+
+describe('pastilles déplacer et retirer', () => {
+  it('en tête de colonne, selon ce que le bâtiment permet', () => {
+    const html = upgradePips({ id: 'app', type: 'app-server' }, catalog, { move: true, remove: true });
+    expect(html.indexOf('data-tool="move"')).toBeLessThan(html.indexOf('data-upgrade'));
+    expect(html).toContain('data-action="remove-node" data-node="app"');
+    const fixed = upgradePips({ id: 'mail', type: 'domain-service' }, catalog, { move: true, remove: false });
+    expect(fixed).not.toContain('remove-node');
+    expect(upgradePips({ id: 'bus', type: 'pubsub' }, catalog, { move: true, remove: true })).toContain('data-tool="move"');
+  });
+});
+
+describe('construire sur une case vide', () => {
+  const view = (draft = A.minimal): ViewState =>
+    ({ catalog, scenario: urlShortener, game: newGame(), draft, attempts: [], tool: { kind: 'select' }, phase: 'build', history: { undo: 0, redo: 0 } }) as unknown as ViewState;
+
+  it('une fiche par bâtiment de la palette, avec ses chiffres et ses évolutions', () => {
+    const html = renderBuildMenu(view(), { q: 5, r: 3 });
+    const palette = Object.values(catalog.components).filter((d) => d.behavior !== 'source' && !d.prePlaced);
+    expect(html.match(/data-action="build-at"/g)).toHaveLength(palette.length);
+    expect(html).not.toContain('data-type="domain-service"');
+    expect(html).toContain('Autoscaling');
+  });
+
+  it('sur un chemin, dit que le bâtiment s’insère dans le lien', () => {
+    const draft = { ...A.minimal, links: A.minimal.links.map((l, i) => (i === 0 ? { ...l, path: [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: 2, r: 0 }] } : l)) };
+    expect(renderBuildMenu(view(draft), { q: 1, r: 0 })).toContain('s’insère dans le lien');
+    expect(renderBuildMenu(view(draft), { q: 7, r: 2 })).not.toContain('s’insère');
   });
 });

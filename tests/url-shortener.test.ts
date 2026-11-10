@@ -56,6 +56,11 @@ describe('Raccourcisseur d’URL', () => {
     expect(auto.failed).toBeGreaterThan(0);
     expect(permanent.failed).toBe(0);
 
+    // Les instances demandées démarrent avant de servir : le rendu montre ce chantier.
+    const first = auto.ticks.findIndex((t) => (t.nodes.app!.starting ?? 0) > 0);
+    expect(first).toBeGreaterThan(0);
+    expect(auto.ticks[first + 2]!.nodes.app!.instances).toBeGreaterThan(auto.ticks[first]!.nodes.app!.instances!);
+
     // Sans socle d'instances fixes, l'autoscaling arrive trop tard sur le pic.
     expect(play(A.autoscaled(0, 3), 'marketing-peak').won).toBe(false);
   });

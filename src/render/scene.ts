@@ -1,6 +1,7 @@
 import {
   AmbientLight,
   Box3,
+  BoxGeometry,
   Color,
   CylinderGeometry,
   DirectionalLight,
@@ -9,6 +10,7 @@ import {
   InstancedMesh,
   Mesh,
   MeshBasicMaterial,
+  MeshLambertMaterial,
   Object3D,
   OrthographicCamera,
   PCFSoftShadowMap,
@@ -26,7 +28,7 @@ import type { Architecture, ArchNode, Catalog, RequestKind, TickMetrics } from '
 import { REQUEST_KINDS } from '../engine/types.ts';
 import { BOARD } from '../data/board.ts';
 import { BRIDGE_MODEL, bridgeRotation, crossingTile, riverCells, riverKeys, riverTile, roadSides, roadTile, TERRAIN_MODELS, type Tile } from './terrain.ts';
-import { HEX_SIZE, HEX_WIDTH, hexAt, hexCenter, hexDistance, hexKey, type Hex } from './hex.ts';
+import { HEX_SIZE, HEX_WIDTH, hexAt, hexCenter, hexDistance, hexKey, hexNeighbours, type Hex } from './hex.ts';
 import { escapeHtml } from './html.ts';
 import { Effects } from './effects.ts';
 import { Fleet, WALK_FRAMES, type FleetStyle } from './fleet.ts';
@@ -100,6 +102,15 @@ interface Building {
   top: number;
   /** Position sur sa case : un bâtiment saturé tremble autour d'elle. */
   home: Vector3;
+  /**
+   * Autoscaling : une place par instance à la demande, sur une case voisine. Les fondations
+   * attendent ; au rejeu, un chantier se dresse le temps du démarrage, puis la tour sert.
+   */
+  slots: { scaffold: Object3D; tower: Object3D }[];
+  /** Icônes des évolutions achetées, sous le nom du bâtiment. */
+  badges: string;
+  /** La barrière de la guérite du disjoncteur : levée, elle s'abaisse quand le circuit s'ouvre. */
+  gate?: Object3D;
 }
 
 export type SceneMode = 'build' | 'replay';
@@ -151,11 +162,17 @@ export class CityScene {
   private readonly models: ModelLibrary;
   private catalog: Catalog;
   private layout: Layout;
+  /** Case voisine où un serveur range ses instances à la demande (autoscaling). */
+  private annexes = new Map<string, Hex>();
   private mode: SceneMode = 'build';
 
   private readonly cursor: Mesh;
   private readonly marker: Mesh;
   private ghost: Group | undefined;
+  /** Les pastilles d'évolution du bâtiment sélectionné, et leur HTML déjà posé. */
+  private readonly pips: CSS2DObject;
+  private pipsHtml = '';
+  private pipsFor: string | undefined;
   /** Réserve d'étiquettes +1 / −1, réutilisées d'une image à l'autre. */
   private readonly pops: CSS2DObject[] = [];
   private hovered: Hex | undefined;
@@ -199,6 +216,11 @@ export class CityScene {
     host.appendChild(this.renderer.domElement);
 
     this.labels = new CSS2DRenderer();
+    const pips = document.createElement('div');
+    pips.className = 'city-pips';
+    this.pips = new CSS2DObject(pips);
+    this.pips.visible = false;
+    this.scene.add(this.pips);
     this.labels.domElement.className = 'city-labels';
     host.appendChild(this.labels.domElement);
 
@@ -242,6 +264,7 @@ export class CityScene {
     this.clearDynamic();
     this.layout = layoutArchitecture(arch);
     for (const road of this.layout.roads) this.roads.set(road.key, road);
+    this.annexes = this.findAnnexes(arch);
     this.addTerrain();
     for (const node of arch.nodes) this.addBuilding(node);
     this.addTrees();
@@ -252,7 +275,10 @@ export class CityScene {
     this.mode = mode;
     this.cursor.visible = false;
     if (this.ghost) this.ghost.visible = false;
-    if (mode === 'replay') this.marker.visible = false;
+    if (mode === 'replay') {
+      this.marker.visible = false;
+      this.pips.visible = false;
+    }
   }
 
   /** Bâtiment fantôme à poser sous le curseur, ou aucun. */
@@ -281,12 +307,33 @@ export class CityScene {
 
   /** Repère sous un bâtiment : celui qu'on a sélectionné, ou le départ d'un lien en cours. */
   setMarked(nodeId: string | undefined, color = '#ffd166'): void {
-    const cell = nodeId ? this.layout.cells[nodeId] : undefined;
+    this.setMarkedAt(nodeId ? this.layout.cells[nodeId] : undefined, color);
+  }
+
+  /** Marque une case, bâtie ou non : la case vide où l'on s'apprête à construire. */
+  setMarkedAt(cell: Hex | undefined, color = '#ffd166'): void {
     this.marker.visible = cell !== undefined && this.mode === 'build';
     if (!cell) return;
     const p = hexCenter(cell);
     this.marker.position.set(p.x, 0.05, p.z);
     (this.marker.material as MeshBasicMaterial).color.set(color);
+  }
+
+  /**
+   * Pose les pastilles d'évolution au pied d'un bâtiment, côté caméra, dans sa case. Le HTML
+   * n'est remplacé que s'il change : une pastille survolée garde son infobulle.
+   */
+  setPips(nodeId: string | undefined, html: string): void {
+    const at = nodeId ? this.buildings.get(nodeId)?.home : undefined;
+    this.pipsFor = at && html && this.mode === 'build' ? nodeId : undefined;
+    this.pips.visible = this.pipsFor !== undefined;
+    if (!at || !this.pips.visible) return;
+    if (html !== this.pipsHtml) {
+      this.pips.element.innerHTML = html;
+      this.pipsHtml = html;
+    }
+    // La caméra regarde depuis +x, +z : le pied du bâtiment de ce côté reste dans sa case.
+    this.pips.position.set(at.x - 0.25, 0.35, at.z + 0.65);
   }
 
   /** Recentre doucement la vue sur un bâtiment (zoom avant), ou sur tout le plateau. */
@@ -569,6 +616,8 @@ export class CityScene {
       source: def?.behavior === 'source',
       top: 1,
       home: new Vector3(),
+      slots: [],
+      badges: '',
     };
   }
 
@@ -581,6 +630,13 @@ export class CityScene {
     b.home.set(at.x, 0, at.z);
     this.build(b, style);
     this.fitToCell(b.group);
+    this.addAnnex(b);
+    this.addGuardHut(b);
+    b.badges = Object.entries(node.upgrades ?? {})
+      .filter(([, level]) => level > 0)
+      .map(([id]) => this.theme.upgradeIcons[id])
+      .filter((icon): icon is string => icon !== undefined)
+      .join(' ');
 
     b.label.className = 'city-label';
     const label = new CSS2DObject(b.label);
@@ -592,6 +648,89 @@ export class CityScene {
 
     this.dynamic.add(b.group);
     this.buildings.set(node.id, b);
+  }
+
+  private levelOf(node: ArchNode, effect: string): number {
+    return Object.entries(node.upgrades ?? {}).reduce((a, [u, l]) => a + (this.catalog.upgrades[u]?.effect.type === effect ? l : 0), 0);
+  }
+
+  /**
+   * Une case voisine libre pour chaque serveur en autoscaling : ni bâtiment, ni chemin, ni
+   * rivière, de préférence côté caméra. Sans case libre, ses tours restent dans sa case.
+   * La case n'est pas réservée : un bâtiment posé dessus la reprend, l'annexe se déplace.
+   */
+  private findAnnexes(arch: Architecture): Map<string, Hex> {
+    const taken = new Set([...Object.values(this.layout.cells).map(hexKey), ...this.layout.roads.flatMap((r) => r.cells.map(hexKey)), ...riverKeys()]);
+    const out = new Map<string, Hex>();
+    for (const node of arch.nodes) {
+      const cell = this.layout.cells[node.id];
+      if (!cell || this.levelOf(node, 'autoscaling') === 0) continue;
+      const free = hexNeighbours(cell)
+        .filter((h) => !taken.has(hexKey(h)) && hexDistance(h, BOARD.center) <= BOARD.radius)
+        .sort((a, b) => hexCenter(b).x + hexCenter(b).z - (hexCenter(a).x + hexCenter(a).z))[0];
+      if (!free) continue;
+      out.set(node.id, free);
+      taken.add(hexKey(free));
+    }
+    return out;
+  }
+
+  /** Les fondations de l'autoscaling sur la case voisine, une par instance à la demande. */
+  private addAnnex(b: Building): void {
+    const cell = this.annexes.get(b.node.id);
+    const count = this.levelOf(b.node, 'autoscaling');
+    if (!cell || count === 0) return;
+    const p = hexCenter(cell);
+    const annex = new Group();
+    annex.position.set(p.x, 0, p.z);
+    const cols = Math.ceil(Math.sqrt(count));
+    const spread = Math.min(1.1, 2.2 / cols);
+    for (let i = 0; i < count; i++) {
+      const slot = new Group();
+      slot.position.set(((i % cols) - (cols - 1) / 2) * spread, 0, (Math.floor(i / cols) - (Math.ceil(count / cols) - 1) / 2) * spread);
+      slot.scale.setScalar(Math.min(1, spread / 1.1));
+      this.put(slot, K('building_tower_base_blue'), { scale: 0.45, y: -0.2 }, b);
+      const scaffold = new Group();
+      for (const [x, z, r] of [[-0.45, 0, Math.PI / 2], [0.45, 0, Math.PI / 2], [0, -0.45, 0], [0, 0.45, 0]] as const) {
+        this.put(scaffold, K('fence_wood_straight'), { x, z, rotate: r, scale: 0.6 });
+      }
+      this.put(scaffold, K('crate_A_small'), { x: 0.5, z: 0.5, scale: 1.8 });
+      const tower = new Group();
+      this.put(tower, K(i % 2 === 0 ? 'building_tower_A_blue' : 'building_tower_B_blue'), { scale: 0.75 }, b);
+      scaffold.visible = false;
+      tower.visible = false;
+      slot.add(scaffold, tower);
+      annex.add(slot);
+      b.slots.push({ scaffold, tower });
+    }
+    this.dynamic.add(annex);
+  }
+
+  /** Le circuit breaker : une guérite au bord de la case, sur la route de la première dépendance. */
+  private addGuardHut(b: Building): void {
+    if (this.levelOf(b.node, 'circuitBreaker') === 0) return;
+    const road = [...this.roads.values()].find((r) => r.from === b.node.id && r.path.length > 1);
+    const next = road?.path[1];
+    const along = next ? new Vector3(next.x - b.home.x, 0, next.z - b.home.z).normalize() : new Vector3(1, 0, 0);
+    // Le bas-côté tourné vers la caméra (+x, +z), pour que les tours ne la cachent pas.
+    let side = new Vector3(-along.z, 0, along.x);
+    if (side.x + side.z < 0) side = side.negate();
+    const hut = new Group();
+    this.put(hut, K('building_tower_base_blue'), { scale: 0.42 }, b);
+    this.put(hut, K('flag_blue'), { y: 0.5, scale: 0.7 }, b);
+    // La barrière, en travers de la route quand elle tombe : un poteau blanc, un bras rouge.
+    const post = new Mesh(new BoxGeometry(0.07, 0.34, 0.07), new MeshLambertMaterial({ color: '#f4f1de' }));
+    post.position.set(-side.x * 0.3, 0.17, -side.z * 0.3);
+    const gate = new Group();
+    gate.position.set(-side.x * 0.3, 0.32, -side.z * 0.3);
+    gate.rotation.y = Math.atan2(-side.x, -side.z);
+    const arm = new Mesh(new BoxGeometry(0.06, 0.06, 0.8), new MeshLambertMaterial({ color: '#d62828' }));
+    arm.position.z = 0.4;
+    gate.add(arm);
+    hut.add(post, gate);
+    b.gate = gate;
+    hut.position.copy(b.home).addScaledVector(along, 0.7).addScaledVector(side, 0.5);
+    this.dynamic.add(hut);
   }
 
   /** Réduit un bâtiment qui déborderait de sa case sur ses voisines. */
@@ -650,7 +789,8 @@ export class CityScene {
 
       case 'tower': {
         // Une tour par instance possible : le scaling fixe et le plafond d'autoscaling.
-        const max = 1 + levelOf('instances') + levelOf('autoscaling');
+        // Les instances à la demande vont sur la case voisine quand il y en a une de libre.
+        const max = 1 + levelOf('instances') + (this.annexes.has(b.node.id) ? 0 : levelOf('autoscaling'));
         const cols = Math.ceil(Math.sqrt(max));
         for (let i = 0; i < max; i++) {
           const tower = this.put(
@@ -735,6 +875,7 @@ export class CityScene {
     const taken = new Set([
       ...Object.values(this.layout.cells).map(hexKey),
       ...this.layout.roads.flatMap((r) => r.cells.map(hexKey)),
+      ...[...this.annexes.values()].map(hexKey),
       ...riverKeys(),
     ]);
     const sources = Object.entries(this.layout.cells)
@@ -803,6 +944,17 @@ export class CityScene {
           fx.smoke(p.clone().setY(b.top));
         }
       });
+      if (b.gate) b.gate.rotation.x = n?.open ? 0 : -1.25;
+      // Les instances à la demande, sur leur case voisine : servies, en chantier, ou en attente.
+      const autoActive = tick ? Math.max(0, (n?.instances ?? 0) - Math.max(0, b.instances.length - down)) : 0;
+      const starting = tick ? (n?.starting ?? 0) : 0;
+      b.slots.forEach((s, i) => {
+        const serving = i < autoActive;
+        const rising = !serving && i < autoActive + starting;
+        s.tower.visible = serving || rising;
+        s.scaffold.visible = rising;
+        s.tower.scale.set(1, rising ? 0.3 + 0.3 * (0.5 + 0.5 * Math.sin(fx.now * 3 + i)) : 1, 1);
+      });
       if (down > 0 && b.instances.length === 0) {
         fx.flames(roof.clone().setY(b.top * 0.6));
         fx.smoke(roof);
@@ -840,6 +992,8 @@ export class CityScene {
       const rounded = (x: number) => Math.round(x);
       b.label.innerHTML =
         `<b>${escapeHtml(b.techName)}</b><span>${escapeHtml(b.metaphor)}</span>` +
+        (b.badges ? `<span class="badges">${b.badges}</span>` : '') +
+        (starting > 0 ? em(`🏗️ ${starting} instance${starting > 1 ? 's' : ''} en démarrage`, true) : '') +
         (down > 0 ? em(`🔥 ${down} instance${down > 1 ? 's' : ''} en panne`, true) : '') +
         // Au rejeu, chaque bâtiment montre ce qu'il reçoit et sa charge : de quoi dimensionner.
         (down > 0 && n?.instances === 0

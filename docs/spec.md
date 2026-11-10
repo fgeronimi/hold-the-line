@@ -66,7 +66,7 @@ Une partie est une suite de vagues. Chacune passe par quatre phases (I5) :
 1. **Briefing** : le chambellan annonce l'information nouvelle et l'incident attendu, s'il
    y en a un. Les chiffres (trafic, budget, SLA) restent affichés sous le récit.
 2. **Construction** : le jeu est en pause. Le joueur pose, déplace, relie et retire des
-   bâtiments sur le plateau, et achète des évolutions dans la fiche du bâtiment.
+   bâtiments sur le plateau, et achète des évolutions par les pastilles au pied du bâtiment sélectionné (I12), ou dans sa fiche ; cliquer une case vide ouvre les fiches des bâtiments à y construire.
 3. **Vague** : le trafic est simulé, puis rejoué sur le même plateau. Les jauges et les
    incidents se lisent en direct.
 4. **Debrief** : ce qui a marché, ce qui a failli casser, ce qu'on pourrait alléger, avec

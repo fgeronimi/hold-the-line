@@ -79,6 +79,19 @@ export const fortifiedCity: Theme = {
       metaphor: 'Crieur public', icon: '📣', shape: 'belfry', color: '#c7bfae', accent: '#3d5a80' },
   },
   narrator: { name: 'Le chambellan', icon: '🎩' },
+  upgradeIcons: {
+    'horizontal-scaling': '🗼',
+    autoscaling: '🏗️',
+    'read-replica': '📚',
+    'rate-limiting': '🛡️',
+    idempotence: '🔏',
+    outbox: '📒',
+    'circuit-breaker': '🔌',
+    'request-coalescing': '🔒',
+    'client-backoff': '⏳',
+    'queue-retention': '📦',
+    'leader-reads': '👑',
+  },
   narratives: {
     // La billetterie du tournoi.
     'ticket-rush':

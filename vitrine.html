@@ -28,6 +28,20 @@
       .gauge i { display: block; height: 100%; background: #fb8500; }
       .hourglass { font: 700 12px system-ui; color: #1c2630; background: #fff; border-radius: 9px; padding: 1px 6px; display: flex; gap: 5px; align-items: center; }
       .hourglass .gauge i { background: #9b5de5; }
+      .pip { pointer-events: auto; position: relative; display: flex; align-items: center; gap: 3px; user-select: none; }
+      .pip .icon { position: relative; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; background: #fffaf0; border: 2px solid #b9b2a4; box-shadow: 0 2px 4px #0003; opacity: .7; cursor: pointer; transition: opacity .15s, border-color .15s, background .15s; }
+      .pip.leveled .icon { cursor: default; }
+      .pip:hover .icon { opacity: 1; }
+      .pip.on .icon { opacity: 1; border-color: #2a9d8f; background: #e3f4f1; }
+      .pip .step { width: 17px; height: 17px; padding: 0; border-radius: 50%; border: 1px solid #b9b2a4; background: #fff; color: #1c2630; font: 800 12px/1 system-ui; cursor: pointer; box-shadow: 0 1px 2px #0002; opacity: 0; transition: opacity .15s; }
+      .pip:hover .step, .pip.on .step { opacity: 1; }
+      .pip .step:hover:not(:disabled) { border-color: #2a9d8f; color: #2a9d8f; }
+      .pip .step:disabled { opacity: .25 !important; cursor: default; }
+      .pip b { position: absolute; right: -7px; bottom: -6px; font: 800 9px system-ui; color: #fff; background: #2a9d8f; border-radius: 7px; padding: 0 3px; }
+      .pip b:empty { display: none; }
+      .pip i { display: none; position: absolute; right: calc(100% + 8px); top: 50%; transform: translateY(-50%); width: max-content; max-width: 190px; font: 12px/1.35 system-ui; font-style: normal; color: #1c2630; background: #fff; border: 1px solid #d3dbe1; border-radius: 6px; padding: 4px 8px; box-shadow: 0 2px 6px #0002; z-index: 2; }
+      .pip i em { font-style: normal; font-weight: 700; display: block; }
+      .pip:hover i { display: block; }
       .sla { position: absolute; inset: 0; pointer-events: none; }
       .sla .vig { position: absolute; inset: 0; box-shadow: inset 0 0 60px 18px #d62828; opacity: 0; }
       .sla .bar { position: absolute; left: 12px; right: 12px; top: 10px; height: 8px; border-radius: 4px; background: #00000022; }
@@ -42,7 +56,7 @@
     <main>
       <header>
         <h1>Vitrine des incidents</h1>
-        <p>Chaque îlot rejoue un problème avec les tuiles et les personnages du jeu. Page de debug, hors partie : rien n'est branché sur le moteur.</p>
+        <p>Chaque îlot rejoue un problème avec les tuiles et les personnages du jeu. Les tuiles « maquette » essaient des façons d’acheter et de montrer les évolutions. Page de debug, hors partie : rien n'est branché sur le moteur.</p>
       </header>
       <section class="grid" id="grid"></section>
     </main>

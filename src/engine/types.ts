@@ -305,6 +305,8 @@ export interface NodeTick {
   backlog?: number;
   /** Instances en service ce tick, pour un nœud qui en a plusieurs. */
   instances?: number;
+  /** Instances demandées par l'autoscaling, encore en démarrage ce tick (le chantier). */
+  starting?: number;
   /** Trafic abusif écarté ici par le rate limiting ce tick (req/s), hors échecs. */
   shed?: number;
   /** Instances mises hors service par un incident ce tick. */

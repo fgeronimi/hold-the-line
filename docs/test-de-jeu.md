@@ -66,7 +66,7 @@ et à la fin de la vague le nombre d'essais et les étoiles affichées au debrie
 Noter l'heure et la phrase exacte quand l'un de ces moments arrive :
 
 - **Construction** : ne trouve pas comment poser ou relier ; pose sur la rivière ; ne voit
-  pas que les évolutions (scaling, réplicas, idempotence…) sont dans la fiche du bâtiment ;
+  ne remarque pas les pastilles d’évolution au pied du bâtiment sélectionné (scaling, réplicas, idempotence…) ; lit ou saute les fiches qui s’ouvrent sur une case vide ;
   glisse un bâtiment sur un chemin et s'étonne du lien créé.
 - **Le chambellan** : lit la ligne « En vrai » ou seulement la métaphore ; saute le
   briefing ; relit le briefing (bouton 🎩).

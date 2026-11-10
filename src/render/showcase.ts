@@ -24,6 +24,7 @@ import {
   type Object3D,
 } from 'three';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { catalog } from '../data/catalog.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { HEX_WIDTH, hexCenter, type Hex } from './hex.ts';
 import { Effects } from './effects.ts';
@@ -49,7 +50,7 @@ type Kind = 'read' | 'write' | 'async' | 'hostile';
 const MODELS: ModelId[] = [
   'hex_grass', 'trees_A_small', 'rock_single_A', 'hex_road_A', 'hex_river_A', 'hex_river_crossing_A', 'hex_river_crossing_B', BRIDGE_MODEL,
   'building_tower_A_blue', 'building_tower_B_blue', 'building_castle_blue', 'building_tower_base_blue', 'building_tavern_blue',
-  'fence_wood_straight', 'crate_A_small', 'sack', 'building_church_blue', 'flag_blue', 'wall_straight_gate', 'building_barracks_blue', 'building_home_B_blue',
+  'fence_wood_straight', 'crate_A_small', 'sack', 'building_church_blue', 'flag_blue', 'wall_straight_gate', 'building_barracks_blue', 'building_home_B_blue', 'building_market_blue',
 ].map((m) => (m.startsWith('kaykit') ? m : K(m)));
 const CHARACTERS = [...Object.values(theme.vehicles).map((v) => v.model!), theme.hostile.model!];
 
@@ -127,11 +128,28 @@ interface Site {
   top: number;
 }
 
+/**
+ * Un seul contexte WebGL pour toute la page : Chrome n'en garde que 16, et la vitrine a plus
+ * d'îlots. Chaque îlot est rendu tour à tour, puis recopié dans sa propre toile 2D.
+ */
+let shared: WebGLRenderer | undefined;
+function gl(): WebGLRenderer {
+  if (!shared) {
+    shared = new WebGLRenderer({ antialias: true });
+    shared.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    shared.shadowMap.enabled = true;
+    shared.shadowMap.type = PCFSoftShadowMap;
+  }
+  return shared;
+}
+
 class Vignette {
   readonly scene = new Scene();
   readonly camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
-  private readonly renderer = new WebGLRenderer({ antialias: true });
+  private readonly canvas = document.createElement('canvas');
   private readonly labels = new CSS2DRenderer();
+  /** Faux quand l'îlot est hors de l'écran : on ne le rend pas. */
+  visible = true;
 
   readonly host: HTMLElement;
   readonly lib: ModelLibrary;
@@ -141,10 +159,8 @@ class Vignette {
     this.host = host;
     this.lib = lib;
     this.cast = cast;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = PCFSoftShadowMap;
-    host.appendChild(this.renderer.domElement);
+    host.appendChild(this.canvas);
+    new IntersectionObserver(([e]) => (this.visible = e!.isIntersecting)).observe(host);
     this.labels.domElement.className = 'labels';
     host.appendChild(this.labels.domElement);
     this.scene.background = new Color('#dfe8ee');
@@ -167,7 +183,9 @@ class Vignette {
 
   fit(): void {
     const { clientWidth: w, clientHeight: h } = this.host;
-    this.renderer.setSize(w, h, false);
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    this.canvas.width = Math.round(w * dpr);
+    this.canvas.height = Math.round(h * dpr);
     this.labels.setSize(w, h);
     const aspect = w / Math.max(h, 1);
     const half = 2.15;
@@ -176,7 +194,11 @@ class Vignette {
   }
 
   render(): void {
-    this.renderer.render(this.scene, this.camera);
+    if (!this.visible) return;
+    const r = gl();
+    r.setSize(this.host.clientWidth, this.host.clientHeight, false);
+    r.render(this.scene, this.camera);
+    this.canvas.getContext('2d')!.drawImage(r.domElement, 0, 0, this.canvas.width, this.canvas.height);
     this.labels.render(this.scene, this.camera);
   }
 
@@ -316,6 +338,73 @@ function caller(v: Vignette): { group: Group; tint: Material[] } {
 
 const glow = (tint: Material[], amount: number) => {
   for (const m of tint) if ('emissive' in m && m.emissive instanceof Color) m.emissive.copy(ALERT).multiplyScalar(amount * 0.6);
+};
+
+/**
+ * La guérite du disjoncteur : une petite tour de garde et sa barrière, qui pivote pour
+ * s'abaisser en travers de la route. `lift` 1 = levée, 0 = baissée.
+ */
+function guardHut(v: Vignette, x: number, z: number) {
+  const group = new Group();
+  v.put(group, K('building_tower_base_blue'), { scale: 0.32 });
+  v.put(group, K('flag_blue'), { y: 0.38, scale: 0.55 });
+  const post = new Mesh(new BoxGeometry(0.08, 0.36, 0.08), new MeshLambertMaterial({ color: '#f4f1de' }));
+  post.position.set(0.32, 0.18, 0.25);
+  const pivot = new Group();
+  pivot.position.set(0.32, 0.33, 0.25);
+  const arm = new Mesh(new BoxGeometry(0.06, 0.06, 0.95), new MeshLambertMaterial({ color: '#d62828' }));
+  arm.position.z = 0.48;
+  pivot.add(arm);
+  group.add(post, pivot);
+  group.position.set(x, 0, z);
+  v.scene.add(group);
+  return {
+    group,
+    /** 1 = levée, 0 = baissée en travers de la route. */
+    lift(f: number) {
+      pivot.rotation.x = -1.25 * Math.min(Math.max(f, 0), 1);
+    },
+  };
+}
+
+/** Des fondations et leur échafaudage, sur une case voisine : la place d'une instance à venir. */
+function foundation(v: Vignette, x: number, z: number) {
+  const group = new Group();
+  v.put(group, K('building_tower_base_blue'), { scale: 0.45, y: -0.2 });
+  const scaffold = new Group();
+  for (const [fx, fz, r] of [[-0.45, 0, Math.PI / 2], [0.45, 0, Math.PI / 2], [0, -0.45, 0], [0, 0.45, 0]] as const) {
+    v.put(scaffold, K('fence_wood_straight'), { x: fx, z: fz, rotate: r, scale: 0.6 });
+  }
+  v.put(scaffold, K('crate_A_small'), { x: 0.55, z: 0.55, scale: 1.8 });
+  v.put(scaffold, K('sack'), { x: -0.55, z: 0.5, scale: 1.8 });
+  const tower = new Group();
+  v.put(tower, K('building_tower_A_blue'), { scale: 0.7 });
+  group.add(scaffold, tower);
+  group.position.set(x, 0, z);
+  v.scene.add(group);
+  return { group, scaffold, tower };
+}
+
+/**
+ * Une pastille d'évolution au pied du bâtiment, avec son prix au survol. Tout-ou-rien, un
+ * clic la bascule ; à niveaux, deux boutons − et + l'encadrent (`step` reçoit −1 ou +1).
+ */
+function pip(v: Vignette, x: number, y: number, z: number, icon: string, tip: string, leveled: boolean, step: (delta: number) => void): HTMLElement {
+  const html = leveled
+    ? `<button class="step" data-d="-1" title="Retirer un niveau">−</button><span class="icon">${icon}<b></b></span><button class="step" data-d="1" title="Ajouter un niveau">+</button><i>${tip}</i>`
+    : `<span class="icon">${icon}<b></b></span><i>${tip}</i>`;
+  const el = v.label(`pip${leveled ? ' leveled' : ''}`, html, x, y, z);
+  el.addEventListener('click', (e) => {
+    const d = (e.target as HTMLElement).closest('[data-d]')?.getAttribute('data-d');
+    if (leveled && !d) return;
+    step(Number(d ?? 1));
+  });
+  return el;
+}
+
+const price = (id: string, level: number) => {
+  const u = catalog.upgrades[id]!;
+  return level === 0 ? { cost: 0, cx: 0 } : { cost: u.cost.base + u.cost.perLevel * level, cx: u.complexity.base + u.complexity.perLevel * level };
 };
 
 interface Entry {
@@ -733,6 +822,189 @@ const ENTRIES: Entry[] = [
           }
         }
         wrong.style.opacity = String(shown);
+      };
+    },
+  },
+  {
+    title: 'Pastilles d’évolution',
+    chip: { text: 'branché', kind: 'ok' },
+    text: 'Au pied de la tour, une pastille par évolution. Le scaling et l’autoscaling ont leurs boutons − et + ; le circuit breaker se bascule d’un clic. Chaque achat prend corps : une tour de plus, des fondations sur la case voisine (une par instance à la demande), une guérite et sa barrière sur la route. Le prix au survol, la facture au-dessus.',
+    trigger: 'clic sur − / + ou sur la pastille ; la fiche reste pour le détail',
+    setup: (v) => {
+      const site = v.site(towers(v, 3));
+      const spot = hexCenter({ q: 0, r: 1 });
+      const slots = [-0.55, 0, 0.55].map((dx, i) => {
+        const f = foundation(v, spot.x + dx, spot.z + (i === 1 ? -0.35 : 0.2));
+        f.group.scale.setScalar(0.55);
+        f.tower.visible = false;
+        return f;
+      });
+      const hut = guardHut(v, 0.0, 0.55);
+      const state = { scaling: 0, autoscaling: 0, breaker: 0 };
+      const max = { scaling: 2, autoscaling: 3, breaker: 1 };
+      const ids = { scaling: 'horizontal-scaling', autoscaling: 'autoscaling', breaker: 'circuit-breaker' };
+      const tip = (k: keyof typeof state) => {
+        const u = catalog.upgrades[ids[k]]!;
+        const unit = price(ids[k], 1);
+        const per = u.cost.perLevel > 0 ? `${u.cost.perLevel} écus par niveau` : `${unit.cost} écus`;
+        return `<em>${u.techName}</em>${u.label}<br>${per} · +${unit.cx} complexité`;
+      };
+      // En colonne au pied de la tour, côté caméra : tout reste dans l'hexagone.
+      const foot = { x: SITE.x - 0.15, z: SITE.z + 0.7 };
+      const pips = (['scaling', 'autoscaling', 'breaker'] as const).map((k, i) => {
+        const el = pip(v, foot.x, 0.1 + (2 - i) * 0.55, foot.z, { scaling: '🗼', autoscaling: '🏗', breaker: '🔌' }[k], tip(k), max[k] > 1, (d) => {
+          state[k] = max[k] === 1 ? 1 - state[k] : Math.min(max[k], Math.max(0, state[k] + d));
+        });
+        return { k, el };
+      });
+      const bill = v.label('pop info', '', SITE.x - 1.6, 2.1, SITE.z - 0.8);
+      return () => {
+        site.parts.forEach((p, i) => (p.visible = i <= state.scaling));
+        slots.forEach((s, i) => (s.group.visible = i < state.autoscaling));
+        hut.group.visible = state.breaker > 0;
+        hut.lift(1);
+        let cost = 0;
+        let cx = 0;
+        for (const { k, el } of pips) {
+          const level = state[k];
+          el.classList.toggle('on', level > 0);
+          el.querySelector('b')!.textContent = level > 0 && max[k] > 1 ? (k === 'autoscaling' ? `≤${level}` : `+${level}`) : '';
+          el.querySelectorAll<HTMLButtonElement>('[data-d]').forEach((b) => (b.disabled = b.dataset.d === '-1' ? level === 0 : level === max[k]));
+          const p = price(ids[k], level);
+          cost += p.cost;
+          cx += p.cx;
+        }
+        bill.textContent = cost > 0 ? `évolutions : ${cost} écus · +${cx} complexité` : 'aucune évolution';
+      };
+    },
+  },
+  {
+    title: 'Autoscaling en chantier',
+    chip: { text: 'branché', kind: 'ok' },
+    text: 'L’autoscaling réserve des fondations sur la case voisine. Quand la charge monte, un échafaudage se dresse et une tour pousse en deux ticks ; pendant ce temps, des voyageurs repartent refoulés. Une fois en service, la tour soulage les autres ; la foule partie, elle est rendue. On voit enfin le délai de démarrage.',
+    trigger: '<code>autoscaling</code> du serveur, <code>instances</code> du tick et délai de démarrage',
+    setup: (v) => {
+      const site = v.site(towers(v, 2));
+      const spot = hexCenter({ q: 0, r: 1 });
+      const slot = foundation(v, spot.x, spot.z);
+      const stage = v.label('pop info', '', spot.x, 1.7, spot.z);
+      const load = v.label('pop', '', SITE.x, 2.0, SITE.z);
+      const crowd = Array.from({ length: 4 }, (_, i) => ({ i, go: v.walker(i % 2 ? 'write' : 'read'), back: v.walker('read', true) }));
+      return (t) => {
+        const p = phase(t, 10);
+        const rising = between(p, 0.15, 0.3);
+        const building = between(p, 0.32, 0.56);
+        const busy = p > 0.15 && p < 0.85;
+        const starting = p >= 0.32 && p < 0.56;
+        const serving = p >= 0.56 && p < 0.85;
+        heat(site, busy ? (serving ? 0.15 : Math.min(1, rising) * 0.8) : 0);
+        load.style.opacity = busy ? '1' : '0';
+        load.textContent = serving ? 'charge 80 %' : 'charge 125 %';
+        load.classList.toggle('info', serving);
+        slot.scaffold.visible = starting || (p >= 0.3 && p < 0.32);
+        slot.tower.visible = p >= 0.32 && p < 0.95;
+        const grow = starting ? building : p >= 0.56 && p < 0.85 ? 1 : p >= 0.85 ? 1 - between(p, 0.85, 0.95) : 0;
+        slot.tower.scale.set(1, Math.max(0.02, grow), 1);
+        stage.style.opacity = p >= 0.3 && p < 0.95 ? '1' : '0';
+        stage.textContent = starting ? `🏗 démarrage ${building < 0.5 ? 1 : 2}/2 ticks` : serving ? '✔ en service' : '↘ instance rendue';
+        for (const { i, go, back } of crowd) {
+          const f = phase(t, 1.6, i / crowd.length);
+          const lane = ((i % 2) - 0.5) * 0.4;
+          // Tant que la tour n'est pas prête, la moitié des voyageurs repart refoulée.
+          const refused = busy && !serving && i % 2 === 0;
+          if (f < 0.55 || !refused) {
+            back.hide();
+            if (f < 0.55) go.at(lerp(ROAD_START, DOOR, f / 0.55), lane, true, t);
+            else go.hide();
+          } else {
+            go.hide();
+            back.at(lerp(DOOR, ROAD_START, between(f, 0.55, 1)), lane, false, t);
+          }
+        }
+      };
+    },
+  },
+  {
+    title: 'Guérite du disjoncteur',
+    chip: { text: 'branché', kind: 'ok' },
+    text: 'Le circuit breaker devient une guérite sur la route du banquier, barrière levée. Le banquier traîne : la barrière tombe, les appels sont refusés sur-le-champ. Un peu plus tard, elle se lève à moitié pour un appel d’essai (demi-ouvert) ; il passe, la route rouvre.',
+    trigger: '<code>open</code> du serveur ; l’état demi-ouvert serait à ajouter au moteur',
+    setup: (v) => {
+      v.site(bank(v));
+      const server = caller(v);
+      const hut = guardHut(v, -0.15, -0.7);
+      const state = v.label('pop info', '', -0.1, 1.5, -0.5);
+      const slow = v.label('hourglass', '⏳ 4 000 ms', SITE.x, 1.6, SITE.z);
+      const mages = [0, 0.33, 0.66].map((offset) => ({ offset, ok: v.walker('async'), ko: v.walker('async', true) }));
+      const from = server.group.position.x + 0.4;
+      const bar = -0.1;
+      return (t) => {
+        const p = phase(t, 9);
+        const open = p >= 0.38 && p < 0.72;
+        const half = p >= 0.72 && p < 0.84;
+        hut.lift(p < 0.35 ? 1 : p < 0.4 ? 1 - between(p, 0.35, 0.4) : open ? 0 : half ? 0.45 : between(p, 0.84, 0.9));
+        slow.style.opacity = p >= 0.33 && p < 0.72 ? '1' : '0';
+        state.textContent = open ? '🔌 ouvert : refus immédiat' : half ? '◐ demi-ouvert : un appel d’essai' : '● fermé : tout passe';
+        state.classList.toggle('shield', !open);
+        for (const { offset, ok, ko } of mages) {
+          const f = phase(t, 2.2, offset);
+          const z = 0.15;
+          if (open) {
+            if (f < 0.45) {
+              ko.hide();
+              ok.at(lerp(from, bar - 0.25, f / 0.45), z, true, t);
+            } else {
+              ok.hide();
+              ko.at(lerp(bar - 0.3, from, between(f, 0.45, 1)), z, false, t);
+            }
+          } else if (half && offset > 0) {
+            ok.hide();
+            ko.hide();
+          } else {
+            ko.hide();
+            ok.at(lerp(from, DOOR, f), z, true, t);
+          }
+        }
+      };
+    },
+  },
+  {
+    title: 'Verrou de recalcul',
+    chip: { text: 'maquette', kind: 'new' },
+    text: 'Un cadenas sur le carnet. Pendant une ruée, un seul messager court aux archives chercher la page perdue ; les autres attendent en file devant le carnet, puis repartent tous servis. Sans verrou, ils courraient tous aux archives.',
+    trigger: '<code>request-coalescing</code> du cache, incident <code>cache-stampede</code>',
+    setup: (v) => {
+      v.site((g, tint) => {
+        v.put(g, K('building_market_blue'), { scale: 0.9 }, tint);
+        v.put(g, K('sack'), { x: 0.9, z: 0.5, scale: 2 }, tint);
+      });
+      const archive = hexCenter({ q: 0, r: 1 });
+      const keep = new Group();
+      v.put(keep, K('building_castle_blue'), { scale: 0.55 });
+      keep.position.set(archive.x, 0, archive.z);
+      v.scene.add(keep);
+      v.label('pip on', '<span class="icon">🔒<b></b></span>', SITE.x + 0.5, 1.5, SITE.z);
+      const wait = v.label('hourglass', '⏳ 4 attendent la même page', SITE.x - 1.2, 1.2, SITE.z + 0.4);
+      const runner = v.walker('read');
+      const queue = Array.from({ length: 4 }, (_, i) => v.walker(i % 2 ? 'read' : 'write'));
+      const door = { x: DOOR - 0.2, z: 0 };
+      return (t) => {
+        const p = phase(t, 7);
+        // Le premier arrivé va aux archives et revient ; la file l'attend, puis repart servie.
+        const there = between(p, 0.15, 0.4);
+        const back = between(p, 0.45, 0.7);
+        if (p < 0.15) runner.at(lerp(ROAD_START, door.x, p / 0.15), door.z, true, t);
+        else if (p < 0.4) runner.at(lerp(door.x, archive.x, there), lerp(door.z, archive.z - 0.5, there), false, t);
+        else if (p < 0.45) runner.at(archive.x, archive.z - 0.5, false, t, false);
+        else if (p < 0.7) runner.at(lerp(archive.x, door.x, back), lerp(archive.z - 0.5, door.z, back), true, t);
+        else runner.at(lerp(door.x, ROAD_START, between(p, 0.7, 1)), door.z, false, t);
+        wait.style.opacity = p >= 0.15 && p < 0.7 ? '1' : '0';
+        queue.forEach((w, i) => {
+          const spot = door.x - 0.45 * (i + 1);
+          if (p < 0.15) w.at(lerp(ROAD_START - 0.5 * i, spot, p / 0.15), 0.2, true, t);
+          else if (p < 0.7) w.at(spot, 0.2, true, t, false);
+          else w.at(lerp(spot, ROAD_START - 0.5, between(p, 0.7, 1)), 0.2, false, t);
+        });
       };
     },
   },

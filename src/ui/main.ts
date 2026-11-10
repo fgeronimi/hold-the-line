@@ -19,6 +19,7 @@ import {
   renderDialog,
   renderHud,
   renderToolbar,
+  upgradePips,
   type Attempt,
   type Tool,
   type ViewState,
@@ -206,7 +207,12 @@ function syncBoard(): void {
   if (!building) scene.setMarked(undefined);
   else if (tool.kind === 'link' && tool.from) scene.setMarked(tool.from, '#3a86ff');
   else if (tool.kind === 'move') scene.setMarked(tool.id, '#9b5de5');
+  else if (state.buildAt) scene.setMarkedAt(state.buildAt, '#2a9d8f');
   else scene.setMarked(state.selectedNode);
+  // Les pastilles d'évolution, au pied du bâtiment sélectionné, seulement à la construction.
+  const selected = building && tool.kind === 'select' ? state.draft.nodes.find((n) => n.id === state.selectedNode) : undefined;
+  const can = selected && { move: state.catalog.components[selected.type]?.behavior !== 'source', remove: !permanent(selected) };
+  scene.setPips(selected?.id, selected && can ? upgradePips(selected, state.catalog, can) : '');
 }
 
 /** Où l'outil courant peut agir : le curseur hexagonal rougit ailleurs. */
@@ -290,7 +296,13 @@ function onBoardClick(cell: BoardCell): void {
   const tool = state.tool;
   switch (tool.kind) {
     case 'select':
-      update({ selectedNode: here?.id, boardMessage: undefined, showMenu: false });
+      // Une case vide où l'on peut bâtir ouvre les fiches des bâtiments à y construire.
+      update({
+        selectedNode: here?.id,
+        buildAt: !here && insideBoard(cell) && !isRiver(cell) ? cell : undefined,
+        boardMessage: undefined,
+        showMenu: false,
+      });
       return;
     case 'place':
       return applied(placeNode(state.draft, tool.type, cell, state.catalog));
@@ -321,7 +333,7 @@ async function playOnBoard(attempt: Attempt): Promise<void> {
   const { startReplay } = await import('../render/replay.ts');
   stopWave?.();
   const wave = state.scenario.waves[attempt.waveIndex]!;
-  update({ phase: 'wave', debriefTab: 'analysis', current: attempt.id, selectedNode: undefined, tool: { kind: 'select' }, showMenu: false });
+  update({ phase: 'wave', debriefTab: 'analysis', current: attempt.id, selectedNode: undefined, buildAt: undefined, tool: { kind: 'select' }, showMenu: false });
   stopWave = startReplay(scene, regions.board, {
     title: `Vague ${attempt.waveIndex + 1} — ${wave.title}`,
     arch: attempt.arch,
@@ -382,7 +394,7 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     leaveWave();
     update({ phase: 'build' });
   },
-  deselect: () => update({ selectedNode: undefined }),
+  deselect: () => update({ selectedNode: undefined, buildAt: undefined }),
   undo: () => travel(undo, redo),
   redo: () => travel(redo, undo),
 
@@ -396,8 +408,17 @@ const actions: Record<string, (el: HTMLElement) => void> = {
           : kind === 'link'
             ? { kind }
             : { kind };
-    update({ tool, boardMessage: undefined, showMenu: false });
+    update({ tool, buildAt: undefined, boardMessage: undefined, showMenu: false });
   },
+  'build-at': (el) => {
+    const cell = state.buildAt;
+    if (!cell) return;
+    const result = placeNode(state.draft, el.dataset.type!, cell, state.catalog);
+    // Le bâtiment posé est sélectionné : ses pastilles d'évolution apparaissent aussitôt.
+    const placed = result.ok ? result.arch.nodes.find((n) => !state.draft.nodes.some((o) => o.id === n.id))?.id : undefined;
+    applied(result, { buildAt: undefined, selectedNode: placed });
+  },
+  'close-build': () => update({ buildAt: undefined }),
 
   'add-node': () => {
     const type = (document.getElementById('new-node') as HTMLSelectElement).value;
@@ -407,6 +428,14 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     const node = state.draft.nodes.find((n) => n.id === el.dataset.node);
     if (!node || permanent(node)) return;
     update({ draft: removeNode(state.draft, node.id), selectedNode: undefined, tool: { kind: 'select' } });
+  },
+  'upgrade-step': (el) => {
+    const node = state.draft.nodes.find((n) => n.id === el.dataset.node);
+    const up = state.catalog.upgrades[el.dataset.upgrade!];
+    if (!node || !up) return;
+    const level = node.upgrades?.[up.id] ?? 0;
+    const next = el.dataset.delta === 'toggle' ? (level > 0 ? 0 : 1) : Math.min(up.maxLevel, Math.max(0, level + Number(el.dataset.delta)));
+    if (next !== level) update({ draft: setUpgrade(state.draft, node.id, up.id, next) });
   },
   upgrade: (el) =>
     update({
@@ -503,7 +532,7 @@ root.addEventListener('change', dispatch);
 window.addEventListener('keydown', (e) => {
   // Pas de raccourci pendant la saisie d'un champ (calibrage, vue tableau).
   if (e.target instanceof Element && e.target.closest('input, select, textarea')) return;
-  if (e.key === 'Escape' && state.phase === 'build') update({ tool: { kind: 'select' }, boardMessage: undefined, showMenu: false });
+  if (e.key === 'Escape' && state.phase === 'build') update({ tool: { kind: 'select' }, buildAt: undefined, boardMessage: undefined, showMenu: false });
   if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z' || e.key === 'y')) {
     e.preventDefault();
     if (e.key === 'y' || e.shiftKey) travel(redo, undo);

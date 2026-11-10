@@ -1,6 +1,6 @@
-import { bill, migrationCost } from '../engine/budget.ts';
+import { bill, migrationCost, totals } from '../engine/budget.ts';
 import type { GameState } from '../engine/game.ts';
-import type { Architecture, Catalog, Gauge, Scenario, SimEvent, Wave, WaveResult } from '../engine/types.ts';
+import type { Architecture, BoardCell, Catalog, Gauge, Scenario, SimEvent, Wave, WaveResult } from '../engine/types.ts';
 import { linkFlows, type LinkFlows } from '../engine/routing.ts';
 import { validateArchitecture } from '../engine/validate.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
@@ -52,6 +52,8 @@ export interface ViewState {
   tool: Tool;
   /** Bâtiment dont la fiche est ouverte. */
   selectedNode?: string | undefined;
+  /** Case vide cliquée : les fiches des bâtiments qu'on peut y construire sont ouvertes. */
+  buildAt?: BoardCell | undefined;
   /** Dernier refus ou conseil du plateau (case occupée, chemin impossible…). */
   boardMessage?: string | undefined;
   phase: Phase;
@@ -231,9 +233,49 @@ export function renderToolbar(s: ViewState): string {
     ${validation.ok ? '' : `<div class="errors panel">${validation.errors.map((e) => `<p>⚠ ${esc(e)}</p>`).join('')}</div>`}`;
 }
 
-/** La fiche du bâtiment sélectionné, en panneau flottant. */
+/** La fiche du bâtiment sélectionné, ou les fiches de ce qu'on peut bâtir sur la case cliquée. */
 export function renderCard(s: ViewState): string {
-  return s.phase === 'build' ? renderNodeCard(s) : '';
+  if (s.phase !== 'build') return '';
+  return s.buildAt ? renderBuildMenu(s, s.buildAt) : renderNodeCard(s);
+}
+
+const KINDS_TEXT: Record<string, string> = { read: 'lectures', write: 'écritures', async: 'événements' };
+
+/**
+ * Les fiches des bâtiments à construire sur une case vide : ce que fait chacun, dans la
+ * métaphore et en vrai, ses chiffres, et un bouton pour le poser là. Sur un chemin, le
+ * bâtiment s'insère dans le lien quand c'est sensé (I11) : la fiche le dit.
+ */
+export function renderBuildMenu(s: ViewState, cell: BoardCell): string {
+  const road = s.draft.links.find((l) => l.path?.some((c) => c.q === cell.q && c.r === cell.r));
+  const ends = road ? [road.from, road.to].map((id) => nameOf(s.draft.nodes.find((n) => n.id === id)?.type ?? id, s.catalog)) : undefined;
+  const cards = Object.values(s.catalog.components)
+    .filter((d) => d.behavior !== 'source' && !d.prePlaced)
+    .map((d) => {
+      const style = theme.buildings[d.id];
+      const accepts = d.accepts.map((k) => KINDS_TEXT[k] ?? k).join(', ');
+      const ups = Object.values(s.catalog.upgrades)
+        .filter((u) => u.appliesTo === d.id)
+        .map((u) => `${theme.upgradeIcons[u.id] ?? '✦'} ${esc(u.techName)}`)
+        .join(' · ');
+      const affordable = d.cost <= Math.max(0, (s.scenario.waves[s.game.waveIndex]?.budget ?? Infinity) - totals(s.draft, s.catalog).cost);
+      return `<article class="build-card">
+        <header><span class="icon">${style?.icon ?? '🏠'}</span><div><b>${esc(d.techName)}</b><small>${esc(style?.metaphor ?? '')}</small></div></header>
+        ${style ? `<p>${esc(style.role.real)}</p>` : ''}
+        <p class="figures">${fmt(d.capacity)} unités de travail/s · ${d.latencyMs} ms${accepts ? ` · reçoit ${accepts}` : ''}</p>
+        ${ups ? `<p class="ups">Évolutions : ${ups}</p>` : ''}
+        <footer><span>💰 ${d.cost} · ⚙ ${d.complexity}</span>
+          <button data-action="build-at" data-type="${esc(d.id)}" ${affordable ? '' : 'title="Au-delà du budget restant de la vague"'}>Construire ici</button></footer>
+      </article>`;
+    })
+    .join('');
+  return `
+    <section class="card panel build-menu">
+      <button class="close" data-action="close-build" title="Fermer (Échap)">✕</button>
+      <h3>Construire ici</h3>
+      ${road && ends ? `<p class="muted">Sur le chemin ${esc(ends[0]!)} → ${esc(ends[1]!)} : le bâtiment s’insère dans le lien quand c’est sensé.</p>` : '<p class="muted">Choisir un bâtiment pour cette case.</p>'}
+      <div class="build-cards">${cards}</div>
+    </section>`;
 }
 
 /** Les fenêtres : le briefing du chambellan, le debrief d'une vague. */
@@ -369,6 +411,51 @@ function renderNodeCard(s: ViewState): string {
         ${permanent ? '' : `<button data-action="remove-node" data-node="${esc(node.id)}">Retirer</button>`}
       </p>
     </section>`;
+}
+
+/**
+ * Les pastilles au pied du bâtiment sélectionné sur le plateau : déplacer et retirer en
+ * tête, puis une par évolution du catalogue qui s'y applique. Tout-ou-rien, la pastille se
+ * bascule ; à niveaux, deux boutons − et + l'encadrent. Le prix et la complexité au survol.
+ */
+export function upgradePips(
+  node: Architecture['nodes'][number],
+  catalog: Catalog,
+  can: { move: boolean; remove: boolean } = { move: false, remove: false },
+): string {
+  const id = esc(node.id);
+  const actions = [
+    can.move &&
+      `<button class="pip act" data-action="tool" data-tool="move" data-node="${id}" aria-label="Déplacer"><span class="icon">✥</span><i><em>Déplacer</em>Cliquer la case d’arrivée, ou glisser le bâtiment</i></button>`,
+    can.remove &&
+      `<button class="pip act ko" data-action="remove-node" data-node="${id}" aria-label="Retirer"><span class="icon">🧨</span><i><em>Retirer</em>Démolir le bâtiment et ses chemins. S’il était déjà là à la vague précédente, sa valeur d’achat entre dans la facture (migration)</i></button>`,
+  ].filter(Boolean);
+  const pips = Object.values(catalog.upgrades)
+    .filter((u) => u.appliesTo === node.type)
+    .map((u) => {
+      const level = node.upgrades?.[u.id] ?? 0;
+      const leveled = u.maxLevel > 1;
+      const icon = theme.upgradeIcons[u.id] ?? '✦';
+      const badge =
+        level === 0 || !leveled
+          ? ''
+          : u.effect.type === 'rateLimit'
+            ? `${u.effect.tiersPerClientRps[level - 1]}/s`
+            : u.effect.type === 'autoscaling'
+              ? `≤${level}`
+              : `+${level}`;
+      const price = u.cost.perLevel > 0 ? `${u.cost.base > 0 ? `${u.cost.base} + ` : ''}${u.cost.perLevel} par niveau` : `${u.cost.base}`;
+      const tiers = u.effect.type === 'rateLimit' ? `<br>paliers : ${u.effect.tiersPerClientRps.join(', ')} req/s par client` : '';
+      const tip = `<em>${esc(u.techName)}</em>${esc(u.label)}<br>${price} · +${u.complexity.base + u.complexity.perLevel} complexité${tiers}`;
+      const data = `data-action="upgrade-step" data-node="${esc(node.id)}" data-upgrade="${esc(u.id)}"`;
+      const face = `<span class="icon">${icon}<b>${esc(badge)}</b></span>`;
+      return leveled
+        ? `<div class="pip leveled${level > 0 ? ' on' : ''}">
+            <button class="step" ${data} data-delta="-1" ${level === 0 ? 'disabled' : ''} aria-label="${esc(u.techName)} : un niveau de moins">−</button>${face}<button class="step" ${data} data-delta="1" ${level === u.maxLevel ? 'disabled' : ''} aria-label="${esc(u.techName)} : un niveau de plus">+</button><i>${tip}</i></div>`
+        : `<button class="pip${level > 0 ? ' on' : ''}" ${data} data-delta="toggle" aria-pressed="${level > 0}" aria-label="${esc(u.techName)}">${face}<i>${tip}</i></button>`;
+    });
+  if (pips.length === 0 && actions.length === 0) return '';
+  return `<div class="pips">${actions.length > 0 ? `<div class="pip-actions">${actions.join('')}</div>` : ''}${pips.join('')}</div>`;
 }
 
 /** Les sélecteurs d'évolutions d'un bâtiment : partagés par la fiche et la vue tableau. */

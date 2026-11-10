@@ -118,6 +118,8 @@ interface NodeOutcome {
   /** Part de chaque type servi qui poursuit sa route de façon synchrone. */
   syncForwardShare: Partial<Record<RequestKind, number>>;
   instances?: number;
+  /** Instances d'autoscaling demandées et pas encore prêtes. */
+  starting?: number;
   /** Serveur : part de ses fils occupés, et la dépendance qui les retient s'ils sont tous pris. */
   threads?: number;
   blockedBy?: string;
@@ -372,6 +374,7 @@ export function simulateWave(
         failed: nodeFailed.get(id) ?? 0,
         ...(backlogs.has(id) ? { backlog: sumRps(backlogs.get(id)!) } : {}),
         ...(outcome.instances !== undefined ? { instances: outcome.instances } : {}),
+        ...(outcome.starting ? { starting: outcome.starting } : {}),
         ...(nodeShed.has(id) ? { shed: nodeShed.get(id)! } : {}),
         // Une dépendance fermée a toutes ses instances hors service, pas une infinité.
         ...(down(node) > 0 ? { down: Math.min(down(node), instancesOf(node, catalog)) } : {}),
@@ -690,6 +693,7 @@ function processService(node: ArchNode, def: ComponentDef, incoming: Flow, env: 
     utilization,
     syncForwardShare: allForwarded(),
     instances,
+    ...(auto && auto.starting() > 0 ? { starting: auto.starting() } : {}),
     ...(threads !== undefined ? { threads } : {}),
     ...(blockedBy ? { blockedBy } : {}),
   };
@@ -719,6 +723,8 @@ function autoscale(node: ArchNode, def: ComponentDef, base: number, env: Process
 
     return {
       active: s.active,
+      /** Instances demandées qui démarrent encore, après la décision de ce tick. */
+      starting: () => s.pending.reduce((a, p) => a + p.count, 0),
       plan(demand: number) {
         const wanted = Math.ceil(demand / (def.capacity * targetUtilization)) - base;
         const target = Math.min(max, Math.max(0, wanted));

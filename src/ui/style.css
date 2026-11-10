@@ -209,3 +209,41 @@ button.primary:hover { background: var(--wood-dark); }
 
 /* Les chiffres de la fiche : de quoi poser le calcul de capacité. */
 .card .figures { font-size: 12px; line-height: 1.5; padding: 6px 8px; background: rgba(0, 0, 0, 0.04); border-radius: 6px; }
+
+/* Les pastilles d'évolution au pied du bâtiment sélectionné (plateau, construction). */
+.city-pips { pointer-events: none; }
+.pips { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pip { pointer-events: auto; position: relative; display: flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; font: inherit; user-select: none; }
+.pip .icon { position: relative; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; background: #fffaf0; border: 2px solid #b9b2a4; box-shadow: 0 2px 4px #0003; opacity: .75; transition: opacity .15s, border-color .15s, background .15s; }
+button.pip { cursor: pointer; }
+.pip:hover .icon { opacity: 1; }
+.pip.on .icon { opacity: 1; border-color: #2a9d8f; background: #e3f4f1; }
+.pip .step { width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 1px solid #b9b2a4; background: #fff; color: #1c2630; font: 800 12px/1 system-ui; cursor: pointer; box-shadow: 0 1px 2px #0002; opacity: 0; transition: opacity .15s; }
+.pip:hover .step, .pip.on .step, .pip .step:focus-visible { opacity: 1; }
+.pip .step:hover:not(:disabled) { border-color: #2a9d8f; color: #2a9d8f; }
+.pip .step:disabled { opacity: .25 !important; cursor: default; }
+.pip b { position: absolute; right: -9px; bottom: -6px; font: 800 9px system-ui; color: #fff; background: #2a9d8f; border-radius: 7px; padding: 0 3px; white-space: nowrap; }
+.pip b:empty { display: none; }
+.pip i { display: none; position: absolute; right: calc(100% + 8px); top: 50%; transform: translateY(-50%); width: max-content; max-width: 220px; font: 12px/1.35 system-ui; font-style: normal; text-align: left; color: #1c2630; background: #fff; border: 1px solid #d3dbe1; border-radius: 6px; padding: 4px 8px; box-shadow: 0 2px 6px #0002; z-index: 2; }
+.pip i em { font-style: normal; font-weight: 700; display: block; }
+.pip:hover i, .pip:focus-within i { display: block; }
+@media (prefers-reduced-motion: reduce) { .pip .icon, .pip .step { transition: none; } }
+.city-label .badges { font-size: 11px; letter-spacing: 1px; color: inherit; }
+.pip-actions { display: flex; gap: 4px; padding-bottom: 4px; margin-bottom: 2px; border-bottom: 1px solid #0002; }
+.pip.act .icon { opacity: .9; }
+.pip.act.ko:hover .icon { border-color: #d62828; background: #fbe4e4; }
+.pip.act:not(.ko):hover .icon { border-color: #9b5de5; background: #f1e8fb; }
+
+/* Les fiches des bâtiments à construire sur une case vide. */
+.build-menu { max-height: calc(100vh - 220px); overflow-y: auto; }
+.build-cards { display: grid; gap: 8px; margin-top: 6px; }
+.build-card { border: 1px solid #0002; border-radius: 8px; padding: 6px 8px; background: #fffdf7; }
+.build-card header { display: flex; gap: 8px; align-items: center; }
+.build-card header .icon { font-size: 22px; }
+.build-card header b { display: block; }
+.build-card header small { color: #666; }
+.build-card p { margin: 4px 0; font-size: 12px; line-height: 1.4; }
+.build-card .figures { color: #444; }
+.build-card .ups { color: #555; }
+.build-card footer { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-top: 4px; }
+.build-card footer button[title] { opacity: .75; }

@@ -46,10 +46,15 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 - `src/render/` : rejeu 3D isométrique (Three.js), chargé à la demande depuis le debrief.
   `hex.ts` (grille hexagonale), `layout.ts` et `traffic.ts` sont purs et testés ; `scene.ts` ne fait qu'afficher un tick
   déjà calculé. La métaphore vient d'un thème en données (`src/data/themes/fortified-city.ts`).
-  `effects.ts` dessine les incidents (fumée, feu, lettres, bouclier) sans état ; `fleet.ts`
+  `effects.ts` dessine les incidents (fumée, feu, lettres, bouclier) sans état ; les
+  pastilles d'évolution (`upgradePips` dans `views.ts`) sont posées par `setPips` au pied du
+  bâtiment sélectionné, et leurs clics passent par la délégation de `main.ts` ; une case vide
+  cliquée ouvre `renderBuildMenu` ; l'autoscaling a ses fondations sur une case voisine
+  (`findAnnexes`, décorative, non réservée) ; `fleet.ts`
   range les personnages, une géométrie instanciée par pose de marche. `vitrine.html`
   (`npm run dev`, puis `/vitrine.html`) les montre un par un sur des îlots de démonstration
-  (`showcase.ts`) : à garder à jour quand un effet change. Hors build.
+  (`showcase.ts`) : à garder à jour quand un effet change. Hors build. Ses îlots partagent un
+  seul contexte WebGL (Chrome n'en garde que 16) : ne pas en créer un par îlot.
 - `public/models/kaykit/` : modèles glTF du KayKit Medieval Hexagon Pack (CC0), chargés
   par le rejeu. N'y copier que les modèles utilisés (`.gltf` + `.bin`, à plat, avec la
   texture commune `hexagons_medieval.png`) et tenir `public/models/CREDITS.md` à jour.

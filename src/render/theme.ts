@@ -43,6 +43,8 @@ export interface Theme {
   narrator: { name: string; icon: string };
   /** Le récit de chaque vague dans la métaphore (clé : id de la vague) ; les chiffres restent affichés à côté. */
   narratives: Record<string, string>;
+  /** L'icône de chaque évolution sur sa pastille, au pied du bâtiment (clé : id du catalogue). */
+  upgradeIcons: Record<string, string>;
 }
 
 /** Nom technique et nom dans la métaphore d'un bâtiment ; un service déjà en place a le sien. */
