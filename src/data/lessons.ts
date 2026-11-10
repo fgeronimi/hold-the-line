@@ -121,6 +121,12 @@ export const reasonLessons = {
     remedy: 'Une outbox : écrire l’événement dans la même transaction que la commande, puis le relayer vers le bus.',
     concept: 'Transactional outbox',
   },
+  circuitOpen: {
+    says: 'Le guet a fermé la route du {metaphor} : {failed} paiements ont été refusés sur-le-champ, mais le reste de la cité a tourné.',
+    tech: 'Le circuit breaker a coupé {name} : ses appels ont échoué tout de suite au lieu de bloquer le serveur. La cascade est évitée, mais chaque appel coupé reste un échec pour son client.',
+    remedy: 'Pour ne rien perdre, différer l’appel : la commande passe par une file, le paiement est fait quand la dépendance revient (paiement différé).',
+    concept: 'Circuit breaker, réponse dégradée',
+  },
   undelivered: {
     says: 'Certains corps de métier n’ont jamais entendu parler des commandes.',
     tech: 'Chaque événement devait atteindre {fanOut} services, mais en moyenne seuls {reached} l’ont reçu. Une file partage les messages entre ses consommateurs : chacun n’en voit qu’une part.',
@@ -157,6 +163,48 @@ export const incidentLessons: Record<IncidentEffect['type'], { hurt: Lesson; hel
       tech: 'La base a encaissé les lectures que le cache ne servait plus pendant qu’il se réchauffait.',
       remedy: 'Un cache est une optimisation : la base doit survivre à son absence, au moins un moment.',
       concept: 'Cache stampede',
+    },
+  },
+  'dependency-down': {
+    hurt: {
+      says: '{title} : {failed} paiements sont restés sans réponse tant que le comptoir était fermé.',
+      tech: 'Une dépendance externe en panne fait échouer chaque appel direct. Ce n’est pas un serveur à doubler : le prestataire n’est pas à vous.',
+      remedy: 'Ne pas appeler la dépendance sur le chemin du client : une file garde les paiements pendant la panne et les livre à son retour (paiement différé, store and forward).',
+      concept: 'Découplage par file, paiement différé',
+    },
+    held: {
+      says: '{title} : les paiements ont attendu au relais de poste et sont partis à la réouverture.',
+      tech: 'La file a gardé les appels pendant la panne ; son arriéré s’est vidé au retour de la dépendance.',
+      remedy: 'Une file a une capacité : une panne trop longue la fait déborder. Dimensionner l’arriéré sur la plus longue panne qu’on accepte.',
+      concept: 'Découplage par file, paiement différé',
+    },
+  },
+  'slow-dependency': {
+    hurt: {
+      says: '{title}. Les scribes attendaient tous le banquier, plus personne ne servait au comptoir : {failed} voyageurs sont repartis sans réponse, même ceux qui ne voulaient rien payer.',
+      tech: 'Un appel synchrone garde un fil d’exécution occupé jusqu’à la réponse. Une dépendance lente épuise tous les fils du serveur, qui ne sert plus rien : la panne se propage en cascade à des requêtes qui n’avaient rien à voir.',
+      remedy: 'Un circuit breaker sur le serveur : au-delà d’un délai, il coupe la dépendance et ses appels échouent tout de suite, les fils restent libres pour le reste. Ou sortir l’appel du chemin du client, par une file.',
+      concept: 'Circuit breaker, cascade de pannes',
+    },
+    held: {
+      says: '{title} : le reste de la cité a continué de tourner pendant que le banquier traînait.',
+      tech: 'La dépendance lente n’a pas bloqué le serveur : ses appels ont été coupés ou différés, les autres requêtes ont été servies.',
+      remedy: 'Un appel coupé reste un échec pour celui qui le faisait : un délai trop long et la cascade revient, trop court et l’on coupe une dépendance saine.',
+      concept: 'Circuit breaker, cascade de pannes',
+    },
+  },
+  'cache-stampede': {
+    hurt: {
+      says: '{title}. Pour chaque page perdue, dix scribes ont couru aux archives chercher la même : elles ont croulé et {failed} voyageurs sont repartis sans réponse.',
+      tech: 'Quand beaucoup d’entrées expirent en même temps, chaque requête qui les manque recalcule la même valeur en base : la base fait le travail plusieurs fois et sature. C’est la ruée vers le cache (thundering herd).',
+      remedy: 'Un verrou de recalcul (request coalescing) : une seule requête recalcule l’entrée, les autres attendent son résultat. Ou une base assez large pour encaisser la ruée (réplicas).',
+      concept: 'Ruée vers le cache',
+    },
+    held: {
+      says: '{title} : les archives ont tenu pendant que le carnet se remplissait.',
+      tech: 'La base a encaissé les recalculs pendant que le cache se reconstruisait.',
+      remedy: 'Étaler les expirations (un délai aléatoire) évite que tout expire au même instant.',
+      concept: 'Ruée vers le cache',
     },
   },
   'duplicate-delivery': {

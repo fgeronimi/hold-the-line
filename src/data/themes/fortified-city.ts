@@ -41,6 +41,12 @@ export const fortifiedCity: Theme = {
         real: 'Un service métier tenu par une autre équipe : il consomme les événements et fait son travail, avec son propre stockage.',
       },
       metaphor: 'Maître de métier', icon: '⚒️', shape: 'tower', color: '#d6cfc0', accent: '#7a4e8a' },
+    'payment-provider': {
+      role: {
+        says: 'Le banquier lombard, hors de la cité : il encaisse chaque paiement. Il n’est pas à vous, et il ne se presse pour personne.',
+        real: 'Un prestataire de paiement externe : on l’appelle par son API, on ne le dimensionne pas, et il peut ralentir ou tomber sans prévenir.',
+      },
+      metaphor: 'Banquier lombard', icon: '🏦', shape: 'counting-house', color: '#c7bfae', accent: '#b08a2e' },
     cache: {
       role: {
         says: 'Le carnet où le scribe note les réponses déjà cherchées, pour ne pas retourner aux archives à chaque fois.',
@@ -68,6 +74,17 @@ export const fortifiedCity: Theme = {
   },
   narrator: { name: 'Le chambellan', icon: '🎩' },
   narratives: {
+    // Le comptoir des paiements.
+    checkout:
+      'Sire, la boutique encaisse enfin ses ventes. Chaque commande passe par le banquier lombard, de l’autre côté de la rivière : il répond vite, et le chaland attend sa quittance au comptoir.',
+    'slow-banker':
+      'Le banquier a ses humeurs : on dit qu’au milieu du jour, il fait attendre chaque paiement de longues secondes. Vos scribes attendront-ils avec lui, au point de ne plus servir personne ?',
+    'midnight-expiry':
+      'Les voyageurs affluent pour consulter leurs commandes. Mais à minuit, toutes les pages du carnet s’effacent d’un coup, et chacune devra être recopiée des archives.',
+    'banker-closed':
+      'Le banquier ferme boutique pour une longue partie du jour. Les commandes, elles, ne s’arrêtent pas : il faudra bien encaisser à sa réouverture.',
+    fair:
+      'La grande foire, Sire ! Une foule immense, le banquier qui traîne, le carnet qui s’efface : tout ce que vous avez appris, il faudra le tenir ensemble.',
     // Le grand marché.
     'market-open':
       'Sire, le grand marché ouvre ses étals. Cent commandes chaque seconde, chacune à consigner au grand livre… et chacune réclame une lettre de confirmation. Le messager met du temps à écrire chaque lettre, et le chaland, lui, n’aime pas attendre au comptoir.',

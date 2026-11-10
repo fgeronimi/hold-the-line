@@ -1,5 +1,6 @@
 import type { Scenario } from '../../engine/types.ts';
 import { market } from './market.ts';
+import { resilience } from './resilience.ts';
 import { urlShortener } from './url-shortener.ts';
 
 /** Les scénarios proposés à l'écran de choix, dans l'ordre conseillé (décision S2). */
@@ -13,6 +14,11 @@ export const SCENARIOS: { scenario: Scenario; level: string; pitch: string }[] =
     scenario: market,
     level: 'Suite',
     pitch: 'Une boutique en ligne : diffuser chaque commande à plusieurs services, sans doublon ni perte (pub/sub, idempotence, outbox).',
+  },
+  {
+    scenario: resilience,
+    level: 'Résilience',
+    pitch: 'Un paiement chez un prestataire qui ralentit ou tombe : cascade de pannes, circuit breaker, paiement différé, ruée vers le cache.',
   },
 ];
 

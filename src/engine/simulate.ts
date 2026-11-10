@@ -86,8 +86,8 @@ function work(flow: Flow, def: ComponentDef, pred: (s: Stream) => boolean = () =
   return total;
 }
 
-function loadedLatency(def: ComponentDef, utilization: number): number {
-  return def.latencyMs / (1 - Math.min(utilization, MAX_UTILIZATION_FOR_LATENCY));
+function loadedLatency(baseMs: number, utilization: number): number {
+  return baseMs / (1 - Math.min(utilization, MAX_UTILIZATION_FOR_LATENCY));
 }
 
 function factorAt(wave: Wave, tick: number): number {
@@ -118,6 +118,9 @@ interface NodeOutcome {
   /** Part de chaque type servi qui poursuit sa route de façon synchrone. */
   syncForwardShare: Partial<Record<RequestKind, number>>;
   instances?: number;
+  /** Serveur : part de ses fils occupés, et la dépendance qui les retient s'ils sont tous pris. */
+  threads?: number;
+  blockedBy?: string;
 }
 
 interface AutoscaleState {
@@ -166,9 +169,38 @@ export function simulateWave(
   const routes = routeTable(arch, catalog);
   let active: Incident[] = [];
   const down = (node: ArchNode): number =>
-    active.reduce((a, i) => a + (i.component === node.type && i.effect.type === 'instance-down' ? i.effect.count : 0), 0);
+    active.reduce(
+      (a, i) =>
+        a + (i.component !== node.type ? 0 : i.effect.type === 'instance-down' ? i.effect.count : i.effect.type === 'dependency-down' ? Infinity : 0),
+      0,
+    );
+  // Une ruée vers le cache vide le cache comme un redémarrage à froid.
   const hitFactor = (type: string, tick: number): number =>
-    active.reduce((f, i) => (i.component === type && i.effect.type === 'cold-cache' ? f * ((tick - i.from) / (i.until - i.from)) : f), 1);
+    active.reduce(
+      (f, i) => (i.component === type && (i.effect.type === 'cold-cache' || i.effect.type === 'cache-stampede') ? f * ((tick - i.from) / (i.until - i.from)) : f),
+      1,
+    );
+  const hasEffect = (node: ArchNode, effect: string): boolean =>
+    Object.values(catalog.upgrades).some((u) => u.appliesTo === node.type && u.effect.type === effect && upgradeLevel(node, u.id) > 0);
+  /** Chaque absence recalculée `herd` fois en base pendant une ruée, sauf derrière un verrou de recalcul. */
+  const herdAt = (cacheId: string): number => {
+    const cache = nodes.get(cacheId)!;
+    if (hasEffect(cache, 'coalescing')) return 1;
+    return active.reduce((h, i) => (i.component === cache.type && i.effect.type === 'cache-stampede' ? Math.max(h, i.effect.herd) : h), 1);
+  };
+  /** Latence d'un nœud hors charge, ralentie par un incident en cours. */
+  const latencyOf = (id: string): number =>
+    active.reduce(
+      (l, i) => (i.component === nodes.get(id)!.type && i.effect.type === 'slow-dependency' ? Math.max(l, i.effect.latencyMs) : l),
+      defOf(id).latencyMs,
+    );
+  const isDown = (id: string): boolean => instancesOf(nodes.get(id)!, catalog, down(nodes.get(id)!)) === 0;
+  const breakerOf = (node: ArchNode): number | undefined => {
+    for (const u of Object.values(catalog.upgrades)) {
+      if (u.appliesTo === node.type && u.effect.type === 'circuitBreaker' && upgradeLevel(node, u.id) > 0) return u.effect.timeoutMs;
+    }
+    return undefined;
+  };
   const hitRateAt = (nodeId: string, s: Stream): number =>
     sourcesById.get(s.source)?.longTail ? 0 : (defOf(nodeId).hitRate ?? 0) * hitFactor(nodes.get(nodeId)!.type, currentTick);
   let currentTick = 0;
@@ -195,6 +227,7 @@ export function simulateWave(
   let undeliveredSoFar = 0;
   const ticks: TickMetrics[] = [];
   const reportedNoRoute = new Set<string>();
+  const reportedBlocked = new Set<string>();
 
   let offeredTotal = 0;
   let syncWeightedLatency = 0;
@@ -229,6 +262,27 @@ export function simulateWave(
     const nodeTicks: Record<string, NodeTick> = {};
     const routed: Routed = new Map();
 
+    // Circuits ouverts ce tick : les dépendances directes d'un serveur à disjoncteur qui
+    // dépassent son délai, ou qui sont en panne.
+    const open = new Map<string, Set<string>>();
+    for (const node of arch.nodes) {
+      const timeout = breakerOf(node);
+      if (timeout === undefined) continue;
+      const targets = new Set(REQUEST_KINDS.flatMap((k) => routes.get(node.id)!.forward[k]));
+      const cut = [...targets].filter((t) => isDown(t) || latencyOf(t) > timeout);
+      if (cut.length > 0) open.set(node.id, new Set(cut));
+    }
+    /** Ce qu'un appel direct de ce type attend en aval, hors circuits coupés et dépendances en panne (refus immédiat). */
+    const syncWait = (id: string, kind: RequestKind): { ms: number; dependency?: string } => {
+      let worst: { ms: number; dependency?: string } = { ms: 0 };
+      for (const t of routes.get(id)!.forward[kind]) {
+        if (open.get(id)?.has(t) || isDown(t)) continue;
+        const ms = latencyOf(t);
+        if (ms > worst.ms) worst = { ms, dependency: t };
+      }
+      return worst;
+    };
+
     for (const id of validation.order) {
       const node = nodes.get(id)!;
       const def = defOf(id);
@@ -241,6 +295,7 @@ export function simulateWave(
         autoscalers,
         down,
         hitFactor: (type) => hitFactor(type, tick),
+        syncWait: (kind) => syncWait(id, kind),
         consumers: consumersOf(routes.get(id)!).map((c) => ({ ...c, def: defOf(c.id), node: nodes.get(c.id)! })),
       });
       outcomes.set(id, outcome);
@@ -254,7 +309,13 @@ export function simulateWave(
         roles: roles.get(id)!,
         incidentShare: (effect) => incidentShare(node.type, effect),
         consumer: consumers.has(id),
+        open: open.get(id),
+        herdAt,
       });
+      if (outcome.blockedBy && !reportedBlocked.has(id)) {
+        reportedBlocked.add(id);
+        events.push({ type: 'threads-exhausted', tick, node: id, dependency: outcome.blockedBy });
+      }
 
       const isSaturated = outcome.utilization > 1;
       if (isSaturated && !saturated.has(id)) {
@@ -273,17 +334,20 @@ export function simulateWave(
       nodeTicks[id] = {
         rps: sumRps(incoming),
         utilization: outcome.utilization,
-        latencyMs: loadedLatency(def, outcome.utilization),
+        latencyMs: loadedLatency(latencyOf(id), outcome.utilization),
         failed: nodeFailed.get(id) ?? 0,
         ...(backlogs.has(id) ? { backlog: sumRps(backlogs.get(id)!) } : {}),
         ...(outcome.instances !== undefined ? { instances: outcome.instances } : {}),
         ...(nodeShed.has(id) ? { shed: nodeShed.get(id)! } : {}),
-        ...(down(node) > 0 ? { down: down(node) } : {}),
+        // Une dépendance fermée a toutes ses instances hors service, pas une infinité.
+        ...(down(node) > 0 ? { down: Math.min(down(node), instancesOf(node, catalog)) } : {}),
         ...nonZero(nodeTally.get(id)),
+        ...(outcome.threads !== undefined ? { threads: outcome.threads } : {}),
+        ...(open.has(id) ? { open: [...open.get(id)!] } : {}),
       };
     }
 
-    const pathLatency = computePathLatencies(validation.order, routes, routed, outcomes, nodeTicks);
+    const pathLatency = computePathLatencies(validation.order, routes, routed, outcomes, nodeTicks, open);
     // L'événement fait partie de la commande : tant qu'il est traité en direct, le client
     // l'attend. Une file le sort du chemin critique (sa part synchrone s'arrête à elle).
     const injectedSync = REQUEST_KINDS.map((k) => ({ k, rps: sumRps(injected, (s) => s.kind === k) }));
@@ -363,6 +427,8 @@ interface ProcessEnv {
   down: (node: ArchNode) => number;
   /** Facteur appliqué au taux de succès d'un type de composant (cache froid). */
   hitFactor: (type: string) => number;
+  /** Ce qu'un appel direct de ce type fait attendre en aval : le temps d'occupation d'un fil. */
+  syncWait: (kind: RequestKind) => { ms: number; dependency?: string };
   consumers: { kinds: RequestKind[]; def: ComponentDef; node: ArchNode }[];
 }
 
@@ -409,6 +475,7 @@ function noFailures(): Record<FailureReason, number> {
     duplicate: 0,
     'lost-event': 0,
     undelivered: 0,
+    'circuit-open': 0,
   };
 }
 
@@ -495,11 +562,36 @@ function processService(node: ArchNode, def: ComponentDef, incoming: Flow, env: 
   const capacity = def.capacity * instances;
   const demand = work(incoming, def);
   auto?.plan(demand);
+  let utilization = ratio(demand, capacity);
+  // Travail à servir : celui des requêtes, ou plus si les fils manquent avant le processeur.
+  let load = demand;
+  // Loi de Little : fils occupés = débit × temps passé par requête, attente de l'aval comprise.
+  let threads: number | undefined;
+  let blockedBy: string | undefined;
+  if (def.threads && instances > 0) {
+    let busy = 0;
+    let worst = { busy: 0, dependency: undefined as string | undefined };
+    for (const kind of REQUEST_KINDS) {
+      const rps = sumRps(incoming, (s) => s.kind === kind);
+      const wait = env.syncWait(kind);
+      const held = (rps * (def.latencyMs + wait.ms)) / 1000;
+      busy += held;
+      if (wait.dependency && held > worst.busy) worst = { busy: held, dependency: wait.dependency };
+    }
+    threads = busy / (def.threads * instances);
+    if (threads > utilization) {
+      utilization = threads;
+      load = threads * capacity;
+      if (threads > 1) blockedBy = worst.dependency;
+    }
+  }
   return {
-    passed: serveWithin(node.id, incoming, demand, capacity, env.ctx),
-    utilization: ratio(demand, capacity),
+    passed: serveWithin(node.id, incoming, load, capacity, env.ctx),
+    utilization,
     syncForwardShare: allForwarded(),
     instances,
+    ...(threads !== undefined ? { threads } : {}),
+    ...(blockedBy ? { blockedBy } : {}),
   };
 }
 
@@ -723,6 +815,9 @@ interface RouteEnv {
   incidentShare: (effect: 'duplicate-delivery' | 'publish-loss') => number;
   /** Service qui doit recevoir chaque événement : ce qui lui parvient compte comme livré. */
   consumer: boolean;
+  /** Dépendances coupées par le circuit breaker de ce nœud : leurs appels échouent tout de suite. */
+  open: Set<string> | undefined;
+  herdAt: (cacheId: string) => number;
 }
 
 /** Ce qu'un nœud fait des événements async : les publier, les consommer, avec quelles protections. */
@@ -814,13 +909,18 @@ function route(id: string, def: ComponentDef, passed: Flow, routes: NodeRoutes, 
 
     // Cache-aside : chaque cache consulté sert sa part, le reste repart d'ici.
     let remaining = s.rps;
+    let herd = 1;
     const lookups = routes.lookup[s.kind];
     for (const cache of lookups) {
       const consulted = s.rps / lookups.length;
       const hits = consulted * env.hitRateAt(cache, s);
       send(cache, s, hits);
       remaining -= hits;
+      herd = Math.max(herd, env.herdAt(cache));
     }
+    // Une ruée recalcule chaque absence plusieurs fois : la base fait `herd` fois le travail,
+    // mais chaque client n'attend qu'une réponse (un lot plus petit que 1 multiplie le travail).
+    if (herd > 1) s = { ...s, batch: s.batch / herd };
 
     const targets = routes.forward[s.kind];
     if (targets.length === 0) {
@@ -836,6 +936,10 @@ function route(id: string, def: ComponentDef, passed: Flow, routes: NodeRoutes, 
     const each = def.fanOut ? remaining : remaining / targets.length;
     const duplicated = s.kind === 'async' && !s.duplicate ? Math.min(1, env.incidentShare('duplicate-delivery')) : 0;
     for (const to of targets) {
+      if (env.open?.has(to)) {
+        fail(env.ctx, id, 'circuit-open', each, isEvent(s) ? each : 0);
+        continue;
+      }
       send(to, s, each);
       if (duplicated > 0) send(to, { ...s, duplicate: true }, each * duplicated);
     }
@@ -849,6 +953,7 @@ function computePathLatencies(
   routed: Routed,
   outcomes: Map<string, NodeOutcome>,
   nodeTicks: Record<string, NodeTick>,
+  open: Map<string, Set<string>>,
 ): (id: string, kind: RequestKind) => number {
   const memo = new Map<string, number>();
   for (const id of [...order].reverse()) {
@@ -862,7 +967,8 @@ function computePathLatencies(
         for (const [to, rps] of sent) downstream += (rps / total) * (memo.get(`${to}|${kind}`) ?? 0);
       } else {
         // Pas de trafic ce tick : on suppose une répartition égale, pour que la latence reste définie.
-        const targets = routes.get(id)?.forward[kind] ?? [];
+        // Un appel coupé par le disjoncteur échoue tout de suite : il n'attend pas l'aval.
+        const targets = (routes.get(id)?.forward[kind] ?? []).filter((t) => !open.get(id)?.has(t));
         if (targets.length > 0) {
           downstream = targets.reduce((a, to) => a + (memo.get(`${to}|${kind}`) ?? 0), 0) / targets.length;
         }

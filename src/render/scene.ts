@@ -73,6 +73,7 @@ const SHAPE_MODELS: Record<Shape, ModelId[]> = {
   keep: ['building_castle_blue', 'building_tower_base_blue'].map(K),
   stables: ['building_tavern_blue', 'fence_wood_straight', 'crate_A_small', 'sack'].map(K),
   belfry: ['building_church_blue', 'flag_blue'].map(K),
+  'counting-house': ['building_home_B_blue', 'sack', 'crate_A_small', 'flag_blue'].map(K),
 };
 /** Décor du bord du plateau : reliefs et grands bois, pour fermer le paysage. */
 const EDGE_DECOR = ['mountain_A_grass_trees', 'hills_A_trees', 'trees_A_large', 'trees_B_medium', 'hill_single_A', 'trees_A_medium'];
@@ -688,6 +689,14 @@ export class CityScene {
         this.put(g, K('flag_blue'), { x: 0.9, z: 0.5, scale: 0.8 }, b);
         break;
 
+      case 'counting-house':
+        // La maison du banquier, ses sacs d'écus et son coffre.
+        this.put(g, K('building_home_B_blue'), { x: -0.3 }, b);
+        for (const [x, z] of [[0.7, 0.5], [0.9, 0.1], [0.6, -0.3]] as const) this.put(g, K('sack'), { x, z, scale: 2.2 }, b);
+        this.put(g, K('crate_A_small'), { x: 0.5, z: 0.9, scale: 2 }, b);
+        this.put(g, K('flag_blue'), { x: -0.3, y: 1.3, scale: 1.6 }, b);
+        break;
+
       case 'stables':
         // La taverne du relais et son enclos : les colis en attente s'y empilent.
         this.put(g, K('building_tavern_blue'), { x: -0.8 }, b);
@@ -812,6 +821,9 @@ export class CityScene {
           ? em('hors service', true)
           : n && n.rps > 0 ? em(`${rounded(n.rps)} req/s${b.source ? ' émises' : ` · charge ${rounded(u * 100)} %`}`, over) : '') +
         (id === slowest && n ? em(`<span class="hourglass">⏳</span> ${rounded(n.latencyMs)} ms`, true) : '') +
+        // La cascade : les fils du serveur attendent une dépendance ; le disjoncteur la coupe.
+        ((n?.threads ?? 0) > 0.8 ? em(`🧵 fils occupés ${rounded((n?.threads ?? 0) * 100)} %`, (n?.threads ?? 0) > 1) : '') +
+        (n?.open ? em(`🔌 circuit coupé : ${n.open.map((t) => escapeHtml(this.buildings.get(t)?.techName ?? t)).join(', ')}`) : '') +
         (backlog > 0 ? em(`arriéré ${rounded(backlog)} <span class="gauge"><i style="width:${Math.min(100, (Math.log10(1 + backlog) / 4) * 100)}%"></i></span>`) : '') +
         ((n?.duplicates ?? 0) > 0 ? em(`×2 ${rounded(n!.duplicates!)} req/s traitées deux fois`, true) : '') +
         ((n?.deduplicated ?? 0) > 0 ? em(`🔁 ${rounded(n!.deduplicated!)} doublons écartés`) : '') +

@@ -38,7 +38,7 @@ générique ; chaque scénario porte son sous-titre (*Hold the Line : les portes
 | Ennemi qui passe, vies perdues | Requête en échec, SLA entamé |
 | Budget de la vague | Facture de la vague sous un plafond, sans épargne (E1) |
 
-Les deux scénarios partagent une métaphore, **la cité fortifiée** (R2, S1) :
+Les trois scénarios partagent une métaphore, **la cité fortifiée** (R2, S1) :
 
 | Technique | Métaphore |
 | --- | --- |
@@ -51,6 +51,7 @@ Les deux scénarios partagent une métaphore, **la cité fortifiée** (R2, S1) :
 | Pub/sub | Crieur public, au clocher |
 | CDN | Avant-poste |
 | Service métier | Maître de métier (magasinier, trésorier, messager) |
+| Prestataire de paiement externe | Banquier lombard |
 | Lecture, écriture, async | Messager, porteur, mage messager |
 | Trafic abusif | Pillards squelettes |
 
@@ -75,8 +76,8 @@ Une vague perdue se rejoue sans limite (E4). On peut revenir au début de toute 
 atteinte, avec l'architecture validée à ce moment-là (E6) : un choix passé se paie, mais ne
 bloque jamais la partie.
 
-Un écran de choix ouvre chaque session (S2) : *Les portes de la cité* (débutant) et
-*Le grand marché* (suite), sans verrou. Une partie par scénario, sauvegardées ensemble dans
+Un écran de choix ouvre chaque session (S2) : *Les portes de la cité* (débutant),
+*Le grand marché* (suite) et *Le banquier lombard* (résilience), sans verrou. Une partie par scénario, sauvegardées ensemble dans
 le navigateur.
 
 ## Composants, évolutions, incidents
@@ -98,6 +99,7 @@ incidents que le scénario envoie. Chaque incident a au moins une parade, et cha
 | Pub/sub | Copie chaque événement vers chacun de ses abonnés (S4) | Oui |
 | CDN | Sert les lectures en bordure, devant le load balancer (X1) | Oui |
 | Service métier | Service d'une autre équipe, déjà en place : il termine l'événement lui-même, sans base partagée (S10) | Oui, hors palette |
+| Prestataire de paiement | Dépendance externe, déjà en place : on l'appelle, on ne la dimensionne pas ; elle peut ralentir ou tomber (S13) | Oui, hors palette |
 | Stockage objet | Fichiers volumineux hors base | Non |
 
 Tous les composants sont proposés dans tous les scénarios (S7) : savoir écarter ce qui ne
@@ -113,7 +115,9 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 | Rate limiting | Load balancer | Client abusif | Paliers par client (C1) : trop bas, il coupe des clients légitimes | Oui |
 | Idempotence | Service métier | Message livré deux fois | Coût et complexité, les clés vivent dans le service (S5) | Oui |
 | Transactional outbox | Base | Événement perdu entre base et bus | Une écriture de plus par commande (S6) | Oui |
-| Sharding, consistent hashing, circuit breaker, backpressure | — | — | — | Non |
+| Circuit breaker | Serveur | Dépendance lente ou en panne qui bloque le serveur | Les appels coupés échouent : réponse dégradée (S15) | Oui |
+| Request coalescing | Cache | Ruée vers le cache | Coût et complexité ; ne sert qu'à l'expiration (S15) | Oui |
+| Sharding, consistent hashing, backpressure | — | — | — | Non |
 
 Retirer ou remplacer un composant coûte sa valeur d'achat ; réduire les instances est
 gratuit (E2). La migration entre dans la facture de la vague (E3).
@@ -132,7 +136,10 @@ Les incidents sont annoncés au briefing et déterministes (X5) : pas de tirage 
 | Traitement lent sur le chemin critique | File de messages | Raccourcisseur vague 5, marché vague 1 |
 | Message livré deux fois | Idempotence | Marché, vagues 3 et 5 |
 | Événement perdu entre base et bus | Transactional outbox | Marché, vagues 4 et 5 |
-| Dépendance en panne, expiration massive du cache, partition réseau | Circuit breaker, verrou de recalcul, choix CAP | Pas encore |
+| Dépendance lente : la cascade de pannes | Circuit breaker, ou file (paiement différé) | Banquier, vagues 2 et 5 |
+| Tout le cache expire d'un coup | Verrou de recalcul, ou réplica | Banquier, vagues 3 et 5 |
+| Dépendance externe en panne | File : paiement différé, livré au retour | Banquier, vague 4 |
+| Partition réseau, tempête de réessais | Choix CAP, backoff | Pas encore |
 
 ## Jauges, victoire et score
 
@@ -184,6 +191,19 @@ l'autre côté de la rivière (S8). Il faut leur faire parvenir chaque commande.
 | 4. Commandes perdues | Le serveur tombe entre l'écriture et la publication | Outbox, et de quoi soulager la base qu'elle charge (cache ou réplica) |
 | 5. Les soldes | 1 500 lectures/s, les deux incidents reviennent | Tout, plus une instance derrière un load balancer |
 
+### Le banquier lombard : un paiement chez un prestataire externe
+
+Le prestataire de paiement est déjà sur le plateau, hors de la cité (S12). Chaque commande
+y est payée.
+
+| Vague | Information | Réponse attendue |
+| --- | --- | --- |
+| 1. Le paiement en ligne | Le prestataire répond en 30 ms | L'appeler en direct suffit (réponse unique) |
+| 2. Le banquier traîne | Quelques secondes à 4 s par paiement | Circuit breaker, ou une file ; sans eux, la cascade fait tomber tout le serveur |
+| 3. Minuit, tout expire | 900 lectures/s, tout le cache expire d'un coup | Cache + verrou de recalcul, ou un réplica |
+| 4. Le banquier ferme | Le prestataire tombe 25 ticks | Une file : les paiements attendent et partent à la réouverture |
+| 5. La grande foire | 2 400 lectures/s, les deux incidents reviennent | Scaling, réplicas, verrou, et disjoncteur ou file |
+
 Les budgets, plafonds et seuils de chaque vague sont dans `docs/decisions.md` et verrouillés
 par les tests.
 
@@ -203,11 +223,13 @@ et déterministe, séparée de l'affichage.
 - **Trafic** : il monte au départ et retombe à la fin de chaque vague (S11), avec un profil
   propre à la vague (rampe de la campagne, X4).
 - **Pas d'aléa, donc pas de graine** (M2) : la même vague donne toujours le même résultat.
-- **Pas de cascade de pannes** (M3) : un aval saturé ne ralentit pas l'amont. Elle viendra
-  avec le circuit breaker, sa parade.
+- **Cascade par les fils d'exécution** (S14) : un serveur a des fils par instance, et un
+  appel direct en garde un le temps de la réponse de l'aval (loi de Little). Une
+  dépendance lente les épuise et le serveur sature pour tout le monde. Il n'y a pas
+  d'autre cascade : un aval simplement saturé ne ralentit pas l'amont (M3).
 - **Sorties** : jauges, facture, journal d'événements, et par tick le débit de chaque lien
-  et l'état de chaque nœud (charge, échecs, arriéré, instances en panne, trafic repoussé,
-  doublons, événements perdus). Le rendu ne fait que relire ces ticks.
+  et l'état de chaque nœud (charge, fils occupés, circuits coupés, échecs, arriéré,
+  instances en panne, trafic repoussé, doublons, événements perdus). Le rendu ne fait que relire ces ticks.
 
 ## Rendu et interface
 
@@ -224,7 +246,8 @@ et déterministe, séparée de l'affichage.
   type. Pastilles +1, ✕ −1, 🛡. Les problèmes se voient sur place : bâtiment qui tremble et
   fume, porte qui clignote et requête qui rebondit, coursiers en rang devant une file,
   sablier sur le bâtiment le plus lent, mage qui se dédouble, messager qui s'évapore,
-  tour en feu, dôme de la garde, et l'alarme quand le SLA est rompu. Tableau de bord,
+  tour en feu, dôme de la garde, et l'alarme quand le SLA est rompu, sur les échecs ou sur
+  la latence. Capacités, coûts et débits restent chiffrés partout (C4). Tableau de bord,
   alertes à la première saturation, ralenti, courbes en direct.
 - **Debrief** (R9, I8) : l'analyse du chambellan en trois temps, et les courbes tick par
   tick (R13).
@@ -255,7 +278,7 @@ Par ordre d'apport pédagogique :
 | Faire jouer 2 ou 3 personnes de la cible, mesurer la durée d'une partie (cible 15 min, B4) | Valider avant d'ajouter |
 | Reproduire les fiches du calendrier dans le jeu (P3) | Le jeu se suffit à lui-même |
 | Questions de clarification : deux par vague, chacune révèle un paramètre caché | Apprendre à cadrer avant de construire |
-| Circuit breaker et cascade de pannes ; incidents avancés (ruée vers le cache, partition réseau) | Thèmes Résilience et Distribué du calendrier |
+| Partition réseau, tempête de réessais (backoff) | Thème Distribué du calendrier |
 | Faire compter la longueur des chemins en coût et en latence | Placement stratégique ; impose de tout recalibrer |
 | Besoins métier flous à traduire en contraintes | Rapproche le jeu d'un énoncé réel |
 | Mode migration (Strangler Fig, Canary, Expand and Contract) | Thème Migration |
@@ -265,8 +288,5 @@ Les thèmes Équipe et Sécurité du calendrier restent hors du jeu.
 
 ## Questions ouvertes
 
-- Cacher les capacités chiffrées une fois le jeu calibré (C4), ou les garder : le calcul
-  de capacité est une compétence à apprendre.
-- Les arriérés de file n'apparaissent dans aucune vague actuelle : la file envoie par lots
-  de 100, ce qui divise le travail en aval. Faut-il une vague où une file déborde ?
-- Une alarme de SLA sur la latence, comme celle sur le taux d'échec ?
+- Une file qui **déborde** (au-delà de son arriéré maximal) n'arrive dans aucune vague :
+  l'arriéré monte au banquier lombard, vague 4, mais reste loin de la limite.

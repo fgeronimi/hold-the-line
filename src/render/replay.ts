@@ -2,7 +2,7 @@ import { attachChart, chartModel, renderChart } from './charts.ts';
 import { nodeNames } from './theme.ts';
 import type { Architecture, Catalog, Wave, WaveResult } from '../engine/types.ts';
 import { escapeHtml } from './html.ts';
-import { firstSaturations, replayStats } from './hud.ts';
+import { firstSaturations, latencyBreachTick, replayStats } from './hud.ts';
 import type { CityScene } from './scene.ts';
 import type { Theme } from './theme.ts';
 import { journeyDuration, journeysForTick, outcomeOf, trafficScale, type Journey, type Outcome } from './traffic.ts';
@@ -88,8 +88,12 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   const alarm = document.createElement('div');
   alarm.className = 'sla-alarm';
   alarm.hidden = true;
-  alarm.innerHTML = `<div class="sla-banner"><span class="bell">🔔</span> SLA rompu : plus de ${(o.wave.sla.maxFailureRate * 100).toFixed(0)} % d’échecs</div>`;
   barHost.appendChild(alarm);
+  const latencyBreach = latencyBreachTick(o.result, o.wave.sla.maxP95LatencyMs);
+  const alarmText = {
+    failures: `SLA rompu : plus de ${(o.wave.sla.maxFailureRate * 100).toFixed(0)} % d’échecs`,
+    latency: `SLA rompu : latence p95 au-delà de ${o.wave.sla.maxP95LatencyMs} ms`,
+  };
 
   const typeOf = new Map(o.arch.nodes.map((n) => [n.id, n.type]));
   const nameOf = (id: string) => {
@@ -149,7 +153,12 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   const renderHud = () => {
     const st = replayStats(o.result, outcomes, time);
     // Se cacher puis réapparaître rejoue l'animation : revenir avant le seuil la réarme.
-    alarm.hidden = st.failureRate <= o.wave.sla.maxFailureRate;
+    const breach = st.failureRate > o.wave.sla.maxFailureRate ? 'failures' : latencyBreach !== undefined && time >= latencyBreach ? 'latency' : undefined;
+    alarm.hidden = breach === undefined;
+    if (breach && alarm.dataset.breach !== breach) {
+      alarm.dataset.breach = breach;
+      alarm.innerHTML = `<div class="sla-banner"><span class="bell">🔔</span> ${alarmText[breach]}</div>`;
+    }
     const { sla, budget } = o.wave;
     const cost = o.result.gauges.cost.value;
     const gauge = (label: string, value: string, bad: boolean) => `<span class="${bad ? 'ko' : ''}">${label} <b>${value}</b></span>`;

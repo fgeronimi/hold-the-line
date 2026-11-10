@@ -10,10 +10,12 @@ coût, complexité et fiabilité.
 
 ## Le principe
 
-Deux scénarios, au choix dès le lancement : *Les portes de la cité*, un raccourcisseur
-d'URL (serveurs, base, cache, CDN, rate limiting, file de messages), et *Le grand marché*,
-la prise de commande d'une boutique en ligne (pub/sub, idempotence, outbox). Les deux
-sont racontés comme une cité médiévale. La métaphore aide à se représenter le système ; le vrai nom
+Trois scénarios, au choix dès le lancement : *Les portes de la cité*, un raccourcisseur
+d'URL (serveurs, base, cache, CDN, rate limiting, file de messages) ; *Le grand marché*,
+la prise de commande d'une boutique en ligne (pub/sub, idempotence, outbox) ; et *Le
+banquier lombard*, un paiement chez un prestataire qui ralentit ou tombe (cascade de
+pannes, circuit breaker, paiement différé, ruée vers le cache). Tous sont racontés comme
+une cité médiévale. La métaphore aide à se représenter le système ; le vrai nom
 technique vient toujours en premier.
 
 | Dans l'architecture | Dans la cité |
@@ -27,6 +29,7 @@ technique vient toujours en premier.
 | Message queue | Relais de poste |
 | Pub/sub | Crieur public, au clocher |
 | Services métier (stock, facturation, e-mail) | Magasinier, Trésorier, Messager |
+| Prestataire de paiement externe | Banquier lombard |
 | Lectures, écritures, tâches async | Messagers, porteurs, mages |
 | Trafic abusif (scraper) | Pillards squelettes |
 
@@ -38,8 +41,9 @@ avec les termes techniques. Chaque bâtiment dit à quoi il sert, dans les deux 
 1. **Le briefing** : le chambellan annonce la vague (trafic, budget, plafond de
    complexité, SLA) et l'éventuel incident prévu (un cache qui redémarre à froid, une
    instance qui tombe).
-2. **La construction** sur le plateau hexagonal : poser des bâtiments, les relier (clic
-   sur le départ, puis sur l'arrivée), régler leurs évolutions dans leur fiche. Une
+2. **La construction** sur le plateau hexagonal : poser des bâtiments (clic, ou glisser
+   depuis la palette), les déplacer en les glissant, les relier (clic sur le départ, puis
+   sur l'arrivée), régler leurs évolutions dans leur fiche ; annuler avec ⌘Z. Une
    rivière traverse le plateau : on ne bâtit pas dessus, les chemins la franchissent par
    un pont. La première vague est guidée pas à pas.
 3. **La vague**, en direct : chaque requête fait l'aller-retour depuis les hameaux, +1

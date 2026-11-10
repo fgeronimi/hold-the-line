@@ -107,7 +107,14 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     const failed = Math.round(sum(result.ticks.slice(incident.from, incident.until).map((t) => t.failed)));
     const lesson = incidentLessons[incident.effect.type];
     const vars = { title: incident.title, failed: String(failed) };
-    tell(incident.from, fromLesson(failed > 0 ? problem : 'good', failed > 0 ? lesson.hurt : lesson.held, vars));
+    // Le disjoncteur a évité la cascade : ce qui a échoué, ce sont les appels qu'il a coupés.
+    const cut = incident.effect.type === 'slow-dependency' && failed > 0 && !result.events.some((e) => e.type === 'threads-exhausted');
+    const dependency = arch.nodes.find((n) => n.type === incident.component)?.id;
+    if (cut && dependency) {
+      tell(incident.from, fromLesson(problem, reasonLessons.circuitOpen, { name: name(dependency), metaphor: metaphor(dependency).toLowerCase(), failed: String(failed) }, dependency));
+    } else {
+      tell(incident.from, fromLesson(failed > 0 ? problem : 'good', failed > 0 ? lesson.hurt : lesson.held, vars));
+    }
   }
 
   // Goulots hors incident, du plus d'échecs au moins.
@@ -172,7 +179,11 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     .map((id) => ({ id, peak: Math.max(0, ...calm.map((t) => t.nodes[id]?.utilization ?? 0)) }))
     .sort((a, b) => b.peak - a.peak)[0];
   // Un service métier appelé en direct (sans file entre eux) : le client attend son travail.
-  const called = arch.links.find((l) => catalog.components[typeOf.get(l.to) ?? '']?.prePlaced && behaviorOf(l.from) !== 'queue');
+  // Sauf si c'est un incident qui l'a ralenti : la leçon de l'incident le raconte déjà.
+  const slowedByIncident = (id: string) => incidents.some((i) => i.effect.type === 'slow-dependency' && i.component === typeOf.get(id));
+  const called = arch.links.find(
+    (l) => catalog.components[typeOf.get(l.to) ?? '']?.prePlaced && behaviorOf(l.from) !== 'queue' && !slowedByIncident(l.to),
+  );
   if (latency.value > latency.limit && called) {
     const def = catalog.components[typeOf.get(called.to)!]!;
     tell(Infinity, fromLesson('bad', reasonLessons.syncCall, { name: name(called.to), metaphor: metaphor(called.to).toLowerCase(), latency: String(def.latencyMs) }, called.to));

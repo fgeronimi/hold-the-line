@@ -12,7 +12,7 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 |---|---|---|---|
 | M1 | Modèle de flux par ticks pour tout le MVP, pas de simulation à événements discrets. | Suffit pour l'équilibrage et le rejeu en phase 2 ; un moteur à événements serait plus lourd à calibrer et à tester. | Fait |
 | M2 | Pas de graine : le moteur n'a aucun aléa. Elle reviendra avec le premier élément aléatoire. | Un paramètre inutilisé n'a rien à faire dans la signature. | Fait |
-| M3 | Pas de cascade de pannes dans le MVP ; elle arrive en V2 avec le circuit breaker (concurrence limitée des serveurs). | Sans parade disponible, la cascade serait une punition, pas un choix. | Reporté V2 |
+| M3 | Pas de cascade de pannes par saturation : un aval saturé ne ralentit pas l'amont. La cascade par épuisement des fils est arrivée avec le circuit breaker, sa parade (S14). | Sans parade disponible, la cascade serait une punition, pas un choix. | Fait (S14) |
 | M4 | Le SLA porte sur le taux d'échec global et sur la latence p95 des ticks, affichée « p95 (approx.) ». | Une moyenne cache les pics ; « p95 » colle au vocabulaire d'entretien, « approx. » évite de mentir sur ce qui est mesuré. | Fait |
 | M5 | `requiresUpstream` devient une liste ; le scaling horizontal est permis derrière un load balancer **ou** une file. | Plusieurs workers consommant une même file est le pattern standard. | Fait |
 
@@ -36,7 +36,7 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 | C2 | Une source « partenaires » légitime à fort débit (ordre de grandeur : 50 clients à 30 req/s) dès la vague 4, scraper recalibré pour qu'une fenêtre de limite gagnante existe sans être évidente. | Avec des clients légitimes tous identiques, toute limite au-dessus de leur débit est gratuite. | Fait : 50 partenaires à 30 req/s, scraper sur 5 adresses à 400 req/s ; seul le palier 40 gagne |
 | C3 | Péremption du cache et retard de réplication hors MVP. | Le raccourcisseur a des données immuables : aucune vague ne peut les punir. | Reporté |
 | C5 | Le rate limiting ne compte que le trafic synchrone ; l'async (un clic par redirection) suit le sort de sa requête sans entamer le quota. | Un événement de clic est un effet de bord côté serveur, pas une requête du client. Sans ça, la vague 5 coupait les partenaires. | Fait |
-| C4 | Capacités, poids et coûts visibles en phase 1. Les cacher en phase 2 se décidera après les premiers tests de jeu. | Impossible de calibrer à l'aveugle. | Fait |
+| C4 | Capacités, poids et coûts **restent visibles**, en phase 2 aussi : fiche du bâtiment, étiquettes et courbes. | Impossible de calibrer à l'aveugle, et le calcul de capacité est la compétence à apprendre : le cacher la transformerait en devinette. Tranché par François le 10 novembre. | Fait |
 
 ## Équilibrage
 
@@ -80,6 +80,7 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 | R12 | **Routes et rivière en tuiles KayKit.** Chaque case de chemin reçoit la tuile de route qui relie exactement les côtés empruntés (13 tuiles couvrent les 63 combinaisons, à la rotation près ; côtés relevés sur les modèles). Une rivière fixe traverse le plateau du haut en bas en tronçons droits : on ne bâtit pas dessus, et un chemin ne la franchit que tout droit, sur un tronçon droit, par un pont (tuile de gué et modèle de pont). Aucun effet sur la simulation. | Des chemins lisibles comme des routes, et un obstacle qui donne du relief au plateau sans toucher à l'équilibrage (les chemins restent décoratifs, I4). La traversée droite est la seule que les tuiles KayKit savent dessiner. | Fait |
 | R13 | **Courbes tick par tick** : une seule figure SVG, un axe des ticks partagé. Trafic, taux d'échec cumulé face au SLA, puis la charge de chaque bâtiment dans l'ordre du trafic, rouge au-delà de la capacité, échecs en barres, incidents en bandes. Réticule et infobulle au survol. Onglet du debrief, et panneau en direct pendant la vague (curseur synchronisé, clic pour y aller). Dessinée à la main, sans bibliothèque. | Voir pourquoi ça casse, et quand : le moteur calcule déjà tout par tick, il suffisait de l'afficher. | Fait |
 | R14 | **Les incidents se voient sur le plateau.** Chaque personnage porte un disque au sol à la couleur de la légende. Saturation : le bâtiment tremble, rougit et fume. Refus : la porte clignote, pastille ✕. Arriéré : coursiers en rang sur le chemin de la file, jauge dans l'étiquette. Latence au-delà du SLA : sablier sur le bâtiment le plus lent. Doublon : nuage violet et « ×2 » (ou « doublons écartés » avec l'idempotence). Événement perdu : lettres qui tombent sur le chemin de sortie. Panne : la tour en panne reste debout, noircit et brûle. Rate limiting : dôme de la garde qui s'allume, pillards qui culbutent. SLA franchi : la cloche sonne, les bords de l'écran rougissent, bannière « SLA rompu ». Effets sans état (`src/render/effects.ts`) : ils ne dépendent que du tick affiché et de l'heure. Chacun est montré seul dans `vitrine.html` (debug, hors build). | François ne voyait pas assez les problèmes pendant la vague ; les couleurs de la légende ne se retrouvaient pas sur les personnages. Il a choisi les neuf effets sur la vitrine, le feu plutôt que la foudre pour la panne. | Fait |
+| R16 | **L'alarme du SLA sonne aussi sur la latence**, au tick où la vague devient perdue : le p95 par rang le plus proche tolère les 3 pires ticks sur 60, le 4ᵉ tick lent scelle la vague (`latencyBreachTick`, testé contre le verdict du moteur). Bannière « SLA rompu : latence p95 au-delà de 60 ms ». | Une vague perdue sur la latence (l'appel direct du marché) ne déclenchait aucune alarme, contrairement à une vague perdue sur les échecs. | Fait |
 | R15 | **Personnages qui marchent, et trajets des incidents comme dans la vitrine.** Chaque personnage est cuit en six poses de sa marche, normalisées ensemble ; chacun prend la pose de son pas. Un refus rebondit à la porte avant de repartir en rouge ; un événement perdu s'évapore à mi-chemin du bus (et compte comme un refus du serveur) ; un doublon fait naître une copie du mage, sur la file voisine, à la sortie du bus, avec la pastille « ×2 » ou « 🔁 déjà reçu ». Logique dans `traffic.ts`, pure et testée. | François voulait le plateau au niveau de la vitrine ; les poses figées faisaient glisser les personnages. Six poses gardent le coût d'une géométrie instanciée. | Fait |
 | R3 | Additions au moteur pour la phase 2, en sortie seulement : `TickMetrics.links` (débit par lien et par type à chaque tick) et `NodeTick.shed` (trafic abusif écarté par nœud). | Le rejeu doit savoir ce qui roule sur chaque route et qui est repoussé à la porte ; la simulation elle-même ne change pas. Ajouts de R14 : `NodeTick.duplicates`, `deduplicated` et `lost`, que les échecs confondaient. | Fait |
 
@@ -120,8 +121,7 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 2. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
    comprise (B4). Incidents en vagues 4 et 5 du raccourcisseur (demande un recalibrage).
 3. Reproduire les fiches du calendrier dans le jeu (I2, P3).
-4. Questions ouvertes de `docs/spec.md` : arriéré de file jamais visible, alarme de
-   latence.
+4. Question ouverte de `docs/spec.md` : aucune file ne déborde encore.
 
 ## Positionnement
 
@@ -160,3 +160,26 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 
 Verrouillé par `tests/market.test.ts`. L'énumération en masse (`npm run balance`) ne couvre
 encore que le raccourcisseur.
+
+## Troisième scénario : le banquier lombard
+
+| # | Décision | Pourquoi | Statut |
+|---|---|---|---|
+| S12 | Troisième scénario, **la résilience** : une boutique encaisse ses commandes chez un prestataire de paiement externe, qui ralentit ou tombe. Même cité ; le prestataire est déjà sur le plateau, de l'autre côté de la rivière (comme les services métier, S8), en maison du banquier (sacs d'écus, coffre). | Couvre le thème Résilience du calendrier, le plus gros apport pédagogique restant (choisi par François). Le prestataire n'est pas à vous : on ne le dimensionne pas, on s'en protège. | Fait |
+| S13 | Le paiement est l'événement async de la commande, terminé par le **prestataire de paiement** (`payment-provider`, 30 ms, hors palette). Appelé en direct, le client attend la banque ; par une file, le paiement est **différé** et sort du chemin du client (même règle que S10). | Réutilise le modèle du grand marché sans nouveau type de requête. Le paiement différé (store and forward) est la vraie parade à une dépendance en panne. | Fait |
+| S14 | **Cascade par épuisement des fils** : un serveur a 100 fils par instance ; un appel direct garde un fil le temps de la latence de l'aval (loi de Little : débit × temps). Une dépendance lente les épuise, le serveur sature pour toutes les requêtes, même celles qui ne l'appellent pas (événement `threads-exhausted`, étiquette « fils occupés »). Plus d'instances, c'est plus de fils, mais le client attend toujours la banque. | La cascade de pannes est la leçon centrale de la résilience, et elle a enfin sa parade. Le seuil est assez haut pour ne rien changer aux deux premiers scénarios (rapport d'équilibrage identique). | Fait |
+| S15 | **Circuit breaker**, évolution du serveur (10, +2 de complexité) : au-delà de 500 ms, ou si elle est en panne, une dépendance directe est coupée ; ses appels échouent tout de suite (`circuit-open`), sans bloquer de fil ni compter dans la latence. **Request coalescing**, évolution du cache (5, +1) : pendant une ruée, une seule requête recalcule chaque entrée. Incidents nouveaux : `slow-dependency`, `dependency-down`, `cache-stampede` (le cache se vide et chaque absence coûte `herd` fois son travail en base, sans compter plus d'échecs que de clients). | Le compromis du disjoncteur est réel : les appels coupés restent des échecs (réponse dégradée). Le verrou est la parade spécifique de la ruée ; une base plus large (réplica) en est une autre. | Fait |
+| S16 | Vagues : 1. paiement en direct (réponse unique) ; 2. le banquier traîne : disjoncteur (80) ou file (95) ; 3. minuit, tout expire : cache + verrou (90) ou réplica (110) ; 4. le banquier ferme 25 ticks : seule une file encaisse, avec cache ou réplica ; l'arriéré monte puis se vide, enfin visible ; 5. la foire : scaling, réplicas, verrou, et disjoncteur (230) ou file (245). Le debrief distingue la cascade (sans disjoncteur) des paiements coupés (avec), et propose le paiement différé quand le banquier ferme. | Un mécanisme par vague, puis tout ensemble ; deux stratégies dès la vague 2. Verrouillé par `tests/resilience.test.ts`. | Fait |
+
+### Calibrage du banquier lombard
+
+| Vague | Budget | Plafond complexité | Stratégies gagnantes (coût) |
+|---|---|---|---|
+| 1 | 80 | 4 | serveur + base + prestataire en direct (70), réponse unique |
+| 2 | 100 | 7 | + disjoncteur (80) · + file (95) |
+| 3 | 125 | 10 | + cache + verrou (90) · + réplica (110) |
+| 4 | 140 | 12 | file + cache (110) · file + réplica (135) |
+| 5 | 250 | 18 | 2 instances en plus, 2 réplicas, cache + verrou, et disjoncteur (230) ou file (245) |
+
+SLA constant : 1 % d'échecs, 60 ms de latence p95.
+

@@ -625,6 +625,8 @@ function describeEvent(e: SimEvent): string {
       return `t${e.tick} incident ${e.incident}`;
     case 'incident-end':
       return `t${e.tick} fin de l'incident ${e.incident}`;
+    case 'threads-exhausted':
+      return `t${e.tick} ${e.node} n'a plus de fil libre : il attend ${e.dependency}`;
   }
 }
 

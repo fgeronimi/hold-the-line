@@ -47,6 +47,12 @@ export interface ComponentDef {
   /** Jamais proposé à la construction : seul un scénario le pose (les services métier, S10). */
   prePlaced?: boolean;
   /**
+   * Serveur : requêtes traitées en même temps par instance (ses fils d'exécution). Un appel
+   * direct à une dépendance garde un fil occupé le temps de la réponse (loi de Little) : une
+   * dépendance lente les épuise, et le serveur sature pour tout le monde (décision S14).
+   */
+  threads?: number;
+  /**
    * Diffusion (pub/sub) : chaque message est copié vers chacun des voisins qui l'acceptent,
    * au lieu d'être partagé entre eux comme le fait une file.
    */
@@ -66,7 +72,14 @@ export type UpgradeEffect =
   /** Consommateur qui reconnaît un message déjà traité, avec sa propre mémoire des clés (S10). */
   | { type: 'idempotence' }
   /** Événement écrit dans la transaction de la commande, puis relayé : une écriture de plus. */
-  | { type: 'outbox' };
+  | { type: 'outbox' }
+  /**
+   * Serveur : au-delà de `timeoutMs`, ou si elle est en panne, une dépendance appelée en
+   * direct est coupée ; ses appels échouent tout de suite au lieu de bloquer des fils.
+   */
+  | { type: 'circuitBreaker'; timeoutMs: number }
+  /** Cache : une seule requête recalcule une entrée expirée, les autres l'attendent. */
+  | { type: 'coalescing' };
 
 /**
  * Ce que coûte une baisse de niveau (décision E2) :
@@ -161,7 +174,16 @@ export type IncidentEffect =
   /** Une part `share` des messages qui sortent du composant est livrée deux fois. */
   | { type: 'duplicate-delivery'; share: number }
   /** Le serveur tombe entre l'écriture en base et la publication : une part `share` des événements est perdue. */
-  | { type: 'publish-loss'; share: number };
+  | { type: 'publish-loss'; share: number }
+  /** Une dépendance externe ne répond plus du tout : toutes ses instances sont hors service. */
+  | { type: 'dependency-down' }
+  /** La dépendance répond en `latencyMs` au lieu de sa latence habituelle. */
+  | { type: 'slow-dependency'; latencyMs: number }
+  /**
+   * Tout le cache expire d'un coup : le taux de succès retombe à 0 puis remonte comme un
+   * cache froid, et chaque absence est recalculée `herd` fois en base, faute de verrou.
+   */
+  | { type: 'cache-stampede'; herd: number };
 
 export interface Incident {
   id: string;
@@ -230,7 +252,9 @@ export type FailureReason =
   /** Événement perdu entre l'écriture en base et la publication. */
   | 'lost-event'
   /** Copie d'événement qu'un service attendait et n'a jamais reçue. */
-  | 'undelivered';
+  | 'undelivered'
+  /** Appel coupé par un circuit breaker ouvert : échec rapide, sans bloquer le serveur. */
+  | 'circuit-open';
 
 export type SimEvent =
   | { type: 'invalid'; message: string }
@@ -240,7 +264,9 @@ export type SimEvent =
   | { type: 'rate-limited'; tick: number; node: string; source: string; rejectedRps: number }
   | { type: 'queue-overflow'; tick: number; node: string; lostRps: number }
   | { type: 'incident-start'; tick: number; incident: string }
-  | { type: 'incident-end'; tick: number; incident: string };
+  | { type: 'incident-end'; tick: number; incident: string }
+  /** Un serveur sature parce que ses fils attendent une dépendance lente : la cascade. */
+  | { type: 'threads-exhausted'; tick: number; node: string; dependency: string };
 
 export interface NodeTick {
   /** Requêtes reçues ce tick (req/s), tous types confondus : émises, pour la source. */
@@ -261,6 +287,10 @@ export interface NodeTick {
   deduplicated?: number;
   /** Événements perdus ici entre l'écriture et la publication (req/s) : déjà dans `failed`. */
   lost?: number;
+  /** Serveur : part de ses fils d'exécution occupés (1 = tous) ; au-delà, la cascade. */
+  threads?: number;
+  /** Serveur : dépendances coupées par son circuit breaker ce tick. */
+  open?: string[];
 }
 
 export interface TickMetrics {

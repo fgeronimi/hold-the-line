@@ -60,6 +60,9 @@ export const catalog: Catalog = {
       workPerRequest: { read: 1, write: 2, async: 0.02 },
       terminalFor: [],
       accepts: ['read', 'write', 'async'],
+      // Assez pour ne jamais compter tant que l'aval répond vite : seule une dépendance lente
+      // appelée en direct les épuise (décision S14).
+      threads: 100,
     },
     // Un service métier tenu par une autre équipe (stock, facturation, e-mail) : il reçoit un
     // événement et fait son travail, sans base partagée. Sa latence est celle d'un vrai travail
@@ -77,6 +80,23 @@ export const catalog: Catalog = {
       terminalFor: ['async'],
       accepts: ['async'],
       // Relié en direct, il reçoit l'événement avant la base : c'est lui qui le traite.
+      routingPriority: 1,
+      prePlaced: true,
+    },
+    // Le prestataire de paiement d'une banque, hors de la cité : on l'appelle, on ne le
+    // dimensionne pas. Rapide d'habitude, il peut ralentir ou fermer (S13).
+    'payment-provider': {
+      id: 'payment-provider',
+      behavior: 'service',
+      label: 'Prestataire de paiement',
+      techName: 'Prestataire de paiement',
+      cost: 0,
+      complexity: 0,
+      capacity: 5000,
+      latencyMs: 30,
+      workPerRequest: { async: 1 },
+      terminalFor: ['async'],
+      accepts: ['async'],
       routingPriority: 1,
       prePlaced: true,
     },
@@ -126,7 +146,7 @@ export const catalog: Catalog = {
       batchSize: 100,
       maxBacklog: 200000,
       // Une base qui consomme directement une file n'existe pas : il faut un worker.
-      allowedDownstream: ['app-server', 'domain-service'],
+      allowedDownstream: ['app-server', 'domain-service', 'payment-provider'],
     },
     pubsub: {
       id: 'pubsub',
@@ -144,7 +164,7 @@ export const catalog: Catalog = {
       routingPriority: 2,
       fanOut: true,
       // Ses abonnés : des files (un service, une file) ou directement des serveurs.
-      allowedDownstream: ['message-queue', 'app-server', 'domain-service'],
+      allowedDownstream: ['message-queue', 'app-server', 'domain-service', 'payment-provider'],
     },
   },
   upgrades: {
@@ -205,6 +225,28 @@ export const catalog: Catalog = {
       complexity: { base: 2, perLevel: 0 },
       removalCost: 'on-disable',
       effect: { type: 'outbox' },
+    },
+    'circuit-breaker': {
+      id: 'circuit-breaker',
+      label: 'Disjoncteur sur les appels',
+      techName: 'Circuit breaker',
+      appliesTo: 'app-server',
+      maxLevel: 1,
+      cost: { base: 10, perLevel: 0 },
+      complexity: { base: 2, perLevel: 0 },
+      removalCost: 'on-disable',
+      effect: { type: 'circuitBreaker', timeoutMs: 500 },
+    },
+    'request-coalescing': {
+      id: 'request-coalescing',
+      label: 'Verrou de recalcul',
+      techName: 'Request coalescing',
+      appliesTo: 'cache',
+      maxLevel: 1,
+      cost: { base: 5, perLevel: 0 },
+      complexity: { base: 1, perLevel: 0 },
+      removalCost: 'on-disable',
+      effect: { type: 'coalescing' },
     },
     'rate-limiting': {
       id: 'rate-limiting',

@@ -60,7 +60,7 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 - `src/data/catalog.ts` : composants et évolutions. `src/data/scenarios/` : un fichier
   par scénario, plus ses architectures types (`*.archetypes.ts`) ; `index.ts` liste les
   scénarios de l'écran de choix. Une partie par scénario, sauvegardées ensemble.
-- `tests/url-shortener.test.ts` et `tests/market.test.ts` verrouillent l'équilibrage : chaque vague gagnée avec la
+- `tests/url-shortener.test.ts`, `tests/market.test.ts` et `tests/resilience.test.ts` verrouillent l'équilibrage : chaque vague gagnée avec la
   réponse attendue, perdue sans elle et perdue sur-dimensionnée.
 
 ## Pièges
@@ -78,7 +78,8 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 - Imports relatifs avec l'extension `.ts` obligatoire : c'est ce qui permet à Node
   de lancer `scripts/` sans build.
 - `npm run balance` et `tests/balance.test.ts` ne connaissent que le raccourcisseur
-  (topologie canonique) ; le grand marché n'est verrouillé que par ses archétypes.
+  (topologie canonique) ; le grand marché et le banquier lombard ne sont verrouillés que
+  par leurs archétypes.
 - `tests/balance.test.ts` énumère un espace réduit qui doit contenir toutes les réponses
   attendues : si un recalibrage déplace une réponse hors de cet espace, l'agrandir.
 - Le MVP de la spec a été élargi au CDN et à l'autoscaling (`docs/decisions.md`, X1–X4).
@@ -100,6 +101,8 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   toute réplique du chambellan a sa ligne « En vrai ».
 - Les incidents (X5) sont calés pour ne faire perdre aucune réponse attendue : en ajouter
   un, c'est relancer `npm run balance` et `url-shortener.test.ts`.
-- Pas de cascade de pannes : un aval saturé ne ralentit pas l'amont (décision M3, V2).
+- Pas de cascade par saturation : un aval saturé ne ralentit pas l'amont (M3). La seule
+  cascade est celle des fils d'exécution (S14) : un serveur qui appelle en direct une
+  dépendance lente sature pour tout le monde, sauf derrière un circuit breaker ou une file.
 - Le travail d'un flux est divisé par sa taille de lot (`batch`), mais les échecs se
   comptent toujours en messages.
