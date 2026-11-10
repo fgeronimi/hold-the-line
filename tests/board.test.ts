@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { catalog } from '../src/data/catalog.ts';
 import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import type { Architecture } from '../src/engine/types.ts';
 import { findPath, hexDistance, hexKey, type Hex } from '../src/render/hex.ts';
@@ -131,5 +132,49 @@ describe('plateau', () => {
     const layout = layoutArchitecture(arch);
     expect(layout.cells['app-server']).toEqual({ q: 5, r: -2 });
     expect(layout.roads[0]!.cells).toEqual(arch.links[0]!.path);
+  });
+});
+
+describe('poser un bâtiment sur un chemin', () => {
+  // Clients (0,0) → serveur (4,0) → banquier (8,0) : deux chemins tout droits.
+  const line = (): Architecture => {
+    let arch: Architecture = { nodes: [{ id: 'src', type: 'traffic-source', cell: { q: 0, r: 0 } }], links: [] };
+    arch = ok(placeNode(arch, 'app-server', { q: 4, r: 0 }));
+    arch = { ...arch, nodes: [...arch.nodes, { id: 'bank', type: 'payment-provider', cell: { q: 8, r: 0 } }, { id: 'db', type: 'database', cell: { q: 4, r: 3 } }] };
+    for (const [from, to] of [['src', 'app-server'], ['app-server', 'bank'], ['app-server', 'db']] as const) arch = ok(connect(arch, from, to));
+    return arch;
+  };
+  const pairs = (arch: Architecture) => arch.links.map((l) => `${l.from}→${l.to}`).sort();
+  const onPath = (arch: Architecture, from: string, to: string) => arch.links.find((l) => l.from === from && l.to === to)!.path![2]!;
+
+  it('une file posée entre le serveur et le banquier s’insère dans le lien', () => {
+    const arch = line();
+    const next = ok(placeNode(arch, 'message-queue', onPath(arch, 'app-server', 'bank'), catalog));
+    expect(pairs(next)).toEqual(['app-server→db', 'app-server→message-queue', 'message-queue→bank', 'src→app-server'].sort());
+    expect(next.links.every((l) => l.path && adjacent(l.path))).toBe(true);
+  });
+
+  it('un load balancer posé devant le serveur prend sa place sur la route', () => {
+    const arch = line();
+    const next = ok(placeNode(arch, 'load-balancer', onPath(arch, 'src', 'app-server'), catalog));
+    expect(pairs(next)).toContain('src→load-balancer');
+    expect(pairs(next)).toContain('load-balancer→app-server');
+    expect(pairs(next)).not.toContain('src→app-server');
+  });
+
+  it('un cache est consulté, pas traversé : il se branche à côté du lien vers la base', () => {
+    const arch = line();
+    const next = ok(placeNode(arch, 'cache', onPath(arch, 'app-server', 'db'), catalog));
+    expect(pairs(next)).toContain('app-server→cache');
+    expect(pairs(next)).toContain('app-server→db');
+  });
+
+  it('un bâtiment qui ne peut pas s’intercaler laisse le lien et le fait contourner', () => {
+    const arch = line();
+    const cell = onPath(arch, 'app-server', 'db');
+    // Une file ne peut pas alimenter une base : le chemin fait un détour.
+    const next = ok(placeNode(arch, 'message-queue', cell, catalog));
+    expect(pairs(next)).toEqual(pairs(arch));
+    expect(next.links.find((l) => l.to === 'db')!.path!.some((c) => hexKey(c) === hexKey(cell))).toBe(false);
   });
 });

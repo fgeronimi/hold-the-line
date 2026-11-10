@@ -140,6 +140,8 @@ export class CityScene {
   private readonly effects: Effects;
   /** Coursiers arrêtés devant une file qui déborde. */
   private waiters!: Fleet;
+  /** Paiements figés devant une dépendance lente : la cascade en train de se faire. */
+  private stuck!: Fleet;
   /** Latence visée par la vague (ms) : au-delà, le bâtiment le plus lent montre son sablier. */
   slaLatencyMs: number | undefined;
   private readonly alert: Color;
@@ -755,6 +757,7 @@ export class CityScene {
     const [w, h, l] = this.theme.vehicles.read.size;
     this.hostiles = this.fleet({ ...this.theme.hostile, size: [w * 1.2, h * 1.1, l] });
     this.waiters = this.fleet(this.theme.vehicles.write);
+    this.stuck = this.fleet(this.theme.vehicles.async);
   }
 
   private updateBuildings(tick: TickMetrics | undefined): void {
@@ -806,6 +809,13 @@ export class CityScene {
         fx.puff(b.home.clone().addScaledVector(along, 0.9).setY(0.4));
       }
       if (shed > 0) fx.shield(b.home, 1.05, shed / Math.max(1, n?.rps ?? 1) + 0.3);
+      // Circuit coupé : une barrière tombe en travers de la route, juste à la sortie du serveur.
+      for (const cut of n?.open ?? []) {
+        const road = this.roads.get(`${id}→${cut}`);
+        if (!road) continue;
+        const { point, angle } = pointAlong(road.path, Math.min(0.5, 1.1 / Math.max(pathLength(road.path), 1e-6)));
+        fx.barrier(new Vector3(point.x, 0.05, point.z), angle);
+      }
 
       const backlog = n?.backlog ?? 0;
       const parked = backlog > 0 ? Math.min(b.parked.length, Math.ceil(Math.log10(1 + backlog) * 3)) : 0;
@@ -867,28 +877,37 @@ export class CityScene {
   }
 
   /** Une file qui déborde : les coursiers attendent en rang sur le chemin qui y mène. */
+  /**
+   * Ceux qui attendent, en rang au bout d'un chemin : les coursiers devant une file qui
+   * déborde, et les mages figés devant une dépendance lente qui retient les fils du serveur.
+   */
   private updateWaiting(tick: TickMetrics | undefined): void {
     this.waiters.begin();
-    for (const id of this.buildings.keys()) {
-      const backlog = tick?.nodes[id]?.backlog ?? 0;
-      if (backlog <= 0) continue;
-      const road = [...this.roads.values()].find((r) => r.to === id);
-      if (!road) continue;
-      const length = pathLength(road.path);
-      const count = Math.min(MAX_WAITING, Math.ceil(Math.log10(1 + backlog) * 2));
-      for (let k = 0; k < count; k++) {
-        const f = 1 - (0.95 + k * 0.42) / length;
-        if (f <= 0) break;
-        const { point, angle } = pointAlong(road.path, f);
-        const bob = Math.abs(Math.sin(this.effects.now * 3 + k)) * 0.015;
-        this.dummy.position.set(point.x + Math.cos(angle) * 0.18, 0.06 + bob, point.z - Math.sin(angle) * 0.18);
-        this.dummy.rotation.set(0, angle, 0);
-        this.dummy.updateMatrix();
-        // Ils attendent : une seule pose, celle du premier pas.
-        this.waiters.add(this.dummy.matrix, 0, this.dummy.matrix.clone().setPosition(this.dummy.position.x, 0.065, this.dummy.position.z));
-      }
+    this.stuck.begin();
+    for (const [id, n] of Object.entries(tick?.nodes ?? {})) {
+      const backlog = n.backlog ?? 0;
+      const into = backlog > 0 ? [...this.roads.values()].find((r) => r.to === id) : undefined;
+      if (into) this.queueUp(this.waiters, into, Math.min(MAX_WAITING, Math.ceil(Math.log10(1 + backlog) * 2)));
+      const stalled = n.waitingOn ? this.roads.get(`${id}→${n.waitingOn}`) : undefined;
+      if (stalled) this.queueUp(this.stuck, stalled, Math.min(MAX_WAITING, 2 + Math.ceil(((n.threads ?? 1) - 1) * 10)));
     }
     this.waiters.end();
+    this.stuck.end();
+  }
+
+  private queueUp(fleet: Fleet, road: Road, count: number): void {
+    const length = pathLength(road.path);
+    for (let k = 0; k < count; k++) {
+      const f = 1 - (0.95 + k * 0.42) / length;
+      if (f <= 0) break;
+      const { point, angle } = pointAlong(road.path, f);
+      const bob = Math.abs(Math.sin(this.effects.now * 3 + k)) * 0.015;
+      this.dummy.position.set(point.x + Math.cos(angle) * 0.18, 0.06 + bob, point.z - Math.sin(angle) * 0.18);
+      this.dummy.rotation.set(0, angle, 0);
+      this.dummy.updateMatrix();
+      // Ils attendent : une seule pose, celle du premier pas.
+      fleet.add(this.dummy.matrix, 0, this.dummy.matrix.clone().setPosition(this.dummy.position.x, 0.065, this.dummy.position.z));
+    }
   }
 
   private updateTravellers(time: number, journeys: Journey[]): void {

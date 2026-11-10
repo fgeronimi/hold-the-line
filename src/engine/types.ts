@@ -289,6 +289,8 @@ export interface NodeTick {
   lost?: number;
   /** Serveur : part de ses fils d'exécution occupés (1 = tous) ; au-delà, la cascade. */
   threads?: number;
+  /** Serveur à court de fils : la dépendance qu'ils attendent tous. */
+  waitingOn?: string;
   /** Serveur : dépendances coupées par son circuit breaker ce tick. */
   open?: string[];
 }

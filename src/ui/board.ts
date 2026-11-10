@@ -1,5 +1,7 @@
 import { BOARD } from '../data/board.ts';
-import type { Architecture, ArchLink, ArchNode, BoardCell } from '../engine/types.ts';
+import { linkFlows } from '../engine/routing.ts';
+import type { Architecture, ArchLink, ArchNode, BoardCell, Catalog } from '../engine/types.ts';
+import { validateArchitecture } from '../engine/validate.ts';
 import { findPath, hexDistance, hexKey, hexSide } from '../render/hex.ts';
 import { layoutArchitecture } from '../render/layout.ts';
 import { bridge, isRiver, riverKeys } from '../render/terrain.ts';
@@ -69,12 +71,50 @@ function isBridge(path: BoardCell[], i: number): boolean {
 
 const crosses = (l: ArchLink, cell: BoardCell) => l.path?.some((c) => hexKey(c) === hexKey(cell)) ?? false;
 
-export function placeNode(arch: Architecture, type: string, cell: BoardCell): BoardResult {
+/**
+ * Poser un bâtiment. Sur un chemin, il s'insère dans le lien quand il le peut : A → B devient
+ * A → nouveau → B (une file entre le serveur et le banquier), ou, pour un cache qu'on
+ * consulte sans le traverser, A → cache s'ajoute à côté de A → B. Sinon, et sans catalogue,
+ * le chemin contourne la case.
+ */
+export function placeNode(arch: Architecture, type: string, cell: BoardCell, catalog?: Catalog): BoardResult {
   const refused = freeForBuilding(arch, cell);
   if (refused) return { ok: false, reason: refused };
-  const next: Architecture = { ...arch, nodes: [...arch.nodes, { id: nextNodeId(arch, type), type, cell }] };
-  // Un chemin qui passait par cette case la contourne désormais.
-  return { ok: true, arch: reroute(next, (l) => crosses(l, cell)) };
+  const id = nextNodeId(arch, type);
+  let next: Architecture = { ...arch, nodes: [...arch.nodes, { id, type, cell }] };
+  const crossed = arch.links.filter((l) => crosses(l, cell));
+  const inserted = new Set<ArchLink>();
+  if (catalog) {
+    const flows = linkFlows(arch, catalog);
+    for (const l of crossed) {
+      const candidate = insertInto(next, l, id, flows.get(`${l.from}→${l.to}`) ?? [], catalog);
+      if (candidate) {
+        next = candidate;
+        inserted.add(l);
+      }
+    }
+  }
+  // Les nouveaux liens n'ont pas encore de tracé ; un chemin qui passait là contourne la case.
+  return { ok: true, arch: reroute(next, (l) => !l.path || (crosses(l, cell) && !inserted.has(l))) };
+}
+
+/** Le lien `l` passe désormais par le bâtiment `id`, si c'est sensé et que l'architecture reste valide. */
+function insertInto(arch: Architecture, l: ArchLink, id: string, carried: string[], catalog: Catalog): Architecture | undefined {
+  const node = arch.nodes.find((n) => n.id === id)!;
+  const def = catalog.components[node.type];
+  if (!def || !carried.some((k) => (def.accepts as string[]).includes(k))) return undefined;
+  const has = (from: string, to: string) => arch.links.some((x) => x.from === from && x.to === to);
+  // Consulté, pas traversé : le cache se branche à côté du lien, qui reste.
+  const links = def.lookaside
+    ? [...arch.links, ...(has(l.from, id) ? [] : [{ from: l.from, to: id }])]
+    : [...arch.links.filter((x) => x !== l), { from: l.from, to: id }, { from: id, to: l.to }];
+  const candidate: Architecture = { ...arch, links };
+  if (!validateArchitecture(candidate, catalog).ok && validateArchitecture(arch, catalog).ok) return undefined;
+  // Il doit vraiment recevoir ce qui passait, et, s'il est traversé, le transmettre à l'arrivée.
+  const flows = linkFlows(candidate, catalog);
+  if ((flows.get(`${l.from}→${id}`) ?? []).length === 0) return undefined;
+  if (!def.lookaside && (flows.get(`${id}→${l.to}`) ?? []).length === 0) return undefined;
+  return candidate;
 }
 
 export function moveNode(arch: Architecture, id: string, cell: BoardCell): BoardResult {

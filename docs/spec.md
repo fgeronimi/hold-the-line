@@ -237,7 +237,8 @@ et déterministe, séparée de l'affichage.
   gauche, une rivière qu'on ne franchit que par un pont. Vue isométrique en Three.js, on se
   déplace et on zoome, on ne tourne pas.
 - **Construction** (I4, I10) : palette de bâtiments, outils Sélection, Relier, Retirer.
-  On pose en cliquant ou en glissant depuis la palette ; on déplace un bâtiment en le
+  On pose en cliquant ou en glissant depuis la palette ; posé sur un chemin, un bâtiment
+  s'insère dans le lien quand c'est sensé (I11) ; on déplace un bâtiment en le
   glissant ; on relie en cliquant A puis B, et le plus court chemin de cases se trace seul.
   Annuler et rétablir (⌘Z, ⇧⌘Z). Les chemins sont de la mise en scène : la simulation les
   ignore, et il n'y a pas de géographie (P2).
@@ -246,7 +247,8 @@ et déterministe, séparée de l'affichage.
   type. Pastilles +1, ✕ −1, 🛡. Les problèmes se voient sur place : bâtiment qui tremble et
   fume, porte qui clignote et requête qui rebondit, coursiers en rang devant une file,
   sablier sur le bâtiment le plus lent, mage qui se dédouble, messager qui s'évapore,
-  tour en feu, dôme de la garde, et l'alarme quand le SLA est rompu, sur les échecs ou sur
+  tour en feu, dôme de la garde, mages figés devant une dépendance lente, barrière du
+  circuit coupé, et l'alarme quand le SLA est rompu, sur les échecs ou sur
   la latence. Capacités, coûts et débits restent chiffrés partout (C4). Tableau de bord,
   alertes à la première saturation, ralenti, courbes en direct.
 - **Debrief** (R9, I8) : l'analyse du chambellan en trois temps, et les courbes tick par

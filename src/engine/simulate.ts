@@ -343,6 +343,7 @@ export function simulateWave(
         ...(down(node) > 0 ? { down: Math.min(down(node), instancesOf(node, catalog)) } : {}),
         ...nonZero(nodeTally.get(id)),
         ...(outcome.threads !== undefined ? { threads: outcome.threads } : {}),
+        ...(outcome.blockedBy ? { waitingOn: outcome.blockedBy } : {}),
         ...(open.has(id) ? { open: [...open.get(id)!] } : {}),
       };
     }

@@ -281,7 +281,7 @@ window.addEventListener('pointerup', (e) => {
   paletteDrag = undefined;
   if (!drag?.moved || !scene || !(e.target instanceof HTMLCanvasElement)) return;
   const cell = scene.cellAt(e.clientX, e.clientY);
-  if (cell) applied(placeNode(state.draft, drag.type, cell), { tool: { kind: 'select' } });
+  if (cell) applied(placeNode(state.draft, drag.type, cell, state.catalog), { tool: { kind: 'select' } });
 });
 
 function onBoardClick(cell: BoardCell): void {
@@ -293,7 +293,7 @@ function onBoardClick(cell: BoardCell): void {
       update({ selectedNode: here?.id, boardMessage: undefined, showMenu: false });
       return;
     case 'place':
-      return applied(placeNode(state.draft, tool.type, cell));
+      return applied(placeNode(state.draft, tool.type, cell, state.catalog));
     case 'move':
       return applied(moveNode(state.draft, tool.id, cell), { tool: { kind: 'select' }, selectedNode: tool.id });
     case 'link':

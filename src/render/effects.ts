@@ -1,5 +1,6 @@
 import {
   AdditiveBlending,
+  Group,
   BoxGeometry,
   Color,
   DynamicDrawUsage,
@@ -47,6 +48,8 @@ export class Effects {
   private readonly letters: Pool;
   private readonly shields: Mesh[] = [];
   private shieldsUsed = 0;
+  private readonly barriers: Group[] = [];
+  private barriersUsed = 0;
   private readonly dummy = new Object3D();
   private readonly color = new Color();
   /** Heure courante, en secondes : les effets tournent même quand le rejeu est en pause. */
@@ -68,6 +71,7 @@ export class Effects {
     this.now = now;
     for (const p of [this.mist, this.fire, this.letters]) p.used = 0;
     this.shieldsUsed = 0;
+    this.barriersUsed = 0;
   }
 
   end(): void {
@@ -77,6 +81,42 @@ export class Effects {
       if (p.mesh.instanceColor) p.mesh.instanceColor.needsUpdate = true;
     }
     this.shields.forEach((s, i) => (s.visible = i < this.shieldsUsed));
+    this.barriers.forEach((b, i) => (b.visible = i < this.barriersUsed));
+  }
+
+  /**
+   * Barrière rouge et blanche en travers du chemin : le circuit breaker a coupé cette route.
+   * `angle` est la direction du chemin ; la barrière se pose perpendiculaire, et s'abaisse
+   * en oscillant un peu, comme une barrière qu'on vient de fermer.
+   */
+  barrier(at: Vector3, angle: number): void {
+    let b = this.barriers[this.barriersUsed];
+    if (!b) {
+      b = new Group();
+      const red = new MeshLambertMaterial({ color: '#d62828' });
+      const white = new MeshLambertMaterial({ color: '#f4f1de' });
+      const post = new BoxGeometry(0.08, 0.42, 0.08);
+      // Le chemin suit l'axe z local : les poteaux et la lisse sont de part et d'autre, en x.
+      for (const x of [-0.42, 0.42]) {
+        const p = new Mesh(post, white);
+        p.position.set(x, 0.21, 0);
+        b.add(p);
+      }
+      // La lisse, en bandes alternées.
+      for (let i = 0; i < 6; i++) {
+        const band = new Mesh(new BoxGeometry(0.15, 0.07, 0.06), i % 2 ? white : red);
+        band.position.set(-0.375 + i * 0.15, 0.36, 0);
+        band.castShadow = true;
+        b.add(band);
+      }
+      this.barriers.push(b);
+      this.scene.add(b);
+    }
+    this.barriersUsed++;
+    b.position.copy(at);
+    // Plus grande qu'à l'échelle : elle doit se voir de loin, entre les personnages.
+    b.scale.setScalar(1.5);
+    b.rotation.set(Math.sin(this.now * 3) * 0.04, angle, 0);
   }
 
   /** Vapeur blanche d'un bâtiment saturé. */

@@ -26,6 +26,7 @@ import {
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { HEX_WIDTH, hexCenter, type Hex } from './hex.ts';
+import { Effects } from './effects.ts';
 import { ModelLibrary, type ModelId } from './models.ts';
 import { BRIDGE_MODEL, bridgeRotation, crossingTile, mask, riverTile, roadTile, type Tile } from './terrain.ts';
 
@@ -48,7 +49,7 @@ type Kind = 'read' | 'write' | 'async' | 'hostile';
 const MODELS: ModelId[] = [
   'hex_grass', 'trees_A_small', 'rock_single_A', 'hex_road_A', 'hex_river_A', 'hex_river_crossing_A', 'hex_river_crossing_B', BRIDGE_MODEL,
   'building_tower_A_blue', 'building_tower_B_blue', 'building_castle_blue', 'building_tower_base_blue', 'building_tavern_blue',
-  'fence_wood_straight', 'crate_A_small', 'sack', 'building_church_blue', 'flag_blue', 'wall_straight_gate', 'building_barracks_blue',
+  'fence_wood_straight', 'crate_A_small', 'sack', 'building_church_blue', 'flag_blue', 'wall_straight_gate', 'building_barracks_blue', 'building_home_B_blue',
 ].map((m) => (m.startsWith('kaykit') ? m : K(m)));
 const CHARACTERS = [...Object.values(theme.vehicles).map((v) => v.model!), theme.hostile.model!];
 
@@ -292,6 +293,30 @@ function particles(v: Vignette, count: number, material: MeshBasicMaterial, radi
 }
 
 type Script = (t: number) => void;
+
+/** La maison du banquier lombard, comme sur le plateau (forme `counting-house`). */
+function bank(v: Vignette) {
+  return (g: Group, tint: Material[]) => {
+    v.put(g, K('building_home_B_blue'), { x: -0.3 }, tint);
+    for (const [x, z] of [[0.7, 0.5], [0.9, 0.1], [0.6, -0.3]] as const) v.put(g, K('sack'), { x, z, scale: 2.2 }, tint);
+    v.put(g, K('crate_A_small'), { x: 0.5, z: 0.9, scale: 2 }, tint);
+  };
+}
+
+/** La tour du serveur, posée au départ du chemin : c'est elle qui appelle le banquier. */
+function caller(v: Vignette): { group: Group; tint: Material[] } {
+  const group = new Group();
+  const tint: Material[] = [];
+  v.put(group, K('building_tower_A_blue'), { scale: 0.75 }, tint);
+  const at = hexCenter({ q: -1, r: 0 });
+  group.position.set(at.x - 0.1, 0, at.z + 0.75);
+  v.scene.add(group);
+  return { group, tint };
+}
+
+const glow = (tint: Material[], amount: number) => {
+  for (const m of tint) if ('emissive' in m && m.emissive instanceof Color) m.emissive.copy(ALERT).multiplyScalar(amount * 0.6);
+};
 
 interface Entry {
   title: string;
@@ -566,6 +591,75 @@ const ENTRIES: Entry[] = [
         const hit = between(p, 0.4, 0.6);
         (shield.material as MeshBasicMaterial).opacity = hit >= 0 && hit <= 1 ? 0.15 + (1 - hit) * 0.4 : 0.15;
         pop.style.opacity = hit >= 0 && hit <= 1.5 ? '1' : '0';
+      };
+    },
+  },
+  {
+    title: 'Cascade de pannes',
+    chip: { text: 'signal existant', kind: 'ok' },
+    text: 'Le banquier traîne : chaque paiement retient un scribe, les mages s’entassent devant sa porte. Plus un scribe libre, la tour rougit et refoule même ceux qui venaient seulement consulter.',
+    trigger: '<code>threads</code> &gt; 1 et <code>waitingOn</code> du serveur',
+    setup: (v) => {
+      v.site(bank(v));
+      const server = caller(v);
+      const line = Array.from({ length: 5 }, () => v.walker('async'));
+      const pairs = [0, 0.5].map((offset) => ({ offset, ok: v.walker('read'), ko: v.walker('read', true) }));
+      v.label('hourglass', '⏳ 4 000 ms', SITE.x, 1.6, SITE.z);
+      v.label('pop', '🧵 fils occupés 125 %', server.group.position.x, 1.4, server.group.position.z);
+      const start = ROAD_START - 0.3;
+      const door = server.group.position.x - 0.35;
+      return (t) => {
+        line.forEach((w, k) => w.at(DOOR - k * 0.42, 0, true, t, false));
+        server.group.position.y = 0;
+        server.group.rotation.z = Math.sin(t * 50) * 0.01;
+        glow(server.tint, 0.65 + 0.35 * Math.sin(t * 5) ** 2);
+        for (const { offset, ok, ko } of pairs) {
+          const p = phase(t, 2.4, offset);
+          if (p < 0.4) {
+            ko.hide();
+            ok.at(lerp(start, door, p / 0.4), 0.35, true, t);
+          } else {
+            ok.hide();
+            ko.at(lerp(door, start, between(p, 0.4, 1)), 0.35, false, t);
+          }
+        }
+      };
+    },
+  },
+  {
+    title: 'Circuit coupé',
+    chip: { text: 'signal existant', kind: 'ok' },
+    text: 'Le disjoncteur abaisse une barrière sur la route du banquier : les paiements sont refusés tout de suite, sans retenir de scribe. La tour reste libre pour tous les autres.',
+    trigger: '<code>open</code> du serveur, incident <code>slow-dependency</code> ou <code>dependency-down</code>',
+    setup: (v) => {
+      v.site(bank(v));
+      const server = caller(v);
+      const fx = new Effects(v.scene);
+      const mages = [0, 0.33, 0.66].map((offset) => ({ offset, ok: v.walker('async'), ko: v.walker('async', true) }));
+      const cross = v.label('pop', '✕', -0.6, 1.1, 0);
+      v.label('pop shield', '🔌 circuit coupé', -0.2, 1.7, 0);
+      v.label('hourglass', '⏳ 4 000 ms', SITE.x, 1.6, SITE.z);
+      const from = server.group.position.x + 0.4;
+      const bar = -0.45;
+      return (t) => {
+        fx.begin(t);
+        fx.barrier(new Vector3(bar, 0.05, 0), Math.PI / 2);
+        fx.end();
+        glow(server.tint, 0);
+        let hit = 0;
+        for (const { offset, ok, ko } of mages) {
+          const p = phase(t, 2.2, offset);
+          if (p < 0.45) {
+            ko.hide();
+            ok.at(lerp(from, bar - 0.25, p / 0.45), 0, true, t);
+          } else {
+            ok.hide();
+            const back = between(p, 0.45, 1);
+            ko.at(lerp(bar - 0.3, from, back), 0, false, t);
+            if (back < 0.25) hit = Math.max(hit, 1 - back * 4);
+          }
+        }
+        cross.style.opacity = String(hit);
       };
     },
   },
