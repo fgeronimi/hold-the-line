@@ -40,7 +40,7 @@ describe('alarme de latence', () => {
     expect(inline.won).toBe(false);
     const at = latencyBreachTick(inline, wave.sla.maxP95LatencyMs)!;
     // Le 4e tick lent sur 60 : trois sont tolérés par le p95.
-    const slowBefore = inline.ticks.slice(0, at + 1).filter((t) => t.avgLatencyMs > wave.sla.maxP95LatencyMs).length;
+    const slowBefore = inline.ticks.slice(0, at + 1).filter((t) => t.slaLatencyMs > wave.sla.maxP95LatencyMs).length;
     expect(slowBefore).toBe(4);
     expect(latencyBreachTick(simulateWave(M.queued, wave, catalog), wave.sla.maxP95LatencyMs)).toBeUndefined();
   });

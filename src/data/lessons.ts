@@ -81,9 +81,21 @@ export const reasonLessons = {
   },
   queueOverflow: {
     says: 'Débordement à {name} : des colis sont perdus.',
-    tech: 'L’arriéré de la file dépasse sa capacité : les messages en trop sont perdus.',
-    remedy: 'Plus de consommateurs derrière la file.',
-    concept: 'Backpressure',
+    tech: 'L’arriéré de la file dépasse sa capacité : les messages en trop sont perdus. Une file absorbe un pic, pas un excès qui dure : l’arriéré monte de (arrivées − départs) chaque seconde.',
+    remedy: 'Si les consommateurs suivent en moyenne, une file plus longue (rétention) suffit à passer le pic. Sinon, plus de consommateurs derrière la file.',
+    concept: 'Backpressure, dimensionner une file',
+  },
+  retryStorm: {
+    says: 'Chaque voyageur refoulé est revenu aussitôt, et ses voisins avec lui : la foule a quadruplé aux portes, bien après que les tours furent relevées.',
+    tech: 'Une panne brève a fait échouer des requêtes ; des clients qui relancent tout de suite ont multiplié la charge ({retries} relances par seconde au pire). Le serveur saturé travaille pour des requêtes déjà abandonnées : la panne s’entretient seule une fois sa cause partie (panne métastable).',
+    remedy: 'Côté client : backoff exponentiel et jitter, avec un budget de relances. Ou assez de marge pour qu’une panne n’amorce jamais la tempête.',
+    concept: 'Tempête de relances, backoff exponentiel',
+  },
+  staleRead: {
+    says: 'Les copistes, coupés du grand registre, ont promis des places déjà vendues : {failed} lectures fausses.',
+    tech: 'Pendant la partition, les réplicas ne reçoivent plus les écritures du primaire : ils servent une donnée périmée. Pour une donnée qui doit être à jour (les places restantes), c’est un échec.',
+    remedy: 'Envoyer les lectures critiques au primaire (lecture sur le leader), et garder les réplicas pour ce qui tolère un léger retard. Choisir, donnée par donnée, entre cohérence et disponibilité.',
+    concept: 'Partition réseau, cohérence (CAP)',
   },
   overBudget: {
     says: 'Sire, le trésor est vide.',
@@ -219,6 +231,20 @@ export const incidentLessons: Record<IncidentEffect['type'], { hurt: Lesson; hel
       tech: 'Les consommateurs idempotents ont ignoré les messages déjà traités.',
       remedy: 'L’idempotence a un coût : chaque service garde la mémoire des clés vues, dans son propre stockage.',
       concept: 'Idempotence',
+    },
+  },
+  partition: {
+    hurt: {
+      says: '{title} : les copistes n’entendaient plus le grand registre, {failed} réponses fausses sont parties.',
+      tech: 'Une partition coupe les réplicas du primaire : ils restent disponibles, mais leurs données vieillissent. On ne peut pas avoir à la fois la cohérence et la disponibilité pendant une partition (CAP).',
+      remedy: 'Les lectures qui doivent être à jour vont au primaire ; les autres peuvent rester sur les réplicas.',
+      concept: 'Partition réseau, cohérence (CAP)',
+    },
+    held: {
+      says: '{title} : les copistes ont servi le catalogue, le grand registre a gardé les places.',
+      tech: 'Les lectures critiques ne passaient pas par les réplicas : la partition n’a rendu périmé que ce qui pouvait l’être.',
+      remedy: 'Lire sur le primaire a un prix : il doit tenir ces lectures en plus des écritures.',
+      concept: 'Partition réseau, cohérence (CAP)',
     },
   },
   'publish-loss': {

@@ -1,7 +1,7 @@
 import { scoreWave, type Scoring } from '../engine/score.ts';
 import { simulateWave } from '../engine/simulate.ts';
 import type { Catalog, Scenario, WaveResult } from '../engine/types.ts';
-import { buildCanonical, choiceKey, enumerate, maxedChoice, reductions, strategyName, strategyParts, type CanonicalChoice, type SearchSpace } from './canonical.ts';
+import { choiceKey, enumerate, maxedChoice, reductions, strategyName, strategyParts, type BalanceSpace, type Choice } from './canonical.ts';
 
 export interface StrategyGroup {
   strategy: string;
@@ -13,7 +13,7 @@ export interface StrategyGroup {
    * obtenu par ce retrait.
    */
   dominatedBy?: string;
-  best: { choice: CanonicalChoice; score: number; result: WaveResult };
+  best: { choice: Choice; score: number; result: WaveResult };
 }
 
 export interface WaveReport {
@@ -31,7 +31,7 @@ export interface WaveReport {
 export interface MassSimReport {
   waves: WaveReport[];
   /** Critère de sortie : aucune architecture ne doit gagner toutes les vagues. */
-  universalWinners: CanonicalChoice[];
+  universalWinners: Choice[];
   /** Critère B1 : au moins deux stratégies non dominées sur la majorité des vagues. */
   majorityHasTwoStrategies: boolean;
   /** Critère de sortie : l'architecture au maximum de tout perd chaque vague par le coût ou la complexité. */
@@ -42,21 +42,21 @@ export interface MassSimReport {
  * Joue chaque architecture canonique sur chaque vague, isolément : sans architecture
  * précédente, donc sans coût de migration. On mesure ce qui peut gagner, pas un parcours.
  */
-export function runMassSim(scenario: Scenario, catalog: Catalog, space: SearchSpace, scoring: Scoring): MassSimReport {
+export function runMassSim(scenario: Scenario, catalog: Catalog, space: BalanceSpace, scoring: Scoring): MassSimReport {
   const candidates = [...enumerate(space)];
   const winsEverywhere = new Set(candidates.map((_, i) => i));
 
   const waves = scenario.waves.map((wave): WaveReport => {
     const groups = new Map<string, StrategyGroup>();
     const winners = new Set<string>();
-    const winningChoices = new Map<string, CanonicalChoice[]>();
+    const winningChoices = new Map<string, Choice[]>();
     candidates.forEach((c, i) => {
       const result = simulateWave(c.arch, wave, catalog);
       if (!result.won) {
         winsEverywhere.delete(i);
         return;
       }
-      winners.add(choiceKey(c.choice));
+      winners.add(choiceKey(space, c.choice));
       winningChoices.set(c.strategy, [...(winningChoices.get(c.strategy) ?? []), c.choice]);
       const score = scoreWave(result, 0, scoring);
       const group = groups.get(c.strategy);
@@ -74,13 +74,13 @@ export function runMassSim(scenario: Scenario, catalog: Catalog, space: SearchSp
     });
     const sorted = [...groups.values()].sort((a, b) => b.best.score - a.best.score);
     for (const g of sorted) {
-      let witness: CanonicalChoice | undefined;
+      let witness: Choice | undefined;
       const allReducible = (winningChoices.get(g.strategy) ?? []).every((choice) => {
-        const reduced = reductions(choice).find((r) => winners.has(choiceKey(r)));
+        const reduced = reductions(space, choice).find((r) => winners.has(choiceKey(space, r)));
         witness ??= reduced;
         return reduced !== undefined;
       });
-      if (allReducible && witness) g.dominatedBy = strategyName(strategyParts(witness));
+      if (allReducible && witness) g.dominatedBy = strategyName(strategyParts(space, witness));
     }
     const singleStrategy = wave.singleStrategy ?? false;
     const strategies = sorted.filter((g) => !g.dominatedBy).map((g) => g.strategy);
@@ -100,7 +100,7 @@ export function runMassSim(scenario: Scenario, catalog: Catalog, space: SearchSp
     universalWinners: [...winsEverywhere].map((i) => candidates[i]!.choice),
     majorityHasTwoStrategies: withTwo > waves.length / 2,
     overprovisioned: scenario.waves.map((wave) => {
-      const r = simulateWave(buildCanonical(maxedChoice(space)), wave, catalog);
+      const r = simulateWave(space.build(maxedChoice(space)), wave, catalog);
       return {
         waveId: wave.id,
         lossReasons: r.lossReasons,

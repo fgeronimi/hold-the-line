@@ -102,6 +102,8 @@ export const urlShortener: Scenario = {
       thriftyCost: 205,
       // La file est la seule réponse ; un CDN posé en vague 3 y perd les clics des redirections en cache.
       singleStrategy: true,
+      // Un serveur tombe : le worker aussi, et la file garde les clics le temps qu'il revienne.
+      incidents: [{ id: 'worker-crash', title: 'Une instance de serveur tombe, worker compris', component: 'app-server', from: 30, until: 32, effect: { type: 'instance-down', count: 1 } }],
     },
   ],
 };

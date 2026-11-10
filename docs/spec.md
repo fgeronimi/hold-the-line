@@ -38,7 +38,7 @@ générique ; chaque scénario porte son sous-titre (*Hold the Line : les portes
 | Ennemi qui passe, vies perdues | Requête en échec, SLA entamé |
 | Budget de la vague | Facture de la vague sous un plafond, sans épargne (E1) |
 
-Les trois scénarios partagent une métaphore, **la cité fortifiée** (R2, S1) :
+Les quatre scénarios partagent une métaphore, **la cité fortifiée** (R2, S1) :
 
 | Technique | Métaphore |
 | --- | --- |
@@ -100,6 +100,7 @@ incidents que le scénario envoie. Chaque incident a au moins une parade, et cha
 | CDN | Sert les lectures en bordure, devant le load balancer (X1) | Oui |
 | Service métier | Service d'une autre équipe, déjà en place : il termine l'événement lui-même, sans base partagée (S10) | Oui, hors palette |
 | Prestataire de paiement | Dépendance externe, déjà en place : on l'appelle, on ne la dimensionne pas ; elle peut ralentir ou tomber (S13) | Oui, hors palette |
+| Prestataire d'e-mail | Dépendance externe, déjà en place, avec un quota de messages par seconde, regroupés ou non (S20) | Oui, hors palette |
 | Stockage objet | Fichiers volumineux hors base | Non |
 
 Tous les composants sont proposés dans tous les scénarios (S7) : savoir écarter ce qui ne
@@ -117,7 +118,10 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 | Transactional outbox | Base | Événement perdu entre base et bus | Une écriture de plus par commande (S6) | Oui |
 | Circuit breaker | Serveur | Dépendance lente ou en panne qui bloque le serveur | Les appels coupés échouent : réponse dégradée (S15) | Oui |
 | Request coalescing | Cache | Ruée vers le cache | Coût et complexité ; ne sert qu'à l'expiration (S15) | Oui |
-| Sharding, consistent hashing, backpressure | — | — | — | Non |
+| Backoff exponentiel et jitter | Clients (la source) | Tempête de relances | Coût et complexité ; ne sert qu'après une panne (S19) | Oui |
+| Rétention | File | Débordement pendant une longue panne de l'aval | Coût par niveau ; n'aide pas si les consommateurs ne suivent pas en moyenne (S20) | Oui |
+| Lecture sur le primaire | Base | Lectures périmées pendant une partition | Le primaire porte ces lectures en plus des écritures (S21) | Oui |
+| Sharding, consistent hashing | — | — | — | Non |
 
 Retirer ou remplacer un composant coûte sa valeur d'achat ; réduire les instances est
 gratuit (E2). La migration entre dans la facture de la vague (E3).
@@ -139,7 +143,10 @@ Les incidents sont annoncés au briefing et déterministes (X5) : pas de tirage 
 | Dépendance lente : la cascade de pannes | Circuit breaker, ou file (paiement différé) | Banquier, vagues 2 et 5 |
 | Tout le cache expire d'un coup | Verrou de recalcul, ou réplica | Banquier, vagues 3 et 5 |
 | Dépendance externe en panne | File : paiement différé, livré au retour | Banquier, vague 4 |
-| Partition réseau, tempête de réessais | Choix CAP, backoff | Pas encore |
+| Panne brève, clients qui relancent aussitôt : tempête de relances | Backoff exponentiel et jitter, ou autoscaling | Tournoi, vagues 1 et 4 |
+| Dépendance externe en panne plus longtemps que la file ne tient | Rétention de la file | Tournoi, vague 2 |
+| Partition réseau entre le primaire et ses réplicas | Lectures critiques sur le primaire (choix CAP) | Tournoi, vagues 3 et 4 |
+| Le worker tombe | La file garde les messages pendant son redémarrage | Raccourcisseur, vague 5 |
 
 ## Jauges, victoire et score
 
@@ -154,7 +161,10 @@ Le joueur est coincé entre « pas assez » et « trop » :
 Une vague est gagnée si le SLA est tenu sans dépasser le budget ni le plafond de
 complexité. La latence est un p95 des latences par tick, affiché « p95 (approx.) » (M4) ;
 elle compte lectures, écritures et événements async, sauf l'async qui passe par une file
-(S10).
+(S10). Un événement traité en direct compte entier, pas dilué dans les lectures (S17), et
+les lectures qui doivent être à jour comptent à part dès qu'elles pèsent plus de 5 % (S21).
+Une requête échouée que le client relance n'est pas un échec : sa relance compte à sa
+place (S19).
 
 **Trois étoiles par vague** (E7) : tenir la vague, la tenir du premier coup, rester
 économe (facture sous le seuil de la stratégie gagnante la moins chère).
@@ -203,6 +213,18 @@ y est payée.
 | 3. Minuit, tout expire | 900 lectures/s, tout le cache expire d'un coup | Cache + verrou de recalcul, ou un réplica |
 | 4. Le banquier ferme | Le prestataire tombe 25 ticks | Une file : les paiements attendent et partent à la réouverture |
 | 5. La grande foire | 2 400 lectures/s, les deux incidents reviennent | Scaling, réplicas, verrou, et disjoncteur ou file |
+
+### Le grand tournoi : une billetterie prise d'assaut
+
+Le prestataire d'e-mail (le colombier) est déjà sur le plateau, avec son quota (S18). Les
+clients relancent tout de suite ce qui échoue, jusqu'à trois fois (S19).
+
+| Vague | Information | Réponse attendue |
+| --- | --- | --- |
+| 1. L'ouverture des ventes | Un déploiement raté arrête tous les serveurs 3 s | Backoff sur les clients, ou autoscaling ; sinon la tempête dure jusqu'à la fin |
+| 2. Les pigeons restent au colombier | Le prestataire d'e-mail tombe 30 s, 8 000 alertes/s | Une file avec de la rétention |
+| 3. Le registre coupé en deux | Lectures non cachables et places restantes, partition des réplicas | Réplicas, et lectures critiques sur le primaire |
+| 4. La joute finale | Les trois incidents | Backoff et scaling, ou autoscaling ; réplica et lecture sur le primaire |
 
 Les budgets, plafonds et seuils de chaque vague sont dans `docs/decisions.md` et verrouillés
 par les tests.
@@ -267,9 +289,9 @@ et déterministe, séparée de l'affichage.
 - Rendu dans `src/render/`, chargé à la demande ; interface sans framework dans `src/ui/`.
 - Progression dans le navigateur ; la sauvegarde ne copie le catalogue et le scénario que
   s'ils ont été calibrés à la main.
-- Équilibrage outillé : `npm run balance` énumère les architectures canoniques du
-  raccourcisseur ; les tests verrouillent chaque vague des deux scénarios (gagnée avec la
-  réponse attendue, perdue sans elle, perdue sur-dimensionnée).
+- Équilibrage outillé : `npm run balance` énumère les architectures canoniques de chaque
+  scénario (B5) ; les tests verrouillent chaque vague (gagnée avec la réponse attendue,
+  perdue sans elle, perdue sur-dimensionnée).
 
 ## Suites
 
@@ -280,7 +302,6 @@ Par ordre d'apport pédagogique :
 | Faire jouer 2 ou 3 personnes de la cible, mesurer la durée d'une partie (cible 15 min, B4) | Valider avant d'ajouter |
 | Reproduire les fiches du calendrier dans le jeu (P3) | Le jeu se suffit à lui-même |
 | Questions de clarification : deux par vague, chacune révèle un paramètre caché | Apprendre à cadrer avant de construire |
-| Partition réseau, tempête de réessais (backoff) | Thème Distribué du calendrier |
 | Faire compter la longueur des chemins en coût et en latence | Placement stratégique ; impose de tout recalibrer |
 | Besoins métier flous à traduire en contraintes | Rapproche le jeu d'un énoncé réel |
 | Mode migration (Strangler Fig, Canary, Expand and Contract) | Thème Migration |
@@ -290,5 +311,8 @@ Les thèmes Équipe et Sécurité du calendrier restent hors du jeu.
 
 ## Questions ouvertes
 
-- Une file qui **déborde** (au-delà de son arriéré maximal) n'arrive dans aucune vague :
-  l'arriéré monte au banquier lombard, vague 4, mais reste loin de la limite.
+- Le p95 reste celui des ticks (M4) : des clients lents mais peu nombreux se diluent dans
+  la moyenne. Deux populations sont mesurées à part (S17, S21) ; un vrai p95 par requête
+  demanderait de suivre la distribution des chemins, et de recalibrer.
+- Un worker qui revient vide son arriéré d'un coup sur la base : aucun débit de rattrapage
+  n'est modélisé (vague 5 du raccourcisseur, crash limité à deux ticks pour cette raison).

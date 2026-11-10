@@ -131,6 +131,14 @@ interface AutoscaleState {
   instanceTicks: number;
 }
 
+/** Ce que le rendu doit montrer et que les échecs confondent, par nœud et par tick. */
+interface Tally {
+  duplicates: number;
+  deduplicated: number;
+  lost: number;
+  stale: number;
+}
+
 interface TickContext {
   tick: number;
   failures: Record<FailureReason, number>;
@@ -138,7 +146,7 @@ interface TickContext {
   /** Trafic abusif écarté par nœud pendant le tick : voulu, donc hors échecs. */
   nodeShed: Map<string, number>;
   /** Ce que le rendu doit montrer et que les échecs confondent : doublons reçus, événements perdus. */
-  nodeTally: Map<string, { duplicates: number; deduplicated: number; lost: number }>;
+  nodeTally: Map<string, Tally>;
   events: SimEvent[];
   shed: { value: number };
   /** Cumul de la vague : événements async en échec, et copies arrivées au bout de leur chemin. */
@@ -146,6 +154,8 @@ interface TickContext {
 }
 
 const P95 = 0.95;
+/** Part du trafic au-delà de laquelle des clients lents se voient dans le p95. */
+const P95_SHARE = 1 - P95;
 
 /**
  * `previous` est l'architecture en place à la fin de la vague précédente : les retraits
@@ -194,6 +204,8 @@ export function simulateWave(
       (l, i) => (i.component === nodes.get(id)!.type && i.effect.type === 'slow-dependency' ? Math.max(l, i.effect.latencyMs) : l),
       defOf(id).latencyMs,
     );
+  const hasReplicas = (node: ArchNode): boolean =>
+    Object.values(catalog.upgrades).some((u) => u.appliesTo === node.type && u.effect.type === 'readReplicas' && upgradeLevel(node, u.id) > 0);
   const isDown = (id: string): boolean => instancesOf(nodes.get(id)!, catalog, down(nodes.get(id)!)) === 0;
   const breakerOf = (node: ArchNode): number | undefined => {
     for (const u of Object.values(catalog.upgrades)) {
@@ -201,8 +213,9 @@ export function simulateWave(
     }
     return undefined;
   };
+  // Une donnée qui doit être à jour ne se lit pas en cache.
   const hitRateAt = (nodeId: string, s: Stream): number =>
-    sourcesById.get(s.source)?.longTail ? 0 : (defOf(nodeId).hitRate ?? 0) * hitFactor(nodes.get(nodeId)!.type, currentTick);
+    sourcesById.get(s.source)?.longTail || sourcesById.get(s.source)?.consistent ? 0 : (defOf(nodeId).hitRate ?? 0) * hitFactor(nodes.get(nodeId)!.type, currentTick);
   let currentTick = 0;
   /** Part d'un incident de messagerie en cours sur ce type de composant. */
   const incidentShare = (type: string, effect: 'duplicate-delivery' | 'publish-loss'): number =>
@@ -229,6 +242,17 @@ export function simulateWave(
   const reportedNoRoute = new Set<string>();
   const reportedBlocked = new Set<string>();
 
+  // Relances des clients (S19) : ce que chaque source renverra au tick suivant.
+  const retrying = wave.sources.filter((s) => (s.retries ?? 0) > 0 && !s.abusive);
+  /** Relances prévues, par source et par tick. */
+  const retryAt = new Map<string, number[]>(retrying.map((s) => [s.id, new Array<number>(wave.ticks).fill(0)]));
+  /** Échecs relancés pendant la vague : le client ne les a pas vus, il a réessayé. */
+  let retriedTotal = 0;
+  const backoff = Object.values(catalog.upgrades).find(
+    (u) => u.appliesTo === nodes.get(validation.sourceId)!.type && u.effect.type === 'backoff' && upgradeLevel(nodes.get(validation.sourceId)!, u.id) > 0,
+  )?.effect;
+  const syncOf = (src: TrafficSource) => SYNC_KINDS.reduce((a, k) => a + (src.rps[k] ?? 0), 0);
+
   let offeredTotal = 0;
   let syncWeightedLatency = 0;
   let syncOffered = 0;
@@ -248,11 +272,19 @@ export function simulateWave(
 
     const inbound = new Map<string, Flow>([...nodes.keys()].map((id) => [id, new Map()]));
     const injected: Flow = new Map();
+    let retried = 0;
     for (const src of wave.sources) {
+      // Une relance refait la même requête : elle suit la répartition lectures / écritures de sa source.
+      const again = retryAt.get(src.id)?.[tick] ?? 0;
+      retried += again;
+      const sync = syncOf(src);
       for (const kind of REQUEST_KINDS) {
-        addStream(injected, { kind, source: src.id, batch: 1, rps: (src.rps[kind] ?? 0) * factor });
+        const share = SYNC_KINDS.includes(kind) && sync > 0 ? (src.rps[kind] ?? 0) / sync : 0;
+        addStream(injected, { kind, source: src.id, batch: 1, rps: (src.rps[kind] ?? 0) * factor + again * share });
       }
     }
+    const asyncFailedBefore = asyncTally.failed;
+    const staleBefore = failures['stale-read'];
     inbound.set(validation.sourceId, injected);
     asyncInjected += sumRps(injected, isEvent);
     const offered = sumRps(injected);
@@ -297,6 +329,8 @@ export function simulateWave(
         hitFactor: (type) => hitFactor(type, tick),
         syncWait: (kind) => syncWait(id, kind),
         consumers: consumersOf(routes.get(id)!).map((c) => ({ ...c, def: defOf(c.id), node: nodes.get(c.id)! })),
+        timeouts: retrying.length > 0,
+        partitioned: (n) => active.some((i) => i.component === n.type && i.effect.type === 'partition'),
       });
       outcomes.set(id, outcome);
 
@@ -345,6 +379,7 @@ export function simulateWave(
         ...(outcome.threads !== undefined ? { threads: outcome.threads } : {}),
         ...(outcome.blockedBy ? { waitingOn: outcome.blockedBy } : {}),
         ...(open.has(id) ? { open: [...open.get(id)!] } : {}),
+        ...(def.behavior === 'database' && hasReplicas(node) && active.some((i) => i.component === node.type && i.effect.type === 'partition') ? { partitioned: true } : {}),
       };
     }
 
@@ -357,6 +392,18 @@ export function simulateWave(
       syncRps > 0
         ? injectedSync.reduce((a, x) => a + x.rps * (pathLatency(validation.sourceId, x.k)), 0) / syncRps
         : 0;
+    // Le client qui passe commande attend tout l'événement tant qu'il est traité en direct :
+    // sa latence compte entière, pas diluée dans les lectures (décision S17). Derrière une
+    // file, la part synchrone de l'événement s'arrête à elle et reste courte.
+    const eventRps = injectedSync.find((x) => x.k === 'async')?.rps ?? 0;
+    // De même, une lecture qui doit être à jour ne passe par aucun cache : si ces clients
+    // pèsent plus de 5 % du trafic, le p95 les voit, leur latence compte entière (S21).
+    const consistentRps = sumRps(injected, (s) => s.kind === 'read' && !!sourcesById.get(s.source)?.consistent);
+    const consistentLatency =
+      consistentRps > P95_SHARE * syncRps
+        ? computePathLatencies(validation.order, routes, routed, outcomes, nodeTicks, open, (id) => !!defOf(id).lookaside)(validation.sourceId, 'read')
+        : 0;
+    const slaLatency = Math.max(tickLatency, eventRps > 0 ? pathLatency(validation.sourceId, 'async') : 0, consistentLatency);
     syncWeightedLatency += tickLatency * syncRps;
     syncOffered += syncRps;
 
@@ -372,14 +419,37 @@ export function simulateWave(
       undeliveredSoFar = Math.max(undeliveredSoFar, missing);
     }
 
+    // Chaque échec synchrone d'un client qui relance revient (S19) : au tick suivant sans
+    // backoff, tous ensemble ; étalé sur les ticks suivants avec. Au plus `retries` relances
+    // par requête neuve : au-delà, le client abandonne et l'échec est le sien.
+    if (retrying.length > 0) {
+      // Une lecture périmée n'est pas une erreur pour le client : il ne la relance pas.
+      const syncFailed = Math.max(0, sumFailures(failures) - failedBefore - (asyncTally.failed - asyncFailedBefore) - (failures['stale-read'] - staleBefore));
+      const weight = retrying.reduce((a, s) => a + syncOf(s), 0);
+      const spread = backoff?.type === 'backoff' ? backoff.spreadTicks : 1;
+      for (const src of retrying) {
+        const schedule = retryAt.get(src.id)!;
+        const fresh = syncOf(src) * factorAt(wave, tick);
+        const again = Math.min((syncFailed * syncOf(src)) / weight, (src.retries ?? 0) * fresh);
+        for (let d = 1; d <= spread; d++) {
+          // Une relance prévue après la fin de la vague n'a pas lieu : son échec reste.
+          if (tick + d >= wave.ticks) break;
+          schedule[tick + d]! += again / spread;
+          retriedTotal += again / spread;
+        }
+      }
+    }
+
     ticks.push({
       tick,
       offered,
       failed: sumFailures(failures) - failedBefore,
       avgLatencyMs: tickLatency,
+      slaLatencyMs: slaLatency,
       nodes: nodeTicks,
       links: linkTraffic(routed),
       ...(active.length > 0 ? { incidents: active.map((i) => i.id) } : {}),
+      ...(retried > 0 ? { retries: retried } : {}),
     });
   }
 
@@ -388,8 +458,9 @@ export function simulateWave(
 
   for (const a of autoscalers.values()) billed.autoscaling += (a.instanceTicks * a.instanceCost) / wave.ticks;
 
-  const failed = sumFailures(failures);
-  const counted = offeredTotal - shed.value;
+  // Un échec relancé n'est pas vu du client : sa relance compte à sa place, réussie ou non.
+  const failed = sumFailures(failures) - retriedTotal;
+  const counted = offeredTotal - shed.value - retriedTotal;
   const failureRate = counted > 0 ? failed / counted : 0;
   const avgLatency = syncOffered > 0 ? syncWeightedLatency / syncOffered : 0;
 
@@ -397,7 +468,7 @@ export function simulateWave(
     cost: gauge(billed.fixed + billed.autoscaling + billed.migration, wave.budget),
     complexity: gauge(complexity, wave.complexityCap),
     failureRate: gauge(failureRate, wave.sla.maxFailureRate),
-    latency: gauge(percentile(ticks.map((t) => t.avgLatencyMs), P95), wave.sla.maxP95LatencyMs),
+    latency: gauge(percentile(ticks.map((t) => t.slaLatencyMs), P95), wave.sla.maxP95LatencyMs),
   };
   const lossReasons = lossReasonsFor(gauges, billed);
 
@@ -431,6 +502,13 @@ interface ProcessEnv {
   /** Ce qu'un appel direct de ce type fait attendre en aval : le temps d'occupation d'un fil. */
   syncWait: (kind: RequestKind) => { ms: number; dependency?: string };
   consumers: { kinds: RequestKind[]; def: ComponentDef; node: ArchNode }[];
+  /**
+   * Les clients relancent (S19) : un serveur saturé ne rejette plus vite, il fait attendre
+   * jusqu'au délai du client, et travaille encore pour des requêtes déjà abandonnées.
+   */
+  timeouts: boolean;
+  /** Un incident coupe les réplicas de ce nœud de son primaire (S21). */
+  partitioned: (node: ArchNode) => boolean;
 }
 
 function processNode(node: ArchNode, def: ComponentDef, incoming: Flow, env: ProcessEnv): NodeOutcome {
@@ -477,7 +555,17 @@ function noFailures(): Record<FailureReason, number> {
     'lost-event': 0,
     undelivered: 0,
     'circuit-open': 0,
+    'stale-read': 0,
   };
+}
+
+/**
+ * Des clients qui relancent n'attendent pas d'être rejetés (S19) : au-delà de la capacité,
+ * le nœud traite des requêtes déjà abandonnées et ne sert plus que capacité / charge de ce
+ * qu'il pourrait. C'est ce qui entretient la tempête une fois la panne passée.
+ */
+function timedOut(demand: number, capacity: number, env: ProcessEnv): number {
+  return env.timeouts && demand > capacity && capacity > 0 ? (demand * demand) / capacity : demand;
 }
 
 /** Sert ce qui tient dans la capacité, fait échouer le reste à parts égales. */
@@ -490,13 +578,13 @@ function serveWithin(nodeId: string, flow: Flow, demand: number, capacity: numbe
 }
 
 /** `events` : la part de ces échecs qui sont des événements async, pour compter ce qui reste à livrer. */
-function tally(ctx: TickContext, nodeId: string, key: 'duplicates' | 'deduplicated' | 'lost', rps: number): void {
-  const t = ctx.nodeTally.get(nodeId) ?? { duplicates: 0, deduplicated: 0, lost: 0 };
+function tally(ctx: TickContext, nodeId: string, key: keyof Tally, rps: number): void {
+  const t = ctx.nodeTally.get(nodeId) ?? { duplicates: 0, deduplicated: 0, lost: 0, stale: 0 };
   t[key] += rps;
   ctx.nodeTally.set(nodeId, t);
 }
 
-function nonZero(t: { duplicates: number; deduplicated: number; lost: number } | undefined): Partial<NodeTick> {
+function nonZero(t: Tally | undefined): Partial<NodeTick> {
   if (!t) return {};
   return Object.fromEntries(Object.entries(t).filter(([, v]) => v > 0));
 }
@@ -573,7 +661,9 @@ function processService(node: ArchNode, def: ComponentDef, incoming: Flow, env: 
     let busy = 0;
     let worst = { busy: 0, dependency: undefined as string | undefined };
     for (const kind of REQUEST_KINDS) {
-      const rps = sumRps(incoming, (s) => s.kind === kind);
+      // Un envoi groupé n'occupe qu'un fil, comme il ne coûte qu'un travail (le lot d'une file).
+      let rps = 0;
+      for (const s of incoming.values()) if (s.kind === kind) rps += s.rps / s.batch;
       const wait = env.syncWait(kind);
       const held = (rps * (def.latencyMs + wait.ms)) / 1000;
       busy += held;
@@ -586,6 +676,15 @@ function processService(node: ArchNode, def: ComponentDef, incoming: Flow, env: 
       if (threads > 1) blockedBy = worst.dependency;
     }
   }
+  // Un quota compte des messages, pas du travail : un envoi regroupé n'y échappe pas.
+  if (def.maxRps) {
+    const quota = (sumRps(incoming) / (def.maxRps * instances)) * capacity;
+    if (quota > load) {
+      load = quota;
+      utilization = Math.max(utilization, ratio(quota, capacity));
+    }
+  }
+  load = timedOut(load, capacity, env);
   return {
     passed: serveWithin(node.id, incoming, load, capacity, env.ctx),
     utilization,
@@ -706,19 +805,45 @@ function processDatabase(node: ArchNode, def: ComponentDef, incoming: Flow, env:
   const readFlow = filterFlow(incoming, isRead);
 
   const writeDemand = work(writeFlow, def);
-  const servedWrites = serveWithin(node.id, writeFlow, writeDemand, primary, env.ctx);
+  const servedWrites = serveWithin(node.id, writeFlow, timedOut(writeDemand, primary, env), primary, env.ctx);
   const primaryLeft = Math.max(0, primary - Math.min(writeDemand, primary));
 
   const readDemand = work(readFlow, def);
   const readCapacity = primaryLeft + replicaCapacity;
-  const servedReads =
-    readCapacity > 0
-      ? serveWithin(node.id, readFlow, readDemand, readCapacity, env.ctx)
-      : failAll(node.id, readFlow, env.ctx);
-
+  const consistent = (s: Stream) => !!env.sourcesById.get(s.source)?.consistent;
+  const leaderReads = Object.values(env.catalog.upgrades).some(
+    (u) => u.appliesTo === node.type && u.effect.type === 'leaderReads' && upgradeLevel(node, u.id) > 0,
+  );
   const passed: Flow = new Map();
   for (const s of servedWrites.values()) addStream(passed, s);
-  for (const s of servedReads.values()) addStream(passed, s);
+
+  if (leaderReads && replicaCapacity > 0) {
+    // Les lectures qui doivent être à jour prennent le primaire d'abord ; les autres se
+    // partagent ce qui reste et les réplicas.
+    const critical = filterFlow(readFlow, consistent);
+    const others = filterFlow(readFlow, (s) => !consistent(s));
+    const criticalDemand = work(critical, def);
+    for (const s of serveWithin(node.id, critical, timedOut(criticalDemand, primaryLeft, env), primaryLeft, env.ctx).values()) addStream(passed, s);
+    const left = Math.max(0, primaryLeft - Math.min(criticalDemand, primaryLeft)) + replicaCapacity;
+    const served = left > 0 ? serveWithin(node.id, others, timedOut(work(others, def), left, env), left, env.ctx) : failAll(node.id, others, env.ctx);
+    for (const s of served.values()) addStream(passed, s);
+  } else {
+    const servedReads =
+      readCapacity > 0
+        ? serveWithin(node.id, readFlow, timedOut(readDemand, readCapacity, env), readCapacity, env.ctx)
+        : failAll(node.id, readFlow, env.ctx);
+    // Les lectures se répartissent selon la capacité : la part servie par des réplicas
+    // coupés du primaire est périmée, un échec pour qui exige une donnée à jour.
+    const staleShare = env.partitioned(node) && readCapacity > 0 ? replicaCapacity / readCapacity : 0;
+    for (const s of servedReads.values()) {
+      const stale = consistent(s) ? s.rps * staleShare : 0;
+      if (stale > 0) {
+        fail(env.ctx, node.id, 'stale-read', stale);
+        tally(env.ctx, node.id, 'stale', stale);
+      }
+      addStream(passed, { ...s, rps: s.rps - stale });
+    }
+  }
 
   const utilization = Math.max(
     ratio(writeDemand, primary),
@@ -764,7 +889,10 @@ function processQueue(node: ArchNode, def: ComponentDef, incoming: Flow, env: Pr
     }
   }
 
-  const maxBacklog = def.maxBacklog ?? Infinity;
+  let maxBacklog = def.maxBacklog ?? Infinity;
+  for (const up of Object.values(env.catalog.upgrades)) {
+    if (up.effect.type === 'retention' && up.appliesTo === node.type) maxBacklog += up.effect.perLevel * upgradeLevel(node, up.id);
+  }
   const waiting = sumRps(backlog);
   if (waiting > maxBacklog) {
     const lost = waiting - maxBacklog;
@@ -788,8 +916,14 @@ function drainCapacity(kind: RequestKind, batch: number, env: ProcessEnv): numbe
   for (const c of env.consumers) {
     if (!c.kinds.includes(kind)) continue;
     const perBatch = c.def.workPerRequest[kind] ?? 0;
-    if (perBatch === 0) return Infinity;
-    total += ((c.def.capacity * instancesOf(c.node, env.catalog, env.down(c.node))) / perBatch) * batch;
+    const instances = instancesOf(c.node, env.catalog, env.down(c.node));
+    const quota = c.def.maxRps !== undefined ? c.def.maxRps * instances : Infinity;
+    if (perBatch === 0) {
+      if (quota === Infinity) return Infinity;
+      total += quota;
+      continue;
+    }
+    total += Math.min(((c.def.capacity * instances) / perBatch) * batch, quota);
   }
   return total;
 }
@@ -947,7 +1081,10 @@ function route(id: string, def: ComponentDef, passed: Flow, routes: NodeRoutes, 
   }
 }
 
-/** Latence moyenne d'une requête depuis un nœud jusqu'au bout de son chemin synchrone. */
+/**
+ * Latence moyenne d'une requête depuis un nœud jusqu'au bout de son chemin synchrone.
+ * `skip` écarte des voisins : les caches, pour une lecture qui ne peut pas y tomber.
+ */
 function computePathLatencies(
   order: string[],
   routes: RouteTable,
@@ -955,21 +1092,22 @@ function computePathLatencies(
   outcomes: Map<string, NodeOutcome>,
   nodeTicks: Record<string, NodeTick>,
   open: Map<string, Set<string>>,
+  skip: (id: string) => boolean = () => false,
 ): (id: string, kind: RequestKind) => number {
   const memo = new Map<string, number>();
   for (const id of [...order].reverse()) {
     for (const kind of REQUEST_KINDS) {
       const own = nodeTicks[id]?.latencyMs ?? 0;
       const share = outcomes.get(id)?.syncForwardShare[kind] ?? 0;
-      const sent = routed.get(id)?.get(kind);
-      const total = sent ? [...sent.values()].reduce((a, x) => a + x, 0) : 0;
+      const sent = [...(routed.get(id)?.get(kind) ?? new Map<string, number>())].filter(([to]) => !skip(to));
+      const total = sent.reduce((a, [, x]) => a + x, 0);
       let downstream = 0;
-      if (sent && total > 0) {
+      if (total > 0) {
         for (const [to, rps] of sent) downstream += (rps / total) * (memo.get(`${to}|${kind}`) ?? 0);
       } else {
         // Pas de trafic ce tick : on suppose une répartition égale, pour que la latence reste définie.
         // Un appel coupé par le disjoncteur échoue tout de suite : il n'attend pas l'aval.
-        const targets = (routes.get(id)?.forward[kind] ?? []).filter((t) => !open.get(id)?.has(t));
+        const targets = (routes.get(id)?.forward[kind] ?? []).filter((t) => !open.get(id)?.has(t) && !skip(t));
         if (targets.length > 0) {
           downstream = targets.reduce((a, to) => a + (memo.get(`${to}|${kind}`) ?? 0), 0) / targets.length;
         }

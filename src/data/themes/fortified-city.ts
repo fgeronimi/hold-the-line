@@ -47,6 +47,12 @@ export const fortifiedCity: Theme = {
         real: 'Un prestataire de paiement externe : on l’appelle par son API, on ne le dimensionne pas, et il peut ralentir ou tomber sans prévenir.',
       },
       metaphor: 'Banquier lombard', icon: '🏦', shape: 'counting-house', color: '#c7bfae', accent: '#b08a2e' },
+    'mail-provider': {
+      role: {
+        says: 'Le colombier, de l’autre côté de la rivière : ses pigeons portent chaque billet à son spectateur, mais il n’en lâche qu’un nombre fixe par seconde, et il ferme parfois.',
+        real: 'Un prestataire d’e-mail externe : il accepte un nombre limité de messages par seconde (son quota), regroupés ou non, et peut tomber en panne.',
+      },
+      metaphor: 'Colombier', icon: '🕊️', shape: 'dovecote', color: '#d6cfc0', accent: '#5a7d9a' },
     cache: {
       role: {
         says: 'Le carnet où le scribe note les réponses déjà cherchées, pour ne pas retourner aux archives à chaque fois.',
@@ -74,6 +80,15 @@ export const fortifiedCity: Theme = {
   },
   narrator: { name: 'Le chambellan', icon: '🎩' },
   narratives: {
+    // La billetterie du tournoi.
+    'ticket-rush':
+      'Sire, la billetterie du grand tournoi ouvre ! Les spectateurs se pressent aux guichets, et chaque billet vendu part au colombier. Gare : un mauvais déploiement fera tomber tous les guichetiers un instant, et un spectateur refoulé revient aussitôt à la charge, avec ses voisins.',
+    'pigeons-grounded':
+      'Le colombier fermera une demi-minute : plus un pigeon ne part. Les achats, eux, continuent, et chaque billet doit attendre quelque part son pigeon. Mais une file n’est pas un puits sans fond.',
+    'split-registry':
+      'Les spectateurs cherchent leurs dates et regardent les places restantes. Les copistes recopient le grand registre pour répondre plus vite… mais un temps, ils ne l’entendront plus. Une place promise et déjà vendue, c’est un spectateur furieux.',
+    'final-joust':
+      'La joute finale, Sire ! Tout le royaume veut sa place : les guichetiers tomberont, le colombier fermera, et les copistes seront coupés du registre. Tout ce que vous avez appris, il faudra le tenir ensemble.',
     // Le comptoir des paiements.
     checkout:
       'Sire, la boutique encaisse enfin ses ventes. Chaque commande passe par le banquier lombard, de l’autre côté de la rivière : il répond vite, et le chaland attend sa quittance au comptoir.',

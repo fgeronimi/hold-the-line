@@ -5,6 +5,9 @@ import type { Architecture, Catalog, RequestKind, TickMetrics, Wave, WaveResult 
 import { nodeNames, type Theme } from '../render/theme.ts';
 import { removeNode } from './editor.ts';
 
+/** Un débit lisible : « 7 200 ». */
+const fmtCount = (x: number) => Math.round(x).toLocaleString('fr-FR').replace(/\u202f|\u00a0/g, ' ');
+
 /**
  * Un constat du chambellan après une vague.
  * - `good` : ce qui a marché ;
@@ -102,8 +105,13 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     tell(tick, fromLesson('bad', reasonLessons.noRoute, { name: name(node), kind }, node));
   }
 
+  // Tempête de relances (S19) : les relances ont dépassé la moitié du trafic neuf. Elle
+  // raconte alors la panne qui l'a amorcée : la leçon de l'incident seul serait trompeuse.
+  const storm = result.ticks.find((t) => (t.retries ?? 0) > 0.5 * (t.offered - (t.retries ?? 0)));
+
   // Incidents : ce qu'ils ont coûté, ou comment la cité les a encaissés.
   for (const incident of incidents) {
+    if (storm && incident.from <= storm.tick && incident.effect.type === 'instance-down') continue;
     const failed = Math.round(sum(result.ticks.slice(incident.from, incident.until).map((t) => t.failed)));
     const lesson = incidentLessons[incident.effect.type];
     const vars = { title: incident.title, failed: String(failed) };
@@ -145,9 +153,15 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     tell(0, fromLesson(problem, reasonLessons.lostEvent, { name: name(firstFailing('serveur')) }));
   }
   const expected = wave.consumers?.length ?? 0;
-  if (result.failuresByReason.undelivered > 0 && result.delivery && expected > 0) {
+  // Un reste d'arrondi n'est pas un service oublié : au moins un message entier.
+  if (result.failuresByReason.undelivered >= 1 && result.delivery && expected > 0) {
     const reached = (result.delivery.delivered / result.delivery.expected) * expected;
     tell(0, fromLesson(problem, reasonLessons.undelivered, { fanOut: String(expected), reached: reached.toFixed(1).replace('.', ',') }));
+  }
+
+  if (storm) {
+    const worst = Math.max(...result.ticks.map((t) => t.retries ?? 0));
+    tell(storm.tick, fromLesson(problem, reasonLessons.retryStorm, { retries: fmtCount(worst) }));
   }
 
   const overflowed = new Set<string>();

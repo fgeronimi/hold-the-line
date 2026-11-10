@@ -100,6 +100,24 @@ export const catalog: Catalog = {
       routingPriority: 1,
       prePlaced: true,
     },
+    // Le prestataire d'e-mail de la billetterie : rapide à accepter un message, mais il n'en
+    // prend qu'un nombre fixe par seconde (son quota), regroupés ou non (S20).
+    'mail-provider': {
+      id: 'mail-provider',
+      behavior: 'service',
+      label: 'Prestataire d’e-mail',
+      techName: 'Prestataire d’e-mail',
+      cost: 0,
+      complexity: 0,
+      capacity: 5000,
+      latencyMs: 200,
+      workPerRequest: { async: 1 },
+      terminalFor: ['async'],
+      accepts: ['async'],
+      routingPriority: 1,
+      prePlaced: true,
+      maxRps: 10000,
+    },
     cache: {
       id: 'cache',
       behavior: 'cache',
@@ -144,9 +162,10 @@ export const catalog: Catalog = {
       accepts: ['async'],
       routingPriority: 1,
       batchSize: 100,
+      // Une file n'est pas infinie : ce qu'elle garde au-delà se paie en rétention (S20).
       maxBacklog: 200000,
       // Une base qui consomme directement une file n'existe pas : il faut un worker.
-      allowedDownstream: ['app-server', 'domain-service', 'payment-provider'],
+      allowedDownstream: ['app-server', 'domain-service', 'payment-provider', 'mail-provider'],
     },
     pubsub: {
       id: 'pubsub',
@@ -164,7 +183,7 @@ export const catalog: Catalog = {
       routingPriority: 2,
       fanOut: true,
       // Ses abonnés : des files (un service, une file) ou directement des serveurs.
-      allowedDownstream: ['message-queue', 'app-server', 'domain-service', 'payment-provider'],
+      allowedDownstream: ['message-queue', 'app-server', 'domain-service', 'payment-provider', 'mail-provider'],
     },
   },
   upgrades: {
@@ -247,6 +266,40 @@ export const catalog: Catalog = {
       complexity: { base: 1, perLevel: 0 },
       removalCost: 'on-disable',
       effect: { type: 'coalescing' },
+    },
+    'client-backoff': {
+      id: 'client-backoff',
+      label: 'Relances espacées',
+      techName: 'Backoff exponentiel et jitter',
+      appliesTo: 'traffic-source',
+      maxLevel: 1,
+      cost: { base: 5, perLevel: 0 },
+      complexity: { base: 1, perLevel: 0 },
+      removalCost: 'on-disable',
+      // Des délais qui doublent (1, 2, 4 s…) tirés au hasard : les relances s'étalent.
+      effect: { type: 'backoff', spreadTicks: 10 },
+    },
+    'queue-retention': {
+      id: 'queue-retention',
+      label: 'Rétention',
+      techName: 'Rétention de la file',
+      appliesTo: 'message-queue',
+      maxLevel: 3,
+      cost: { base: 0, perLevel: 5 },
+      complexity: { base: 1, perLevel: 0 },
+      removalCost: 'free',
+      effect: { type: 'retention', perLevel: 100000 },
+    },
+    'leader-reads': {
+      id: 'leader-reads',
+      label: 'Lectures critiques au registre',
+      techName: 'Lecture sur le primaire',
+      appliesTo: 'database',
+      maxLevel: 1,
+      cost: { base: 5, perLevel: 0 },
+      complexity: { base: 1, perLevel: 0 },
+      removalCost: 'on-disable',
+      effect: { type: 'leaderReads' },
     },
     'rate-limiting': {
       id: 'rate-limiting',

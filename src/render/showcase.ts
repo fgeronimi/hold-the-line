@@ -664,6 +664,79 @@ const ENTRIES: Entry[] = [
     },
   },
   {
+    title: 'Tempête de relances',
+    chip: { text: 'signal existant', kind: 'ok' },
+    text: 'Refoulés, les voyageurs font demi-tour aussitôt, et chaque tour en ramène davantage : la foule grossit devant des tours pourtant relevées. La poussière monte des hameaux, le compteur de relances s’emballe.',
+    trigger: '<code>retries</code> du tick &gt; la moitié du trafic neuf',
+    setup: (v) => {
+      const site = v.site(towers(v, 2));
+      const fx = new Effects(v.scene);
+      const crowd = Array.from({ length: 9 }, (_, i) => ({ i, go: v.walker(i % 3 ? 'read' : 'write'), back: v.walker('read', true) }));
+      const counter = v.label('pop', '↻ 0 relances/s', ROAD_START + 0.3, 1.2, 0);
+      return (t) => {
+        const p = phase(t, 6);
+        // Le nombre de voyageurs en jeu double à chaque aller-retour : c'est la tempête.
+        const active = Math.min(crowd.length, Math.ceil(2 ** (p * 4)));
+        heat(site, Math.min(1, p * 1.5) * 0.6);
+        fx.begin(t);
+        if (p > 0.3) fx.puff(new Vector3(ROAD_START, 0.6, 0));
+        fx.end();
+        counter.textContent = `↻ ${Math.round(active * 550).toLocaleString('fr-FR')} relances/s`;
+        for (const { i, go, back } of crowd) {
+          if (i >= active) {
+            go.hide();
+            back.hide();
+            continue;
+          }
+          const f = phase(t, 1.2, i / crowd.length);
+          const lane = ((i % 3) - 1) * 0.25;
+          if (f < 0.55) {
+            back.hide();
+            go.at(lerp(ROAD_START, DOOR, f / 0.55), lane, true, t);
+          } else {
+            go.hide();
+            back.at(lerp(DOOR, ROAD_START, between(f, 0.55, 1)), lane, false, t);
+          }
+        }
+      };
+    },
+  },
+  {
+    title: 'Partition réseau',
+    chip: { text: 'signal existant', kind: 'ok' },
+    text: 'Une barrière coupe les archives de leurs copistes. Les messagers qui demandent les places restantes à un copiste repartent avec une réponse périmée, en rouge ; ceux qui vont au grand registre ont la bonne.',
+    trigger: '<code>partitioned</code> et <code>stale</code> de la base',
+    setup: (v) => {
+      v.site((g, tint) => {
+        v.put(g, K('building_castle_blue'), { scale: 0.9 }, tint);
+        for (const x of [-1.0, 0.2]) v.put(g, K('building_tower_base_blue'), { x, z: 1.3, scale: 0.6 }, tint);
+      });
+      const fx = new Effects(v.scene);
+      const readers = [0, 0.25, 0.5, 0.75].map((offset, i) => ({ offset, stale: i % 2 === 0, go: v.walker('read'), back: v.walker('read', i % 2 === 0) }));
+      v.label('pop', '✂ réplicas coupés du primaire', SITE.x, 1.9, SITE.z);
+      const wrong = v.label('pop', '≠ périmée', -0.4, 1.0, 0.6);
+      return (t) => {
+        fx.begin(t);
+        fx.barrier(new Vector3(SITE.x, 0.05, SITE.z + 0.75), 0);
+        fx.end();
+        let shown = 0;
+        for (const { offset, stale, go, back } of readers) {
+          const f = phase(t, 2.6, offset);
+          const lane = stale ? 0.55 : -0.35;
+          if (f < 0.5) {
+            back.hide();
+            go.at(lerp(ROAD_START, DOOR, f / 0.5), lane, true, t);
+          } else {
+            go.hide();
+            back.at(lerp(DOOR, ROAD_START, between(f, 0.5, 1)), lane, false, t);
+            if (stale) shown = Math.max(shown, 1 - between(f, 0.5, 1));
+          }
+        }
+        wrong.style.opacity = String(shown);
+      };
+    },
+  },
+  {
     title: 'SLA franchi',
     chip: { text: 'dérivé des ticks', kind: 'ok' },
     text: 'Quand le taux d’échec cumulé passe le seuil, la cloche sonne, les bords de l’écran rougissent et une bannière tombe : c’est l’instant où la vague est perdue.',

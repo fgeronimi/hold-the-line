@@ -14,6 +14,7 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 | M2 | Pas de graine : le moteur n'a aucun aléa. Elle reviendra avec le premier élément aléatoire. | Un paramètre inutilisé n'a rien à faire dans la signature. | Fait |
 | M3 | Pas de cascade de pannes par saturation : un aval saturé ne ralentit pas l'amont. La cascade par épuisement des fils est arrivée avec le circuit breaker, sa parade (S14). | Sans parade disponible, la cascade serait une punition, pas un choix. | Fait (S14) |
 | M4 | Le SLA porte sur le taux d'échec global et sur la latence p95 des ticks, affichée « p95 (approx.) ». | Une moyenne cache les pics ; « p95 » colle au vocabulaire d'entretien, « approx. » évite de mentir sur ce qui est mesuré. | Fait |
+| M6 | Les fils d'exécution d'un serveur se comptent **par envoi**, comme le travail : un lot de 100 messages sorti d'une file n'occupe qu'un fil. | Le worker du raccourcisseur, comptant 4 500 messages par seconde un par un, saturait ses fils au retour d'une panne alors qu'il ne recevait que 45 envois. Aucun rapport d'équilibrage ne bouge. | Fait |
 | M5 | `requiresUpstream` devient une liste ; le scaling horizontal est permis derrière un load balancer **ou** une file. | Plusieurs workers consommant une même file est le pattern standard. | Fait |
 
 ## Économie et progression
@@ -44,7 +45,8 @@ Statut : **à appliquer** = décidé mais pas encore dans le code.
 |---|---|---|---|
 | B1 | Critère de sortie assoupli : au moins deux stratégies gagnantes sur la majorité des vagues. Une vague à réponse unique le déclare dans ses données (vague 5 : file + worker). | Certaines contraintes ont une seule bonne réponse, et c'est pédagogiquement juste. Vagues à réponse unique : 1 (tutoriel) et 5 (la file). | Fait |
 | B2 | Deux architectures gagnantes sont des stratégies distinctes si leur ensemble de composants et d'évolutions activées diffère, niveaux ignorés. Seules comptent les stratégies **non dominées** : un groupe est dominé si chacune de ses architectures gagnantes gagne encore privée d'un de ses éléments (avec ce qui en dépend). | Sinon « 4 instances » et « 5 instances » comptent comme deux stratégies, et « LB posé pour rien » compte comme une alternative. Un premier essai, « sur-ensemble d'un groupe gagnant », écartait à tort l'autoscaling, qui ajoute un élément utile à « scaling + cache ». | Fait |
-| B3 | L'énumération porte sur une topologie canonique : présence de chaque composant, niveaux d'évolution, paliers de rate limiting. Les schémas exotiques se testent à la main. | Énumérer tous les graphes explose et produit surtout de l'absurde. | Fait : `npm run balance`, 2 928 architectures |
+| B3 | L'énumération porte sur une topologie canonique : présence de chaque composant, niveaux d'évolution, paliers de rate limiting. Les schémas exotiques se testent à la main. | Énumérer tous les graphes explose et produit surtout de l'absurde. | Fait : `npm run balance`, 2 928 architectures pour le raccourcisseur, 768 pour le marché, 192 pour le banquier |
+| B5 | Chaque scénario décrit **son espace canonique** en données (`src/data/balance-space.ts`) : des dimensions (présence, niveaux, variantes nommées, dépendances), et la fonction qui en construit l'architecture à partir de ses archétypes. L'énumération, la dominance et le rapport ne connaissent que les dimensions. `npm run balance -- <scénario>` en joue un seul. | Le grand marché et le banquier n'étaient verrouillés que par leurs archétypes : une réponse imprévue d'un joueur ne pouvait pas être vérifiée. Dès sa première passe, l'énumération du marché a trouvé un trou (S17). | Fait |
 | B4 | Durée cible : 15 minutes pour 5 vagues, environ 3 minutes par vague. Au-delà de 20 minutes en test, on retire des vagues plutôt que de raccourcir le debrief. | Ferme le dernier critère de sortie « à fixer » de la spec. | Cible |
 
 ## Interface
@@ -99,7 +101,7 @@ scaling permanent ne soulage le serveur au pic. Un essai par des réplicas plus 
 | X2 | L'**autoscaling** entre dans le MVP : évolution du serveur, plafond d'instances en niveau, démarrage en 2 ticks, cible de 70 % de charge, instances facturées au prorata de leurs ticks de service. Réduire est immédiat. | Moins cher que le scaling permanent sur un pic court, mais des échecs pendant la montée en charge et +2 de complexité : le compromis de la spec. Sans socle d'instances fixes, il arrive trop tard. | Fait |
 | X3 | Une source peut être en **longue traîne** (`longTail`) : ses lectures ne tombent dans aucun cache, CDN compris. Le scraper l'est. | Un crawler visite tous les liens. Sans ça, le CDN absorbait le scraper et rendait le rate limiting inutile en vague 4. | Fait |
 | X4 | La vague 3 monte en rampe sur 4 ticks (×2, ×3,5, puis ×5) au lieu d'un saut. | Une campagne monte en quelques secondes ; un saut instantané rendait l'autoscaling injouable. | Fait |
-| X5 | **Incidents annoncés** au briefing, déterministes : `instance-down` (des instances d'un type tombent, à zéro le composant ne sert plus rien) et `cold-cache` (taux de succès à 0 puis remontée linéaire). Vague 2 : le cache redémarre à froid (ticks 31 à 33). Vague 3 : une instance du serveur tombe après le pic (ticks 46 à 48). Rien en vagues 4 et 5. | Ils enseignent la redondance (SPOF) et le cache stampede sans tirage aléatoire. Calés pour ne faire perdre aucune réponse attendue : en vague 4 ou 5, toute panne fait perdre toutes les réponses, il faudrait recalibrer. Le debrief dit ce que la panne a coûté et ce qui l'aurait encaissée. | Fait |
+| X5 | **Incidents annoncés** au briefing, déterministes : `instance-down` (des instances d'un type tombent, à zéro le composant ne sert plus rien) et `cold-cache` (taux de succès à 0 puis remontée linéaire). Vague 2 : le cache redémarre à froid (ticks 31 à 33). Vague 3 : une instance du serveur tombe après le pic (ticks 46 à 48). Vague 5 : une instance de serveur tombe deux ticks (31 et 32), le worker compris : la file garde les clics et les rend à son retour. Rien en vague 4. | Ils enseignent la redondance (SPOF) et le cache stampede sans tirage aléatoire. Calés pour ne faire perdre aucune réponse attendue. En vague 4, une panne de serveur fait perdre la stratégie CDN (une seule instance) et répète la leçon de la vague 3 ; un cache vidé noie la base sous 4 500 lectures : rien qui enseigne du neuf. En vague 5, au-delà de deux ticks, le worker qui revient vide l'arriéré d'un coup et sature la base (aucun débit de rattrapage n'est modélisé). Le debrief dit ce que la panne a coûté et ce qui l'aurait encaissée. | Fait |
 
 ## Calibrage actuel du raccourcisseur
 
@@ -119,11 +121,13 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 
 ## Prochaines étapes
 
-1. Faire jouer 2 ou 3 personnes de la cible, avec `docs/test-de-jeu.md`.
+1. Faire jouer 2 ou 3 personnes de la cible, avec `docs/test-de-jeu.md`, quatrième scénario
+   compris.
 2. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
-   comprise (B4). Incidents en vagues 4 et 5 du raccourcisseur (demande un recalibrage).
+   comprise (B4).
 3. Reproduire les fiches du calendrier dans le jeu (I2, P3).
-4. Question ouverte de `docs/spec.md` : aucune file ne déborde encore.
+4. Questions ouvertes de `docs/spec.md` : un vrai p95 par requête, le débit de rattrapage
+   d'un worker.
 
 ## Positionnement
 
@@ -148,6 +152,7 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 | S8 | Les trois services du grand marché (stock, facturation, e-mail) sont **déjà sur le plateau** au début, de l'autre côté de la rivière : ni facturés ni démolissables, seules leurs évolutions se paient. Chaque vague nomme les services qui doivent recevoir chaque événement (`consumers`) ; la livraison se compte service par service. | Le joueur ne construit pas les consommateurs, il les relie : la leçon porte sur la diffusion, pas sur le nombre de workers. Compter par service rend « non livré » exact. | Fait |
 | S9 | Le guide signale une **impasse** : un bâtiment qui reçoit du travail qu'il ne termine pas, sans lien sortant. Toutes les évolutions restent proposées dès la première vague, comme tous les composants (S7). | L'impasse donnait des « no-route » que rien n'expliquait avant la vague. Cocher une parade trop tôt se paie (l'outbox fait saturer la base en vague 1) et le debrief l'explique : c'est une leçon, pas un piège. | Fait |
 | S10 | Les services du grand marché sont des **services métier** (`domain-service`, jamais dans la palette) : ils terminent l'événement eux-mêmes, sans base partagée, et gardent eux-mêmes les clés d'idempotence. L'événement async compte dans la latence du SLA tant qu'il est traité en direct : appeler un service sans file met ses 200 ms sur le chemin du client. | L'ancien modèle faisait consommer l'async par la base des commandes et relier chaque service à cette base : ni réaliste (base partagée, un anti-pattern), ni pédagogique (l'appel direct gagnait). La vraie raison d'une file est de sortir un travail lent du chemin critique. | Fait |
+| S17 | La latence du SLA d'un tick est la moyenne pondérée, **sauf si l'événement de commande attend plus longtemps** : traité en direct, sa latence compte entière (`slaLatencyMs`). La barre, le sablier et l'alarme lisent cette même valeur. | L'énumération en masse a trouvé que, pendant les soldes, des services abonnés au pub/sub sans file gagnaient, moins chers que la réponse attendue : leurs 200 ms étaient noyées dans 1 500 lectures rapides (80 commandes sur 1 660 requêtes). Le briefing promet une commande validée en 60 ms : c'est la latence de la commande que le client voit. Un SLA « pire type de requête » cassait tout le calibrage (les écritures sur une base chargée par l'outbox) ; seul l'événement direct est concerné, et aucun rapport d'équilibrage ne bouge ailleurs. | Fait |
 | S11 | Le trafic **monte au départ et retombe à la fin** (`ramp`, 8 ticks de chaque côté) : une enveloppe en S, de 25 % à 100 % puis jusqu'à 40 %, multiplie le profil de chaque vague. Les chiffres sont visibles : trafic de la vague au plus fort dans la barre du haut, capacité et coût en travail dans la fiche, débit reçu et charge de chaque bâtiment pendant le rejeu et sur les courbes (valeur du tick joué en direct, pic au debrief, seuil chiffré). | Un trafic à plein dès le premier tick ne ressemble à rien de réel, et une file qui se vide à la fin se voit enfin. Sans les chiffres, on ne pouvait pas dimensionner (combien de réplicas, d'instances) : le calcul de capacité est la compétence à apprendre. | Fait |
 
 ### Calibrage du grand marché
@@ -160,8 +165,8 @@ en longue traîne. Critères de sortie : aucune architecture ne gagne les 5 vagu
 | 4 | 260 | 19 | + outbox, qui double les écritures (base à 113 %) : + cache (235) ou + réplica (260) |
 | 5 | 270 | 21 | tout, + une instance derrière un load balancer (265) |
 
-Verrouillé par `tests/market.test.ts`. L'énumération en masse (`npm run balance`) ne couvre
-encore que le raccourcisseur.
+Verrouillé par `tests/market.test.ts` et par l'énumération en masse (`npm run balance -- market`,
+B5) : une seule stratégie non dominée par vague, deux en vague 4.
 
 ## Troisième scénario : le banquier lombard
 
@@ -185,3 +190,23 @@ encore que le raccourcisseur.
 
 SLA constant : 1 % d'échecs, 60 ms de latence p95.
 
+## Quatrième scénario : le grand tournoi
+
+| # | Décision | Pourquoi | Statut |
+|---|---|---|---|
+| S18 | Quatrième scénario, **le thème Distribué** : la billetterie d'un tournoi, prise d'assaut. Même cité ; le prestataire d'e-mail (`mail-provider`, le colombier, hors palette) est déjà sur le plateau. Quatre vagues : tempête de relances, file qui déborde, partition, puis les trois ensemble. | Rassemble ce qui restait des suites (partition réseau, tempête de réessais, une file qui déborde) dans un récit où chaque incident a une conséquence évidente : une place vendue deux fois, un billet jamais reçu. Quatre vagues suffisent à trois mécanismes. | Fait |
+| S19 | **Relances des clients** : une source déclare `retries`. Chaque échec synchrone revient au tick suivant, tous ensemble, jusqu'à `retries` relances par requête neuve. Un échec relancé n'est pas vu du client : il sort du taux d'échec, sa relance compte à sa place (le rejeu fait de même). Quand des clients relancent, un nœud saturé (serveur, base) ne rejette plus vite : il traite des requêtes déjà abandonnées et ne sert que capacité / charge de ce qu'il pourrait. Parade : **backoff exponentiel et jitter**, évolution des clients (5, +1), qui étale les relances sur 10 ticks ; ou l'autoscaling, qui absorbe la tempête. Une lecture périmée n'est pas relancée : le client ne sait pas qu'elle est fausse. | Sans cet effondrement, une panne brève se résorbe seule et la tempête n'existe pas : c'est le travail perdu pour des clients partis qui la rend métastable. Compter chaque tentative comme un échec rendait le backoff inutile, alors que sa vertu est justement de faire réussir la relance. | Fait |
+| S20 | **File bornée et quota** : la file garde 200 000 messages ; au-delà, elle déborde (échec `queue-overflow`). La **rétention** (5 par niveau, +1 de complexité) ajoute 100 000 messages par niveau. Un prestataire externe a un quota (`maxRps`) compté en messages, lots compris : une file qui le consomme ne se vide pas plus vite. | La leçon : une file absorbe un pic ou une panne de l'aval, pas un excès qui dure, et se dimensionne sur la plus longue panne qu'on accepte (arrivées × durée). Une limite de quelques milliers cassait le raccourcisseur, dont la file reçoit 4 500 clics par seconde : 200 000, c'est 45 secondes de clics. | Fait |
+| S21 | **Partition réseau** (incident `partition` sur la base) : les réplicas sont coupés du primaire. Une source `consistent` (les places restantes) lit des données qui doivent être à jour : jamais en cache, et la part de ses lectures servie par des réplicas coupés est un échec `stale-read`. **Lecture sur le primaire**, évolution de la base (5, +1) : ces lectures vont au primaire d'abord. Leur latence compte à part dans le SLA dès qu'elles pèsent plus de 5 % du trafic. | Le choix CAP rendu jouable : pendant une partition, disponible ou cohérent, donnée par donnée. Sans la mesure à part, une base saturée par ces lectures restait invisible derrière 2 000 lectures servies par le cache, et une finale sans réplica gagnait (trouvé par `npm run balance`). | Fait |
+
+### Calibrage du grand tournoi
+
+| Vague | Budget | Plafond complexité | Stratégies gagnantes (coût) |
+|---|---|---|---|
+| 1 | 150 | 11 | 2 instances, cache, file, et backoff (145) ou autoscaling (148) |
+| 2 | 150 | 11 | 2 instances (ou autoscaling), cache, file + 1 niveau de rétention (145) |
+| 3 | 230 | 13 | 2 instances (ou autoscaling), 2 réplicas, lecture sur le primaire, file (210) |
+| 4 | 235 | 14 | cache, réplica, lecture sur le primaire, file, et autoscaling (205) ou 4 instances + backoff (230) |
+
+SLA constant : 1 % d'échecs, 60 ms de latence p95. Clients à 3 relances. Verrouillé par
+`tests/tournament.test.ts` et `npm run balance -- tournament`.

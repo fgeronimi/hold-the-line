@@ -10,11 +10,13 @@ coût, complexité et fiabilité.
 
 ## Le principe
 
-Trois scénarios, au choix dès le lancement : *Les portes de la cité*, un raccourcisseur
+Quatre scénarios, au choix dès le lancement : *Les portes de la cité*, un raccourcisseur
 d'URL (serveurs, base, cache, CDN, rate limiting, file de messages) ; *Le grand marché*,
-la prise de commande d'une boutique en ligne (pub/sub, idempotence, outbox) ; et *Le
+la prise de commande d'une boutique en ligne (pub/sub, idempotence, outbox) ; *Le
 banquier lombard*, un paiement chez un prestataire qui ralentit ou tombe (cascade de
-pannes, circuit breaker, paiement différé, ruée vers le cache). Tous sont racontés comme
+pannes, circuit breaker, paiement différé, ruée vers le cache) ; et *Le grand tournoi*,
+une billetterie prise d'assaut (tempête de relances et backoff, file qui déborde,
+partition réseau et lectures cohérentes). Tous sont racontés comme
 une cité médiévale. La métaphore aide à se représenter le système ; le vrai nom
 technique vient toujours en premier.
 

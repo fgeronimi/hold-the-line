@@ -57,6 +57,11 @@ export interface ComponentDef {
    * au lieu d'être partagé entre eux comme le fait une file.
    */
   fanOut?: boolean;
+  /**
+   * Prestataire externe : messages acceptés par seconde au plus, quel que soit leur
+   * regroupement (son quota). Une file qui le consomme ne se vide pas plus vite (S20).
+   */
+  maxRps?: number;
 }
 
 export type UpgradeEffect =
@@ -79,7 +84,16 @@ export type UpgradeEffect =
    */
   | { type: 'circuitBreaker'; timeoutMs: number }
   /** Cache : une seule requête recalcule une entrée expirée, les autres l'attendent. */
-  | { type: 'coalescing' };
+  | { type: 'coalescing' }
+  /**
+   * Clients : relances espacées (backoff exponentiel, jitter), étalées sur `spreadTicks`
+   * ticks ; sans elles, tous les échecs reviennent ensemble au tick suivant (décision S19).
+   */
+  | { type: 'backoff'; spreadTicks: number }
+  /** File : `perLevel` messages de plus avant de déborder, par niveau. */
+  | { type: 'retention'; perLevel: number }
+  /** Base : les lectures qui doivent être à jour vont au primaire, jamais aux réplicas (S21). */
+  | { type: 'leaderReads' };
 
 /**
  * Ce que coûte une baisse de niveau (décision E2) :
@@ -152,6 +166,16 @@ export interface TrafficSource {
    * tombent jamais dans un cache, CDN compris.
    */
   longTail?: boolean;
+  /**
+   * Relances par requête échouée (décision S19) : chaque échec synchrone revient au tick
+   * suivant, jusqu'à ce nombre de fois en plus du trafic neuf. Absent : pas de relance.
+   */
+  retries?: number;
+  /**
+   * Lit des données qui doivent être à jour (les places restantes) : ses lectures ne
+   * tombent jamais dans un cache, et un réplica coupé du primaire les sert périmées (S21).
+   */
+  consistent?: boolean;
   rps: Partial<Record<RequestKind, number>>;
 }
 
@@ -183,7 +207,9 @@ export type IncidentEffect =
    * Tout le cache expire d'un coup : le taux de succès retombe à 0 puis remonte comme un
    * cache froid, et chaque absence est recalculée `herd` fois en base, faute de verrou.
    */
-  | { type: 'cache-stampede'; herd: number };
+  | { type: 'cache-stampede'; herd: number }
+  /** Les réplicas de la base sont coupés du primaire : ils servent des données périmées (S21). */
+  | { type: 'partition' };
 
 export interface Incident {
   id: string;
@@ -254,7 +280,9 @@ export type FailureReason =
   /** Copie d'événement qu'un service attendait et n'a jamais reçue. */
   | 'undelivered'
   /** Appel coupé par un circuit breaker ouvert : échec rapide, sans bloquer le serveur. */
-  | 'circuit-open';
+  | 'circuit-open'
+  /** Lecture d'une donnée à jour servie périmée par un réplica coupé du primaire. */
+  | 'stale-read';
 
 export type SimEvent =
   | { type: 'invalid'; message: string }
@@ -293,18 +321,31 @@ export interface NodeTick {
   waitingOn?: string;
   /** Serveur : dépendances coupées par son circuit breaker ce tick. */
   open?: string[];
+  /** Base : lectures servies périmées par des réplicas coupés (req/s) : déjà dans `failed`. */
+  stale?: number;
+  /** Base : ses réplicas sont coupés du primaire ce tick (partition, S21). */
+  partitioned?: boolean;
 }
 
 export interface TickMetrics {
   tick: number;
   offered: number;
   failed: number;
+  /** Latence moyenne d'une requête, pondérée par le débit de chaque type. */
   avgLatencyMs: number;
+  /**
+   * Ce que le SLA mesure à ce tick (décision S17) : la moyenne, sauf si l'événement de
+   * commande, traité en direct, attend plus longtemps. Noyé dans les lectures, un client
+   * qui attend 200 ms sa commande passerait sinon le SLA.
+   */
+  slaLatencyMs: number;
   nodes: Record<string, NodeTick>;
   /** Débit envoyé sur chaque lien (clé `from→to`) par type de requête : ce que le rendu anime. */
   links: Record<string, Partial<Record<RequestKind, number>>>;
   /** Incidents en cours ce tick (ids). */
   incidents?: string[];
+  /** Relances des clients injectées ce tick (req/s), déjà comptées dans `offered`. */
+  retries?: number;
 }
 
 export interface Gauge {

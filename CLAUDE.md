@@ -11,8 +11,9 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 
 - `npm test` : Vitest, tous les tests
 - `npm run typecheck` : `tsc --noEmit` (TypeScript 7)
-- `npm run balance` : simulation en masse, ~17 000 architectures canoniques sur chaque
-  vague, ~30 s (Node exécute le TypeScript nativement, sans build)
+- `npm run balance` : simulation en masse des trois scénarios, ~17 000 architectures
+  canoniques pour le raccourcisseur, ~1 min (Node exécute le TypeScript nativement, sans
+  build) ; `npm run balance -- market` n'en joue qu'un, par son id
 - `npm run dev` : interface de jeu et de calibrage ; `npm run build` : site statique
   dans `dist/`, chemins relatifs pour GitHub Pages
 
@@ -56,11 +57,12 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   `node scripts/strip-characters.mjs <originaux> public/models/kaykit-chars`. Ne pas
   copier un personnage original (~4 Mo) : le passer par ce script.
 - `src/balance/` : outillage d'équilibrage (énumération canonique, rapport par vague) ;
-  hors moteur, il ne fait qu'appeler `simulateWave`.
+  hors moteur, il ne fait qu'appeler `simulateWave`. Il ne connaît que des dimensions :
+  chaque scénario décrit la sienne dans `src/data/balance-space.ts`.
 - `src/data/catalog.ts` : composants et évolutions. `src/data/scenarios/` : un fichier
   par scénario, plus ses architectures types (`*.archetypes.ts`) ; `index.ts` liste les
   scénarios de l'écran de choix. Une partie par scénario, sauvegardées ensemble.
-- `tests/url-shortener.test.ts`, `tests/market.test.ts` et `tests/resilience.test.ts` verrouillent l'équilibrage : chaque vague gagnée avec la
+- `tests/url-shortener.test.ts`, `tests/market.test.ts`, `tests/resilience.test.ts` et `tests/tournament.test.ts` verrouillent l'équilibrage : chaque vague gagnée avec la
   réponse attendue, perdue sans elle et perdue sur-dimensionnée.
 
 ## Pièges
@@ -71,15 +73,16 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   `src/data/catalog.ts`, sinon le calibrage casse les tests du moteur.
 - La latence du SLA compte lectures, écritures et événements async ; l'async sort du chemin
   critique dès qu'il passe par une file (décision S10). Un service métier appelé en direct
-  met sa latence (200 ms) sur le chemin du client. C'est un p95 des latences par tick, pas un
+  met sa latence (200 ms) sur le chemin du client, entière : un tick vaut la moyenne, ou
+  l'événement direct s'il attend plus (`slaLatencyMs`, S17). C'est un p95 des latences par tick, pas un
   vrai p99 par requête : toujours l'afficher « p95 (approx.) ».
 - Le rate limiting ne compte que le synchrone (décision C5) ; ses niveaux sont des index
   de palier, pas des quantités.
 - Imports relatifs avec l'extension `.ts` obligatoire : c'est ce qui permet à Node
   de lancer `scripts/` sans build.
-- `npm run balance` et `tests/balance.test.ts` ne connaissent que le raccourcisseur
-  (topologie canonique) ; le grand marché et le banquier lombard ne sont verrouillés que
-  par leurs archétypes.
+- Un composant ou une évolution ajouté à un scénario doit entrer dans son espace de
+  `src/data/balance-space.ts`, sinon `npm run balance` ne voit pas les réponses qui s'en
+  servent. Une dimension avec `requires` vient après celle dont elle dépend.
 - `tests/balance.test.ts` énumère un espace réduit qui doit contenir toutes les réponses
   attendues : si un recalibrage déplace une réponse hors de cet espace, l'agrandir.
 - Le MVP de la spec a été élargi au CDN et à l'autoscaling (`docs/decisions.md`, X1–X4).
@@ -104,5 +107,11 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 - Pas de cascade par saturation : un aval saturé ne ralentit pas l'amont (M3). La seule
   cascade est celle des fils d'exécution (S14) : un serveur qui appelle en direct une
   dépendance lente sature pour tout le monde, sauf derrière un circuit breaker ou une file.
-- Le travail d'un flux est divisé par sa taille de lot (`batch`), mais les échecs se
-  comptent toujours en messages.
+- Le travail d'un flux est divisé par sa taille de lot (`batch`), comme les fils qu'il
+  occupe (M6), mais les échecs se comptent toujours en messages.
+- Des clients qui relancent (`retries`, S19) changent deux règles : un échec relancé sort
+  du taux d'échec (sa relance compte à sa place, `replayStats` fait pareil), et un nœud
+  saturé sert capacité / charge de ce qu'il pourrait. Une saturation légère peut donc
+  dégénérer en tempête : vérifier la marge quand un scénario a des clients qui relancent.
+- Une source `consistent` (S21) ne tombe jamais en cache et sa latence compte à part dans
+  le SLA : c'est la seule population, avec l'événement direct (S17), mesurée hors moyenne.

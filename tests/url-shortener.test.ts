@@ -96,6 +96,14 @@ describe('Raccourcisseur d’URL', () => {
     expect(inline.nodes.db!.peakUtilization).toBeGreaterThan(1);
   });
 
+  it('vague 5 — le worker tombe : la file garde les clics, puis les rend', () => {
+    const r = play(A.queuedClicks(4), 'click-tracking');
+    expect(r.won).toBe(true);
+    expect(r.ticks[31]!.nodes.queue!.backlog).toBeGreaterThan(0);
+    expect(r.ticks[34]!.nodes.queue!.backlog ?? 0).toBe(0);
+    expect(r.failuresByReason['queue-overflow']).toBe(0);
+  });
+
   it('vague 5 — le CDN de la vague 3 perd les clics des redirections en cache', () => {
     // Le débat 301 contre 302 : une redirection servie en bordure ne passe jamais par le serveur.
     const r = play(A.withCdn({ rateLimitTier: A.TIER_40, queue: true }), 'click-tracking');

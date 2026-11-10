@@ -31,6 +31,14 @@ export const sharedQueue: Architecture = {
   links: [...queued.links, link('queue', 'stock'), link('queue', 'billing')],
 };
 
+/**
+ * Comment les événements de commande atteignent les services : pas du tout, appel
+ * direct au service e-mail, file vers l'e-mail, une file partagée par les trois, un
+ * pub/sub qui copie à une file par service, ou un pub/sub abonné sans file.
+ */
+export const DELIVERIES = ['none', 'inline', 'queue', 'shared-queue', 'pubsub', 'pubsub-direct'] as const;
+export type Delivery = (typeof DELIVERIES)[number];
+
 export interface FanOutOptions {
   idempotence?: boolean;
   outbox?: boolean;
@@ -40,26 +48,40 @@ export interface FanOutOptions {
   extraInstances?: number;
 }
 
-/** Le crieur public annonce chaque commande à trois files, une par service. */
-export function fannedOut(o: FanOutOptions = {}): Architecture {
+/** Le schéma de référence du marché, toutes variantes de livraison confondues. */
+export function ordering(delivery: Delivery, o: FanOutOptions = {}): Architecture {
   const nodes: ArchNode[] = [
     source,
     { id: 'app', type: 'app-server', upgrades: { 'horizontal-scaling': o.extraInstances ?? 0 } },
     { id: 'db', type: 'database', upgrades: { outbox: o.outbox ? 1 : 0, 'read-replica': o.replicas ?? 0 } },
-    { id: 'bus', type: 'pubsub' },
-    ...SERVICES.map((s): ArchNode => ({ id: `q-${s}`, type: 'message-queue' })),
     ...services(o.idempotence),
   ];
-  const links: ArchLink[] = [
-    link('app', 'db'),
-    link('app', 'bus'),
-    ...SERVICES.flatMap((s) => [link('bus', `q-${s}`), link(`q-${s}`, s)]),
-  ];
+  const links: ArchLink[] = [link('app', 'db')];
   if (o.extraInstances) {
     nodes.push({ id: 'lb', type: 'load-balancer' });
     links.unshift(link('src', 'lb'), link('lb', 'app'));
   } else {
     links.unshift(link('src', 'app'));
+  }
+  switch (delivery) {
+    case 'none':
+      break;
+    case 'inline':
+      links.push(link('app', 'mail'));
+      break;
+    case 'queue':
+    case 'shared-queue':
+      nodes.push({ id: 'queue', type: 'message-queue' });
+      links.push(link('app', 'queue'), ...(delivery === 'queue' ? ['mail'] : SERVICES).map((s) => link('queue', s)));
+      break;
+    case 'pubsub':
+      nodes.push({ id: 'bus', type: 'pubsub' }, ...SERVICES.map((s): ArchNode => ({ id: `q-${s}`, type: 'message-queue' })));
+      links.push(link('app', 'bus'), ...SERVICES.flatMap((s) => [link('bus', `q-${s}`), link(`q-${s}`, s)]));
+      break;
+    case 'pubsub-direct':
+      nodes.push({ id: 'bus', type: 'pubsub' });
+      links.push(link('app', 'bus'), ...SERVICES.map((s) => link('bus', s)));
+      break;
   }
   if (o.cache) {
     nodes.push({ id: 'cache', type: 'cache' });
@@ -67,3 +89,6 @@ export function fannedOut(o: FanOutOptions = {}): Architecture {
   }
   return { nodes, links };
 }
+
+/** Le crieur public annonce chaque commande à trois files, une par service. */
+export const fannedOut = (o: FanOutOptions = {}): Architecture => ordering('pubsub', o);
