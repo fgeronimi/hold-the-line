@@ -54,6 +54,19 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   changement ; `board.ts` (poser, déplacer, relier par A*), `debrief.ts` (analyse du
   chambellan), `tutorial.ts` (guide de la vague 1), `hints.ts` (le bouton « Un indice », déduit de
   `Wave.answers`, I14), `time.ts` (les durées en minutes), `editor.ts` et `calibration.ts` sont purs et testés.
+- `src/ui/main.ts` ne fait que le câblage : écouteurs, scène 3D, effets, rendu. Chaque geste
+  est une fonction pure de `actions.ts` qui renvoie `{ patch, effects }` ; la partie gardée
+  passe par `session.ts` (`readStore` valide le magasin, `withGame` n'y copie le calibrage
+  que s'il a eu lieu) ; annuler / rétablir est dans `history.ts`.
+- `src/ui/draft.ts` : `draftInfo(arch, catalog)` donne validation, ordre, flux et facture d'un
+  brouillon, mémorisés par identité de référence. Vues, guide, aide et plateau le lisent au
+  lieu de rappeler `validateArchitecture` ou `linkFlows`.
+- L'analyse du chambellan est calculée quand la tentative est enregistrée
+  (`Attempt.analysis`) et ne se refait que si le calibrage a changé. Ses répliques qui ne
+  viennent pas d'une leçon sont dans `Theme.debrief` ; le debrief reconnaît les évolutions
+  par leur effet, jamais par leur identifiant.
+- `src/ui/views.ts` ré-exporte les calques de `src/ui/views/` (`hud.ts`, `toolbar.ts`,
+  `card.ts`, `dialog.ts`, `debug.ts`, et `common.ts` pour les types, `esc` et les formats).
 - Mode debug : `?debug` dans l'URL ou la touche D. Essais hors partie, vue tableau et
   calibrage n'existent que là.
 - Le plateau 3D (`CityScene`) est créé une fois dans `#board`, **hors** des zones

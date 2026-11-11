@@ -5,10 +5,16 @@
 // Changer la version dès que la forme sauvegardée change : une vieille sauvegarde est ignorée.
 const KEY = 'hold-the-line:v9';
 
-export function load<T>(): T | undefined {
+/**
+ * Ce qui est gardé, s'il a la forme attendue : `valid` le vérifie avant qu'on s'en serve,
+ * pour qu'une sauvegarde abîmée soit ignorée ici plutôt que de faire planter la partie plus loin.
+ */
+export function load<T>(valid: (value: unknown) => value is T): T | undefined {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as T) : undefined;
+    if (!raw) return undefined;
+    const value: unknown = JSON.parse(raw);
+    return valid(value) ? value : undefined;
   } catch {
     return undefined;
   }

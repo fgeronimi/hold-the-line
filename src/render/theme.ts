@@ -53,9 +53,45 @@ export interface Theme {
    * `{level}` et `{wave}` y sont remplacés par l'élément désigné, dans la métaphore.
    */
   hints: Record<HintLine, string>;
+  /**
+   * Les répliques du narrateur au debrief (`src/ui/debrief.ts`) qui ne viennent pas d'une
+   * leçon : l'ouverture, ce qui a marché, l'alerte et ce qu'on pourrait alléger. La ligne
+   * « En vrai » reste dans le code, comme pour l'aide. `{name}` est le nom d'un bâtiment
+   * dans la métaphore ; les autres variables sont décrites à `DebriefLine`.
+   */
+  debrief: Record<DebriefLine, string>;
+  /** L'écran de choix du scénario : la question du narrateur, puis « En vrai ». */
+  choose: { says: string; real: string };
 }
 
 export type HintLine = 'place' | 'placeMore' | 'link' | 'upgrade' | 'level' | 'remove' | 'unlink' | 'lower' | 'rewind' | 'rebuilt' | 'ready';
+
+/**
+ * - `won` (`{story}` : ce qui a marché, ou `wonQuiet`), `wonQuiet` (`{title}` : la vague), `lost` ;
+ * - ce qui a marché : `edge`, `cache` (`{share}` : sur 100 lectures), `instances`, `replicas`
+ *   (`{count}`), `replica`, `rateLimit`, `pubsub` (`{count}` : abonnés), `idempotence`,
+ *   `outbox`, `queue`, `queues` (`{count}`) ;
+ * - `hot` : le bâtiment le plus chargé d'une vague tenue ;
+ * - `superfluous`, `superfluousMany` (`{names}`) : ce dont la vague se passait.
+ */
+export type DebriefLine =
+  | 'won'
+  | 'wonQuiet'
+  | 'lost'
+  | 'edge'
+  | 'cache'
+  | 'instances'
+  | 'replica'
+  | 'replicas'
+  | 'rateLimit'
+  | 'pubsub'
+  | 'idempotence'
+  | 'outbox'
+  | 'queue'
+  | 'queues'
+  | 'hot'
+  | 'superfluous'
+  | 'superfluousMany';
 
 /** Nom technique et nom dans la métaphore d'un bâtiment ; un service déjà en place a le sien. */
 export function nodeNames(node: ArchNode, catalog: Catalog, theme: Theme): { tech: string; metaphor: string } {

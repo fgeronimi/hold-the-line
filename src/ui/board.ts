@@ -1,10 +1,9 @@
 import { BOARD } from '../data/board.ts';
-import { linkFlows } from '../engine/routing.ts';
 import type { Architecture, ArchLink, ArchNode, BoardCell, Catalog } from '../engine/types.ts';
-import { validateArchitecture } from '../engine/validate.ts';
 import { findPath, hexDistance, hexKey, hexSide } from '../render/hex.ts';
 import { layoutArchitecture } from '../render/layout.ts';
 import { bridge, isRiver, riverKeys } from '../render/terrain.ts';
+import { draftInfo } from './draft.ts';
 import { nextNodeId } from './editor.ts';
 
 /**
@@ -85,7 +84,7 @@ export function placeNode(arch: Architecture, type: string, cell: BoardCell, cat
   const crossed = arch.links.filter((l) => crosses(l, cell));
   const inserted = new Set<ArchLink>();
   if (catalog) {
-    const flows = linkFlows(arch, catalog);
+    const flows = draftInfo(arch, catalog).flows;
     for (const l of crossed) {
       const candidate = insertInto(next, l, id, flows.get(`${l.from}→${l.to}`) ?? [], catalog);
       if (candidate) {
@@ -109,9 +108,9 @@ function insertInto(arch: Architecture, l: ArchLink, id: string, carried: string
     ? [...arch.links, ...(has(l.from, id) ? [] : [{ from: l.from, to: id }])]
     : [...arch.links.filter((x) => x !== l), { from: l.from, to: id }, { from: id, to: l.to }];
   const candidate: Architecture = { ...arch, links };
-  if (!validateArchitecture(candidate, catalog).ok && validateArchitecture(arch, catalog).ok) return undefined;
+  if (!draftInfo(candidate, catalog).validation.ok && draftInfo(arch, catalog).validation.ok) return undefined;
   // Il doit vraiment recevoir ce qui passait, et, s'il est traversé, le transmettre à l'arrivée.
-  const flows = linkFlows(candidate, catalog);
+  const flows = draftInfo(candidate, catalog).flows;
   if ((flows.get(`${l.from}→${id}`) ?? []).length === 0) return undefined;
   if (!def.lookaside && (flows.get(`${id}→${l.to}`) ?? []).length === 0) return undefined;
   return candidate;

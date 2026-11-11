@@ -1,6 +1,6 @@
 import { validateArchitecture } from '../engine/validate.ts';
 import type { Architecture, Catalog, Wave, WaveResult } from '../engine/types.ts';
-import { escapeHtml } from './html.ts';
+import { escapeHtml, percent as pct, percentPrecise } from './html.ts';
 import { nodeNames, type Theme } from './theme.ts';
 
 /**
@@ -35,10 +35,18 @@ export interface ChartModel {
   incidents: { from: number; until: number; title: string }[];
 }
 
-const pct = (n: number) => `${Math.round(n * 100)} %`;
-const num = (n: number) => (n === 0 ? '0' : Math.abs(n) >= 100 ? String(Math.round(n)) : n.toFixed(n < 10 ? 1 : 0));
+/** Deux chiffres significatifs au moins, sans décimale au-delà de 10 : une lecture au survol. */
+const twoDigits = (n: number) => (n === 0 ? '0' : Math.abs(n) >= 100 ? String(Math.round(n)) : n.toFixed(n < 10 ? 1 : 0));
 
-export function chartModel(result: WaveResult, arch: Architecture, wave: Wave, catalog: Catalog, theme: Theme): ChartModel {
+export function chartModel(
+  result: WaveResult,
+  arch: Architecture,
+  wave: Wave,
+  catalog: Catalog,
+  theme: Theme,
+  /** L'ordre du trafic, si l'appelant l'a déjà : l'interface le garde par brouillon. */
+  order?: readonly string[],
+): ChartModel {
   const ticks = result.ticks;
   const n = ticks.length;
 
@@ -62,7 +70,7 @@ export function chartModel(result: WaveResult, arch: Architecture, wave: Wave, c
       values: offered,
       top: Math.max(1, ...offered) * 1.1,
       failed: ticks.map((t) => t.failed),
-      notes: ticks.map((t) => [`${num(t.failed)} req/s en échec`]),
+      notes: ticks.map((t) => [`${twoDigits(t.failed)} req/s en échec`]),
       peak: Math.max(0, ...offered),
     },
     {
@@ -78,9 +86,7 @@ export function chartModel(result: WaveResult, arch: Architecture, wave: Wave, c
     },
   ];
 
-  const validation = validateArchitecture(arch, catalog);
-  const order = validation.ok ? validation.order : arch.nodes.map((x) => x.id);
-  for (const id of order) {
+  for (const id of order ?? trafficOrder(arch, catalog)) {
     const node = arch.nodes.find((x) => x.id === id);
     if (!node || catalog.components[node.type]?.behavior === 'source') continue;
     const load = ticks.map((t) => t.nodes[id]?.utilization ?? 0);
@@ -100,8 +106,8 @@ export function chartModel(result: WaveResult, arch: Architecture, wave: Wave, c
         return [
           ...(x.down ? [`⚡ ${x.down} instance${x.down > 1 ? 's' : ''} en panne`] : []),
           ...(x.instances !== undefined && x.instances > 1 ? [`${x.instances} instances`] : []),
-          ...(x.backlog ? [`${num(x.backlog)} messages en attente`] : []),
-          ...(x.failed > 0 ? [`${num(x.failed)} req/s en échec`] : []),
+          ...(x.backlog ? [`${twoDigits(x.backlog)} messages en attente`] : []),
+          ...(x.failed > 0 ? [`${twoDigits(x.failed)} req/s en échec`] : []),
         ];
       }),
       peak: Math.max(0, ...load),
@@ -112,6 +118,11 @@ export function chartModel(result: WaveResult, arch: Architecture, wave: Wave, c
     .filter((i) => arch.nodes.some((x) => x.type === i.component))
     .map((i) => ({ from: i.from, until: Math.min(i.until, n), title: i.title }));
   return { ticks: n, panels, incidents };
+}
+
+function trafficOrder(arch: Architecture, catalog: Catalog): string[] {
+  const validation = validateArchitecture(arch, catalog);
+  return validation.ok ? validation.order : arch.nodes.map((x) => x.id);
 }
 
 /** Géométrie partagée par le rendu et l'interaction. */
@@ -134,20 +145,20 @@ export function tickAt(m: ChartModel, x: number): number {
 
 /** Une charge de 10 (1 000 %) est celle d'un bâtiment sans instance en service. */
 function format(p: ChartPanel, v: number): string {
-  if (p.unit === 'req/s') return `${num(v)} req/s`;
-  if (p.id === 'failure-rate') return `${(v * 100).toFixed(2)} %`;
+  if (p.unit === 'req/s') return `${twoDigits(v)} req/s`;
+  if (p.id === 'failure-rate') return percentPrecise(v);
   return v >= 10 ? 'hors service' : pct(v);
 }
 
 /** La lecture d'un tick : la charge d'un bâtiment vient avec le débit qui la produit. */
 export function readingAt(p: ChartPanel, tick: number): string {
   const v = format(p, p.values[tick] ?? 0);
-  return p.rps ? `${num(p.rps[tick] ?? 0)} req/s · charge ${v}` : v;
+  return p.rps ? `${twoDigits(p.rps[tick] ?? 0)} req/s · charge ${v}` : v;
 }
 
 /** Le pic d'une vague jouée : la plus forte charge, et le plus fort débit reçu. */
 function peakReading(p: ChartPanel): string {
-  return p.rps ? `pic ${format(p, p.peak)} · ${num(Math.max(0, ...p.rps))} req/s` : `pic ${format(p, p.peak)}`;
+  return p.rps ? `pic ${format(p, p.peak)} · ${twoDigits(Math.max(0, ...p.rps))} req/s` : `pic ${format(p, p.peak)}`;
 }
 
 /** Les ids SVG sont globaux au document : deux figures affichées ne doivent pas partager leurs clipPath. */

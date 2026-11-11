@@ -82,3 +82,40 @@ describe('analyzeWave', () => {
     expect(redundant.tone).toBe('good');
   });
 });
+
+describe('le debrief ne connaît la métaphore que par le thème', () => {
+  // Les mots de la cité fortifiée : aucun ne doit venir du code du debrief.
+  const CITY_WORDS = /(?<![a-zà-ÿ])(?:Sire|cité|scribe|archives|relais de poste|voyageur|pillard|la garde|atelier|grand livre|corps de métier)/i;
+
+  it('avec un autre thème, ouverture, alertes et allègements ne disent aucun mot de la cité', async () => {
+    const { SCENARIOS } = await import('../src/data/scenarios/index.ts');
+    const { answersFor } = await import('../src/ui/hints.ts');
+    const lines = Object.fromEntries(Object.keys(fortifiedCity.debrief).map((k) => [k, `[${k}] {name}{names}{share}{count}{story}{title}`]));
+    const buildings = Object.fromEntries(Object.entries(fortifiedCity.buildings).map(([k, b]) => [k, { ...b, metaphor: `M-${k}` }]));
+    const other = { ...fortifiedCity, id: 'test', debrief: lines as typeof fortifiedCity.debrief, buildings };
+    let told = 0;
+    for (const { scenario } of SCENARIOS) {
+      scenario.waves.forEach((w, i) => {
+        // Les services déjà en place ont leur propre nom : on le neutralise aussi.
+        const arch = structuredClone(answersFor(scenario, i)[0]!);
+        for (const n of arch.nodes) if (n.fixed) n.fixed = { tech: n.fixed.tech, metaphor: `M-${n.id}` };
+        const findings = analyzeWave(simulateWave(arch, w, catalog), arch, w, catalog, other);
+        const own = findings.filter((f, k) => k === 0 || f.tone === 'tip' || (f.tone === 'warn' && !f.concept));
+        for (const f of own) {
+          expect(f.says, `${scenario.id}/${w.id}`).not.toMatch(CITY_WORDS);
+          told++;
+        }
+      });
+    }
+    expect(told).toBeGreaterThan(10);
+  });
+
+  it('le code du debrief n’écrit aucun mot de la cité ni aucun identifiant d’évolution', async () => {
+    const { default: source } = await import('../src/ui/debrief.ts?raw');
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+    expect(code).not.toMatch(CITY_WORDS);
+    expect(code).not.toMatch(/'read-replica'|upgrades\?\.\w|upgrades\?\.\[/);
+  });
+});

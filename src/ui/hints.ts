@@ -1,10 +1,10 @@
 import { spaceOf } from '../data/balance-space.ts';
 import { incidentLessons, reasonLessons, saturationLessons, type Lesson } from '../data/lessons.ts';
 import { hintsLeft, withHint, type GameState } from '../engine/game.ts';
-import { linkFlows } from '../engine/routing.ts';
 import { simulateWave } from '../engine/simulate.ts';
 import type { Architecture, ArchNode, Catalog, RequestKind, Scenario, UpgradeDef, UpgradeEffect, Wave } from '../engine/types.ts';
 import { nodeNames, type HintLine, type Theme } from '../render/theme.ts';
+import { draftInfo } from './draft.ts';
 import type { TutorialStep } from './tutorial.ts';
 
 /**
@@ -321,7 +321,7 @@ export function compare(ref: Architecture, other: Architecture, catalog: Catalog
     missing.push({ kind: 'place', key: `place|${n.type}|${count}`, type: n.type, count, highlight: { tool: 'place', type: n.type } });
   }
 
-  const flows = linkFlows(ref, catalog);
+  const flows = draftInfo(ref, catalog).flows;
   const refLinks = [...ref.links].sort((a, b) => rank(a.from) - rank(b.from) || rank(a.to) - rank(b.to));
   for (const l of refLinks) {
     const from = map.get(l.from);

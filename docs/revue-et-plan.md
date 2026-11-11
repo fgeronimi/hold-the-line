@@ -506,7 +506,17 @@ lignes, en vingt modules ; instantané d'équilibrage identique, et empreinte SH
 tous les résultats de simulation identique au bit près avant et après. Écart assumé sur
 R2 : le moteur publie des cumuls (`countedSoFar`, `clientFailedSoFar`) et non des nombres
 par tick, parce qu'une relance réussie donnerait un échec négatif sur son tick.
-D3a (temps compressé) et I14 sont faits aussi. Restent R5, R6, R4, R7, R9, R8.
+D3a (temps compressé) et I14 sont faits aussi.
+
+**R5, R6, R4, R7 et R9 faits.** `main.ts` passe de 563 à 296 lignes, `views.ts` devient
+un point d'entrée de 12 lignes sur cinq calques ; le HTML produit est identique octet pour
+octet sur 5 990 sorties comparées avant et après. 417 tests verts. Seul changement de
+comportement : une sauvegarde abîmée est ignorée au lieu de faire planter plus tard. R8
+(découpe de `scene.ts`) reste à faire seulement s'il faut retoucher la scène.
+
+À reprendre plus tard, relevé en passant : `tutorial.ts` et `views/dialog.ts` gardent des
+mots de la métaphore en dur ; ⌘Z hors construction consomme un pas d'annulation sans
+l'appliquer (comportement d'origine, maintenant testé).
 
 Toutes doivent laisser l'instantané A4 identique.
 

@@ -1,8 +1,10 @@
 import { incidentLessons, reasonLessons, saturationLessons, type Lesson } from '../data/lessons.ts';
 import { bill } from '../engine/budget.ts';
 import { simulateWave } from '../engine/simulate.ts';
-import type { Architecture, Catalog, RequestKind, TickMetrics, Wave, WaveResult } from '../engine/types.ts';
-import { nodeNames, type Theme } from '../render/theme.ts';
+import type { Architecture, Catalog, RequestKind, TickMetrics, UpgradeEffect, Wave, WaveResult } from '../engine/types.ts';
+import { hasEffect, resolveUpgrades, withEffect } from '../engine/upgrades.ts';
+import { percent as pct } from '../render/html.ts';
+import { nodeNames, type DebriefLine, type Theme } from '../render/theme.ts';
 import { removeNode } from './editor.ts';
 
 /** Un débit lisible : « 7 200 ». */
@@ -47,7 +49,6 @@ function fromLesson(tone: Finding['tone'], lesson: Lesson, vars: Record<string, 
   return f;
 }
 
-const pct = (n: number) => `${Math.round(n * 100)} %`;
 const sum = (xs: number[]) => xs.reduce((a, x) => a + x, 0);
 
 /** Débit d'un type sur les liens qui partent d'un nœud (`from`) ou y arrivent (`to`), sur toute la vague. */
@@ -82,6 +83,10 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
   const behaviorOf = (id: string) => catalog.components[typeOf.get(id) ?? '']?.behavior;
   const ofBehavior = (b: string) => arch.nodes.filter((n) => catalog.components[n.type]?.behavior === b).map((n) => n.id);
   const won = result.won;
+  const line = (l: DebriefLine, vars: Record<string, string> = {}) => fill(theme.debrief[l], vars);
+  // Les évolutions se reconnaissent à leur effet, comme dans le moteur : pas à leur identifiant.
+  const upgradesOf = (n: Architecture['nodes'][number]) => resolveUpgrades(n, catalog);
+  const anyHas = (effect: UpgradeEffect['type']) => arch.nodes.some((n) => hasEffect(upgradesOf(n), effect));
   const problem: Finding['tone'] = won ? 'warn' : 'bad';
 
   // Les ticks d'incident : ce qui y déborde est raconté par l'incident, pas comme un goulot.
@@ -206,7 +211,7 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
   } else if (won && hottest && hottest.peak > HOT && !saturated.some((s) => s.id === hottest.id)) {
     tell(Infinity, {
       tone: 'warn',
-      says: `${metaphor(hottest.id)} : presque plein au plus fort de la vague. À la prochaine affluence, c’est là que ça cédera.`,
+      says: line('hot', { name: metaphor(hottest.id) }),
       tech: `${name(hottest.id)} a tourné jusqu’à ${pct(hottest.peak)} de sa capacité : peu de marge.`,
       node: hottest.id,
     });
@@ -222,7 +227,7 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     const plural = superfluous.length > 1;
     out.push({
       tone: 'tip',
-      says: `Sans ${superfluous.map(metaphor).join(', ')}, la cité aurait tenu quand même : ${plural ? 'ils coûtent' : 'il coûte'} sans rien apporter cette vague.`,
+      says: line(plural ? 'superfluousMany' : 'superfluous', { names: superfluous.map(metaphor).join(', ') }),
       tech: `${superfluous.map(name).join(', ')} : la vague rejouée sans ${plural ? 'eux' : 'lui'} respecte toujours le SLA. Chaque composant d’un système doit répondre à un besoin précis.`,
       remedy: 'Le retirer, ou le garder en connaissance de cause pour une vague à venir.',
       concept: 'Over-engineering',
@@ -234,13 +239,13 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     const worked = contributions();
     return {
       tone: 'good',
-      says: `La cité a tenu, Sire. ${worked.length > 0 ? worked.map((w) => w.says).join(' ') : `${wave.title} : défi relevé.`}`,
+      says: line('won', { story: worked.length > 0 ? worked.map((w) => w.says).join(' ') : line('wonQuiet', { title: wave.title }) }),
       ...(worked.length > 0 ? { tech: worked.map((w) => w.tech).join(' ') } : {}),
     };
   }
 
   function openingLost(): Finding {
-    return { tone: 'bad', says: 'La cité est tombée, Sire. Voici ce qui s’est passé.', tech: `${result.lossReasons.join('. ')}.` };
+    return { tone: 'bad', says: line('lost'), tech: `${result.lossReasons.join('. ')}.` };
   }
 
   /** Ce que chaque bâtiment a apporté, chiffré : ce qui a fait tenir la vague. */
@@ -252,7 +257,7 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
       const served = flow(result.ticks, 'read', 'to', id) - flow(result.ticks, 'read', 'from', id);
       if (reads > 0 && served > 0) {
         worked.push({
-          says: `Votre ${metaphor(id)} a renvoyé ${Math.round((served / reads) * 100)} voyageurs sur 100 sans même les faire entrer en ville.`,
+          says: line('edge', { name: metaphor(id), share: String(Math.round((served / reads) * 100)) }),
           tech: `Le CDN a servi ${pct(served / reads)} des lectures en bordure : le serveur ne les a jamais vues.`,
         });
       }
@@ -261,7 +266,7 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
       const hits = flow(result.ticks, 'read', 'to', id);
       if (reads > 0 && hits > 0) {
         worked.push({
-          says: `Votre ${metaphor(id)} a fait le travail : ${Math.round((hits / reads) * 100)} voyageurs sur 100 y ont trouvé leur réponse sans déranger les archives.`,
+          says: line('cache', { name: metaphor(id), share: String(Math.round((hits / reads) * 100)) }),
           tech: `Le cache a servi ${pct(hits / reads)} des lectures ; la base n’a vu que le reste.`,
         });
       }
@@ -270,23 +275,23 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
       const peak = Math.max(0, ...result.ticks.map((t) => t.nodes[id]?.instances ?? 1));
       if (peak > 1) {
         worked.push({
-          says: `${peak} tours de scribes se sont partagé la foule.`,
+          says: line('instances', { count: String(peak) }),
           tech: `Jusqu’à ${peak} instances du serveur derrière le load balancer : la charge est répartie (scaling horizontal).`,
         });
       }
     }
     for (const n of arch.nodes) {
-      const replicas = n.upgrades?.['read-replica'] ?? 0;
+      const replicas = withEffect(upgradesOf(n), 'readReplicas').reduce((a, u) => a + u.level, 0);
       if (replicas > 0) {
         worked.push({
-          says: `${replicas > 1 ? `Les ${replicas} copies des archives ont` : 'La copie des archives a'} répondu aux lectures que les archives seules n’auraient pas tenues.`,
+          says: replicas > 1 ? line('replicas', { count: String(replicas) }) : line('replica'),
           tech: `${replicas} réplica${replicas > 1 ? 's' : ''} en lecture : les lectures se répartissent, le primaire garde les écritures.`,
         });
       }
     }
     if (result.shed > 0 && result.failuresByReason['rate-limited'] === 0) {
       worked.push({
-        says: 'La garde de la porte a refoulé les pillards sans gêner un seul marchand honnête.',
+        says: line('rateLimit'),
         tech: `Le rate limiting a écarté ${Math.round(result.shed)} requêtes abusives du scraper, et aucune requête légitime.`,
       });
     }
@@ -294,20 +299,20 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
       const subscribers = arch.links.filter((l) => l.from === id).length;
       if (flow(result.ticks, 'async', 'to', id) > 0 && subscribers > 0) {
         worked.push({
-          says: `Votre ${metaphor(id)} a annoncé chaque commande à ${subscribers} corps de métier à la fois.`,
+          says: line('pubsub', { name: metaphor(id), count: String(subscribers) }),
           tech: `Le pub/sub a copié chaque événement à ses ${subscribers} abonnés : chaque service reçoit tout, sans que le serveur les connaisse.`,
         });
       }
     }
-    if (arch.nodes.some((n) => (n.upgrades?.idempotence ?? 0) > 0) && result.failuresByReason.duplicate === 0) {
+    if (anyHas('idempotence') && result.failuresByReason.duplicate === 0) {
       worked.push({
-        says: 'Vos ateliers reconnaissent une commande déjà servie : personne n’a été débité deux fois.',
+        says: line('idempotence'),
         tech: 'Les consommateurs idempotents écartent les messages déjà traités.',
       });
     }
-    if (arch.nodes.some((n) => (n.upgrades?.outbox ?? 0) > 0) && result.failuresByReason['lost-event'] === 0) {
+    if (anyHas('outbox') && result.failuresByReason['lost-event'] === 0) {
       worked.push({
-        says: 'Chaque commande est consignée au grand livre avec son annonce : aucune ne s’est perdue.',
+        says: line('outbox'),
         tech: 'L’outbox écrit l’événement dans la même transaction que la commande.',
       });
     }
@@ -315,7 +320,7 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     const queues = ofBehavior('queue').filter((id) => flow(result.ticks, 'async', 'to', id) > 0);
     if (queues.length > 0) {
       worked.push({
-        says: `${queues.length > 1 ? `Vos ${queues.length} relais de poste ont` : `Votre ${metaphor(queues[0]!)} a`} emporté le travail de fond sans faire attendre personne.`,
+        says: queues.length > 1 ? line('queues', { count: String(queues.length) }) : line('queue', { name: metaphor(queues[0]!) }),
         tech: 'La file sort ce travail du chemin critique : la requête répond tout de suite, un worker traite les messages à son rythme, par lots.',
       });
     }
@@ -337,4 +342,26 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
       })
       .map((n) => n.id);
   }
+}
+
+/**
+ * L'analyse d'une tentative, avec le catalogue et la vague qu'elle a lus. Elle relance une
+ * simulation par bâtiment retirable : on la calcule quand la tentative est enregistrée, et
+ * on ne la refait que si le calibrage du mode debug a changé l'un ou l'autre depuis.
+ */
+export interface Analysis {
+  catalog: Catalog;
+  wave: Wave;
+  findings: Finding[];
+}
+
+export function analysisOf(
+  known: Analysis | undefined,
+  attempt: { result: WaveResult; arch: Architecture },
+  wave: Wave,
+  catalog: Catalog,
+  theme: Theme,
+): Analysis {
+  if (known && known.catalog === catalog && known.wave === wave) return known;
+  return { catalog, wave, findings: analyzeWave(attempt.result, attempt.arch, wave, catalog, theme) };
 }

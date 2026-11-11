@@ -1,8 +1,8 @@
-import { migrationCost, totals } from '../engine/budget.ts';
+import { migrationCost } from '../engine/budget.ts';
 import type { Architecture, Catalog, Wave } from '../engine/types.ts';
-import { validateArchitecture } from '../engine/validate.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { nodeNames } from '../render/theme.ts';
+import { draftInfo } from './draft.ts';
 import { minuteSpan } from './time.ts';
 
 /** Ce qu'il faut faire maintenant, et quel bouton de la barre d'outils le montre. */
@@ -79,7 +79,7 @@ export function tutorialStep(arch: Architecture, catalog: Catalog): TutorialStep
       highlight: { tool: 'link' },
     };
   }
-  const validation = validateArchitecture(arch, catalog);
+  const validation = draftInfo(arch, catalog).validation;
   if (!validation.ok) {
     return {
       id: 'fix',
@@ -113,7 +113,8 @@ export function guideStep(
     const step = tutorialStep(arch, catalog);
     if (step.id !== 'launch') return step;
   }
-  const validation = validateArchitecture(arch, catalog);
+  const info = draftInfo(arch, catalog);
+  const validation = info.validation;
   if (!validation.ok) {
     return { id: 'fix', says: 'Quelque chose cloche dans le plan de la cité.', real: validation.errors[0] ?? 'Architecture invalide.' };
   }
@@ -154,7 +155,7 @@ export function guideStep(
       real: `Le ${starved.fixed.tech} doit recevoir chaque événement de commande, et rien ne l’alimente encore.`,
     };
   }
-  const { cost, complexity } = totals(arch, catalog);
+  const { cost, complexity } = info;
   const bill = cost + migrationCost(committed, arch, catalog);
   if (bill > wave.budget) {
     return {
