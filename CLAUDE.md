@@ -29,6 +29,17 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 - Modèle de flux par ticks : à chaque tick, le trafic traverse le graphe en ordre
   topologique ; au-delà de sa capacité un nœud fait échouer l'excédent. Seule la file
   garde un arriéré d'un tick à l'autre. Pas d'aléa, donc pas de graine.
+- `src/engine/simulate.ts` ne garde que la boucle des ticks. `World` (`world.ts`) porte ce
+  qui vaut pour toute la vague : graphe, évolutions résolues une fois (`upgrades.ts`),
+  arriérés, autoscaling. `Now` est reconstruit à chaque tick : compteurs (`ledger.ts`),
+  incidents (`incidents.ts`), circuits ouverts (`circuits.ts`). Les traitements prennent
+  `(node, def, incoming, w, now)` : pas de fermeture sur un état muté. Un fichier par
+  comportement dans `src/engine/nodes/` ; le routage des flux dans `route.ts`, la latence et
+  la règle du p95 dans `latency.ts`, les relances dans `retries.ts`, le verdict dans
+  `verdict.ts`, ses phrases dans `messages.ts`.
+- Le moteur publie ce que le rendu affiche, qui ne recalcule rien : `TickMetrics.countedSoFar`
+  et `clientFailedSoFar` (taux d'échec cumulé du rejeu), `WaveResult.latencyBreachTick`,
+  `WaveResult.losses` (raisons typées ; `lossReasons` en est la mise en phrases).
 - `src/engine/types.ts` : seul le `Behavior` d'un composant est codé dans le moteur ;
   capacités, coûts, poids et contraintes viennent des données.
 - `src/engine/routing.ts` : les liens ne sont pas typés. Chaque composant déclare

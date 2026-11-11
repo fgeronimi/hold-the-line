@@ -501,6 +501,13 @@ marché, vague 5 depuis les variantes à réplica de la vague 4 ; tournoi, vague
 
 ### Étape 2 — refactorisations sans changement de comportement
 
+**État au 11 novembre 2026 : R2, R1 et R3 faits.** `simulate.ts` passe de 1 192 à 265
+lignes, en vingt modules ; instantané d'équilibrage identique, et empreinte SHA-256 de
+tous les résultats de simulation identique au bit près avant et après. Écart assumé sur
+R2 : le moteur publie des cumuls (`countedSoFar`, `clientFailedSoFar`) et non des nombres
+par tick, parce qu'une relance réussie donnerait un échec négatif sur son tick.
+D3a (temps compressé) et I14 sont faits aussi. Restent R5, R6, R4, R7, R9, R8.
+
 Toutes doivent laisser l'instantané A4 identique.
 
 | # | Action | Effort | Risque | Débloque |

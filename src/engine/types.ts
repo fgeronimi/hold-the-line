@@ -355,6 +355,20 @@ export interface TickMetrics {
   incidents?: string[];
   /** Relances des clients injectées ce tick (req/s), déjà comptées dans `offered`. */
   retries?: number;
+  /**
+   * Requêtes comptées dans le taux d'échec, cumulées depuis le début de la vague : offertes,
+   * moins le trafic abusif écarté et les relances injectées (S19). Une relance compte à la
+   * place de l'échec qu'elle rejoue. Cumulé et non par tick : une relance réussie rendrait
+   * négatif le bilan de son tick.
+   */
+  countedSoFar: number;
+  /**
+   * Échecs vus du client, cumulés : les échecs, moins les relances injectées. Le verdict,
+   * lui, déduit les relances au tick où il les planifie : en fin de vague,
+   * `clientFailedSoFar / countedSoFar` donne son taux d'échec (une relance qui tomberait
+   * après la fin n'est jamais planifiée) ; en cours de vague, le cumul suit le client.
+   */
+  clientFailedSoFar: number;
 }
 
 export interface Gauge {
@@ -370,9 +384,21 @@ export interface NodeSummary {
   saturatedTicks: number;
 }
 
+/** Pourquoi une vague est perdue, avec les nombres qui le disent ; la phrase vient de `messages.ts`. */
+export type LossReason =
+  | { kind: 'invalid'; message: string }
+  /** Facture au-delà du budget ; `autoscaling` et `migration` sont déjà dans `cost`. */
+  | { kind: 'budget'; cost: number; limit: number; autoscaling: number; migration: number }
+  | { kind: 'complexity'; value: number; limit: number }
+  | { kind: 'failure-rate'; value: number; limit: number }
+  /** p95 des latences par tick : toujours à présenter comme une approximation. */
+  | { kind: 'latency'; p95Ms: number; limitMs: number };
+
 export interface WaveResult {
   won: boolean;
+  /** Les raisons de `losses`, mises en phrases. */
   lossReasons: string[];
+  losses: LossReason[];
   /**
    * Facture de la vague : le fixe (composants et évolutions), les instances ajoutées par
    * l'autoscaling au prorata de leur temps de service, et les retraits depuis la vague précédente.
@@ -396,4 +422,9 @@ export interface WaveResult {
   nodes: Record<string, NodeSummary>;
   ticks: TickMetrics[];
   events: SimEvent[];
+  /**
+   * Tick où la latence scelle la défaite : passé lui, le p95 final dépasse forcément sa
+   * limite. Absent si la vague tient sa latence.
+   */
+  latencyBreachTick?: number;
 }

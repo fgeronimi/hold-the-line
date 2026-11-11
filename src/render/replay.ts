@@ -2,7 +2,7 @@ import { attachChart, chartModel, renderChart } from './charts.ts';
 import { nodeNames } from './theme.ts';
 import type { Architecture, Catalog, Wave, WaveResult } from '../engine/types.ts';
 import { escapeHtml } from './html.ts';
-import { firstSaturations, latencyBreachTick, replayStats } from './hud.ts';
+import { firstSaturations, replayStats } from './hud.ts';
 import type { CityScene } from './scene.ts';
 import type { Theme } from './theme.ts';
 import { journeyDuration, journeysForTick, outcomeOf, trafficScale, type Journey, type Outcome } from './traffic.ts';
@@ -89,7 +89,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   alarm.className = 'sla-alarm';
   alarm.hidden = true;
   barHost.appendChild(alarm);
-  const latencyBreach = latencyBreachTick(o.result, o.wave.sla.maxP95LatencyMs);
+  const latencyBreach = o.result.latencyBreachTick;
   const alarmText = {
     failures: `SLA rompu : plus de ${(o.wave.sla.maxFailureRate * 100).toFixed(0)} % d’échecs`,
     latency: `SLA rompu : latence p95 au-delà de ${o.wave.sla.maxP95LatencyMs} ms`,

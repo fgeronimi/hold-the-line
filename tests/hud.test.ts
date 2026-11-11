@@ -3,7 +3,7 @@ import { catalog } from '../src/data/catalog.ts';
 import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { simulateWave } from '../src/engine/simulate.ts';
-import { firstSaturations, latencyBreachTick, replayStats } from '../src/render/hud.ts';
+import { firstSaturations, replayStats } from '../src/render/hud.ts';
 
 describe('tableau de bord du rejeu', () => {
   const peak = simulateWave(A.scaled(1), urlShortener.waves[2]!, catalog);
@@ -38,17 +38,17 @@ describe('alarme de latence', () => {
     const wave = market.waves[0]!;
     const inline = simulateWave(M.inline, wave, catalog);
     expect(inline.won).toBe(false);
-    const at = latencyBreachTick(inline, wave.sla.maxP95LatencyMs)!;
+    const at = inline.latencyBreachTick!;
     // Le 4e tick lent sur 60 : trois sont tolérés par le p95.
     const slowBefore = inline.ticks.slice(0, at + 1).filter((t) => t.slaLatencyMs > wave.sla.maxP95LatencyMs).length;
     expect(slowBefore).toBe(4);
-    expect(latencyBreachTick(simulateWave(M.queued, wave, catalog), wave.sla.maxP95LatencyMs)).toBeUndefined();
+    expect(simulateWave(M.queued, wave, catalog).latencyBreachTick).toBeUndefined();
   });
 
   it('ne sonne jamais pour une vague que le moteur donne gagnée sur la latence', () => {
     for (const w of urlShortener.waves) {
       const r = simulateWave(A.minimal, w, catalog);
-      const breach = latencyBreachTick(r, w.sla.maxP95LatencyMs);
+      const breach = r.latencyBreachTick;
       expect(breach !== undefined).toBe(r.gauges.latency.value > w.sla.maxP95LatencyMs);
     }
   });
