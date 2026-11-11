@@ -14,12 +14,33 @@ export interface GameState {
   /** Étoiles gagnées par vague tenue, de 1 à 3. */
   stars: number[];
   finished: boolean;
+  /**
+   * Indices déjà donnés sur la vague en cours, par leur clé (`src/ui/hints.ts`). Optionnel,
+   * lu avec `?? []` : une sauvegarde d'avant l'aide reste valide sans changer de clé.
+   */
+  hints?: string[];
 }
 
 const EMPTY: Architecture = { nodes: [], links: [] };
 
 export function newGame(): GameState {
-  return { waveIndex: 0, committed: EMPTY, history: [EMPTY], replays: 0, scores: [], stars: [], finished: false };
+  return { waveIndex: 0, committed: EMPTY, history: [EMPTY], replays: 0, scores: [], stars: [], finished: false, hints: [] };
+}
+
+/**
+ * Indices qu'on peut encore demander sur la vague en cours : un par essai perdu (décision
+ * I14). L'aide ne coûte rien de plus que l'essai perdu qui l'a ouverte, que E5 pénalise déjà.
+ */
+export function hintsLeft(state: GameState): number {
+  if (state.finished) return 0;
+  return Math.max(0, state.replays - (state.hints?.length ?? 0));
+}
+
+/** Garde un indice donné ; sans droit restant, ou déjà donné, rien ne change. */
+export function withHint(state: GameState, key: string): GameState {
+  const given = state.hints ?? [];
+  if (hintsLeft(state) <= 0 || given.includes(key)) return state;
+  return { ...state, hints: [...given, key] };
 }
 
 /**
@@ -39,6 +60,7 @@ export function rewindTo(state: GameState, waveIndex: number): GameState {
     scores: state.scores.slice(0, waveIndex),
     stars: state.stars.slice(0, waveIndex),
     finished: false,
+    hints: [],
   };
 }
 
@@ -72,6 +94,7 @@ export function playWave(
       scores: [...state.scores, score],
       stars: [...state.stars, starCount(starsFor(result, state.replays, wave))],
       finished: waveIndex >= scenario.waves.length,
+      hints: [],
     },
     result,
     score,

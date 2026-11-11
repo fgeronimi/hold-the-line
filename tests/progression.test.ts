@@ -3,7 +3,7 @@ import { catalog } from '../src/data/catalog.ts';
 import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { migrationCost } from '../src/engine/budget.ts';
-import { newGame, playWave, rewindTo } from '../src/engine/game.ts';
+import { hintsLeft, newGame, playWave, rewindTo, withHint } from '../src/engine/game.ts';
 import { scoreWave } from '../src/engine/score.ts';
 import type { Architecture, Gauge, WaveResult } from '../src/engine/types.ts';
 
@@ -145,5 +145,45 @@ describe('playWave', () => {
 
   it('refuse de sauter à une vague pas encore atteinte', () => {
     expect(() => rewindTo(newGame(), 1)).toThrow();
+  });
+});
+
+describe('indices gardés dans la partie', () => {
+  const scoring = { maxPoints: 100, replayPenalty: 0.2 };
+
+  it('un indice par essai perdu, jamais plus', () => {
+    let state = newGame();
+    expect(hintsLeft(state)).toBe(0);
+    expect(withHint(state, 'a')).toBe(state);
+    ({ state } = playWave(state, urlShortener, A.noDatabase, catalog, scoring));
+    expect(hintsLeft(state)).toBe(1);
+    state = withHint(state, 'a');
+    expect(state.hints).toEqual(['a']);
+    expect(hintsLeft(state)).toBe(0);
+    expect(withHint(state, 'b')).toBe(state);
+    // Une vague encore perdue garde les indices et en ouvre un de plus.
+    ({ state } = playWave(state, urlShortener, A.noDatabase, catalog, scoring));
+    expect(state.hints).toEqual(['a']);
+    expect(withHint(state, 'a')).toBe(state);
+    expect(withHint(state, 'b').hints).toEqual(['a', 'b']);
+  });
+
+  it('vidés quand la vague est gagnée, et au retour en arrière', () => {
+    let state = newGame();
+    ({ state } = playWave(state, urlShortener, A.noDatabase, catalog, scoring));
+    state = withHint(state, 'a');
+    ({ state } = playWave(state, urlShortener, A.minimal, catalog, scoring));
+    expect(state.hints).toEqual([]);
+    expect(hintsLeft(state)).toBe(0);
+    const back = rewindTo(withHint({ ...state, replays: 1 }, 'b'), 0);
+    expect(back.hints).toEqual([]);
+    // Le retour compte comme un rejeu : il ouvre un indice.
+    expect(hintsLeft(back)).toBe(1);
+  });
+
+  it('une sauvegarde d’avant l’aide, sans le champ, reste lisible', () => {
+    const { hints: _dropped, ...old } = { ...newGame(), replays: 2 };
+    expect(hintsLeft(old)).toBe(2);
+    expect(withHint(old, 'a').hints).toEqual(['a']);
   });
 });

@@ -6,7 +6,8 @@ import { validateArchitecture } from '../engine/validate.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { calibrationGroups, formatField, getAt } from './calibration.ts';
 import { analyzeWave, type Finding } from './debrief.ts';
-import { guideStep } from './tutorial.ts';
+import { hintPanel, type HintPanel } from './hints.ts';
+import { guideStep, type TutorialStep } from './tutorial.ts';
 import { SCENARIOS } from '../data/scenarios/index.ts';
 import { chartModel, renderChart } from '../render/charts.ts';
 import { nodeNames } from '../render/theme.ts';
@@ -134,6 +135,30 @@ function capacityText(node: Architecture['nodes'][number], def: Catalog['compone
     .join('<br>');
 }
 
+/** L'aide de la vague en cours (décision I14) : indices donnés, bouton, ce qui clignote. */
+export const hintsOf = (s: ViewState): HintPanel => hintPanel({ game: s.game, scenario: s.scenario, catalog: s.catalog, draft: s.draft }, theme);
+
+/**
+ * Les indices déjà donnés, puis le bouton qui en demande un de plus : un par essai perdu.
+ * Grisé, il dit pourquoi. Sous la bulle de la fenêtre « que faire », et au debrief d'une
+ * vague perdue.
+ */
+function renderHints(panel: HintPanel): string {
+  const items = panel.given
+    .map(
+      ({ text, done }) => `<li class="${done ? 'done' : 'todo'}">
+        <p class="says">${done ? '✓' : '💡'} « ${esc(text.says)} »${done ? ' <small>fait</small>' : ''}</p>
+        <p class="real">${esc(text.real)}</p></li>`,
+    )
+    .join('');
+  const note = panel.button.why ?? `${panel.left} indice${panel.left > 1 ? 's' : ''} disponible${panel.left > 1 ? 's' : ''}`;
+  return `<div class="hints">
+    ${items ? `<ol>${items}</ol>` : ''}
+    <p class="hint-ask"><button data-action="hint" ${panel.button.enabled ? '' : 'disabled'} title="${esc(note)}">💡 Un indice</button>
+      <small class="muted">${esc(note)}</small></p>
+  </div>`;
+}
+
 const starIcons = (n: number) => '★'.repeat(n) + '☆'.repeat(3 - n);
 
 /** La barre du haut : la vague, ce que coûte la cité en construction, le score, le menu. */
@@ -190,6 +215,9 @@ export function renderToolbar(s: ViewState): string {
   const { catalog, draft, tool } = s;
   const active = (on: boolean) => (on ? ' active' : '');
   const guide = guideStep(draft, catalog, wave, s.game.waveIndex, s.game.committed, s.game.waveIndex === 0 && s.scenario.id === SCENARIOS[0]!.scenario.id);
+  const help = hintsOf(s);
+  // Le dernier indice demandé, tant qu'il reste à faire, passe avant le pas-à-pas.
+  const blink: TutorialStep['highlight'] = help.highlight ?? guide.highlight;
   const hint = (on: boolean) => (on ? ' hint' : '');
   const tools = [
     { kind: 'select', icon: '👆', label: 'Sélection', hint: 'Cliquer un bâtiment pour ouvrir sa fiche, le glisser pour le déplacer' },
@@ -197,7 +225,7 @@ export function renderToolbar(s: ViewState): string {
     { kind: 'remove', icon: '🧨', label: 'Retirer', hint: 'Cliquer un bâtiment pour le démolir' },
   ]
     .map(
-      (t) => `<button class="tool${active(tool.kind === t.kind)}${hint(guide?.highlight?.tool === t.kind)}" data-action="tool" data-tool="${t.kind}" title="${esc(t.hint)}">
+      (t) => `<button class="tool${active(tool.kind === t.kind)}${hint(blink?.tool === t.kind)}" data-action="tool" data-tool="${t.kind}" title="${esc(t.hint)}">
         <span class="icon">${t.icon}</span><span>${t.label}</span></button>`,
     )
     .join('') +
@@ -208,7 +236,7 @@ export function renderToolbar(s: ViewState): string {
     .map((d) => {
       const style = theme.buildings[d.id];
       const on = tool.kind === 'place' && tool.type === d.id;
-      const guided = guide?.highlight?.tool === 'place' && guide.highlight.type === d.id;
+      const guided = blink?.tool === 'place' && blink.type === d.id;
       return `<button class="tool build${active(on)}${hint(guided)}" data-action="tool" data-tool="place" data-type="${esc(d.id)}"
         title="${esc(`${d.techName}${style ? ` — ${style.metaphor}` : ''}. ${style?.role.real ?? ''} Coût ${d.cost}, complexité ${d.complexity}. Cliquer puis poser, ou glisser sur le plateau.`)}">
         <span class="icon">${style?.icon ?? '🏠'}</span><span>${esc(d.techName)}</span><small>${esc(style?.metaphor ?? '')}</small><small>💰 ${d.cost}</small></button>`;
@@ -219,16 +247,14 @@ export function renderToolbar(s: ViewState): string {
   const from = tool.kind === 'link' && tool.from ? draft.nodes.find((n) => n.id === tool.from) : undefined;
   const linkHint = from ? `<div class="toast panel">Départ : ${esc(nameOf(from.type, catalog))} — cliquer l’arrivée</div>` : '';
   const message = s.boardMessage ? `<div class="toast panel ko">${esc(s.boardMessage)}</div>` : linkHint;
-  const tutorial = guide
-    ? `<div class="tutorial panel">${speech(guide.says, guide.real)}</div>`
-    : '';
+  const tutorial = `<div class="tutorial panel">${speech(guide.says, guide.real)}${renderHints(help)}</div>`;
   return `
     ${tutorial}
     ${message}
     <div class="toolbar panel">
       <div class="group">${tools}</div>
       <div class="group palette">${palette}</div>
-      <button class="launch${hint(guide?.highlight?.tool === 'launch')}" data-action="play" ${validation.ok ? '' : 'disabled'} title="${esc(why)}">⚔️ Lancer la vague</button>
+      <button class="launch${hint(blink?.tool === 'launch')}" data-action="play" ${validation.ok ? '' : 'disabled'} title="${esc(why)}">⚔️ Lancer la vague</button>
     </div>
     ${validation.ok ? '' : `<div class="errors panel">${validation.errors.map((e) => `<p>⚠ ${esc(e)}</p>`).join('')}</div>`}`;
 }
@@ -315,6 +341,7 @@ export function renderDialog(s: ViewState): string {
         ? `${renderChart(chartModel(r, a.arch, attemptWave, s.catalog, theme))}<p class="muted">Survoler pour lire chaque tick. La courbe d’un bâtiment passe en rouge au-delà de sa capacité ; les barres rouges sont les requêtes en échec, les bandes orange les incidents.</p>`
         : renderFindings(analyzeWave(r, a.arch, attemptWave, s.catalog, theme))
       : ''}
+    ${a.played && !r.won && a.waveIndex === s.game.waveIndex ? renderHints(hintsOf(s)) : ''}
     ${a.played && !r.won && s.game.replays > 0 ? `<p class="muted">Chaque nouvel essai coûte ${Math.round(scoring.replayPenalty * 100)} % des points de la vague, jusqu’à ne plus en rapporter ; les étoiles restent à prendre. Si un choix plus ancien bloque, le menu ☰ permet de revenir à une vague antérieure.</p>` : ''}
     <p class="actions">${actions}</p>
   </div>`;
@@ -383,10 +410,14 @@ function renderNodeCard(s: ViewState): string {
   const node = s.draft.nodes.find((n) => n.id === s.selectedNode);
   if (!node) return '';
   const def = s.catalog.components[node.type];
+  const blink = hintsOf(s).highlight;
   const links = s.draft.links
     .map((l, i) => ({ l, i }))
     .filter(({ l }) => l.from === node.id || l.to === node.id)
-    .map(({ l, i }) => `<li>${esc(linkEnd(l.from))} → ${esc(linkEnd(l.to))} <button data-action="remove-link" data-link="${i}">retirer</button></li>`)
+    .map(({ l, i }) => {
+      const hinted = blink?.link?.from === l.from && blink.link.to === l.to;
+      return `<li>${esc(linkEnd(l.from))} → ${esc(linkEnd(l.to))} <button data-action="remove-link" data-link="${i}"${hinted ? ' class="hint"' : ''}>retirer</button></li>`;
+    })
     .join('');
   const permanent = def?.behavior === 'source' || !!node.fixed;
   const own = nodeNames(node, s.catalog, theme);
@@ -408,7 +439,7 @@ function renderNodeCard(s: ViewState): string {
       ${links ? `<ul>${links}</ul>` : '<p class="muted">Aucun chemin.</p>'}
       <p>
         <button data-action="tool" data-tool="move" data-node="${esc(node.id)}">Déplacer</button>
-        ${permanent ? '' : `<button data-action="remove-node" data-node="${esc(node.id)}">Retirer</button>`}
+        ${permanent ? '' : `<button data-action="remove-node" data-node="${esc(node.id)}"${blink?.tool === 'remove' && blink.node === node.id ? ' class="hint"' : ''}>Retirer</button>`}
       </p>
     </section>`;
 }
@@ -422,13 +453,17 @@ export function upgradePips(
   node: Architecture['nodes'][number],
   catalog: Catalog,
   can: { move: boolean; remove: boolean } = { move: false, remove: false },
+  /** Ce que désigne le dernier indice, s'il vise ce bâtiment : la pastille clignote. */
+  hinted?: TutorialStep['highlight'],
 ): string {
+  const target = hinted?.node === node.id ? hinted : undefined;
+  const blink = (on: boolean) => (on ? ' hint' : '');
   const id = esc(node.id);
   const actions = [
     can.move &&
       `<button class="pip act" data-action="tool" data-tool="move" data-node="${id}" aria-label="Déplacer"><span class="icon">✥</span><i><em>Déplacer</em>Cliquer la case d’arrivée, ou glisser le bâtiment</i></button>`,
     can.remove &&
-      `<button class="pip act ko" data-action="remove-node" data-node="${id}" aria-label="Retirer"><span class="icon">🧨</span><i><em>Retirer</em>Démolir le bâtiment et ses chemins. S’il était déjà là à la vague précédente, sa valeur d’achat entre dans la facture (migration)</i></button>`,
+      `<button class="pip act ko${blink(target?.tool === 'remove')}" data-action="remove-node" data-node="${id}" aria-label="Retirer"><span class="icon">🧨</span><i><em>Retirer</em>Démolir le bâtiment et ses chemins. S’il était déjà là à la vague précédente, sa valeur d’achat entre dans la facture (migration)</i></button>`,
   ].filter(Boolean);
   const pips = Object.values(catalog.upgrades)
     .filter((u) => u.appliesTo === node.type)
@@ -450,9 +485,9 @@ export function upgradePips(
       const data = `data-action="upgrade-step" data-node="${esc(node.id)}" data-upgrade="${esc(u.id)}"`;
       const face = `<span class="icon">${icon}<b>${esc(badge)}</b></span>`;
       return leveled
-        ? `<div class="pip leveled${level > 0 ? ' on' : ''}">
+        ? `<div class="pip leveled${level > 0 ? ' on' : ''}${blink(target?.upgrade === u.id)}">
             <button class="step" ${data} data-delta="-1" ${level === 0 ? 'disabled' : ''} aria-label="${esc(u.techName)} : un niveau de moins">−</button>${face}<button class="step" ${data} data-delta="1" ${level === u.maxLevel ? 'disabled' : ''} aria-label="${esc(u.techName)} : un niveau de plus">+</button><i>${tip}</i></div>`
-        : `<button class="pip${level > 0 ? ' on' : ''}" ${data} data-delta="toggle" aria-pressed="${level > 0}" aria-label="${esc(u.techName)}">${face}<i>${tip}</i></button>`;
+        : `<button class="pip${level > 0 ? ' on' : ''}${blink(target?.upgrade === u.id)}" ${data} data-delta="toggle" aria-pressed="${level > 0}" aria-label="${esc(u.techName)}">${face}<i>${tip}</i></button>`;
     });
   if (pips.length === 0 && actions.length === 0) return '';
   return `<div class="pips">${actions.length > 0 ? `<div class="pip-actions">${actions.join('')}</div>` : ''}${pips.join('')}</div>`;

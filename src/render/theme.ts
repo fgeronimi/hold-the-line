@@ -45,7 +45,15 @@ export interface Theme {
   narratives: Record<string, string>;
   /** L'icône de chaque évolution sur sa pastille, au pied du bâtiment (clé : id du catalogue). */
   upgradeIcons: Record<string, string>;
+  /**
+   * Les répliques du narrateur pour l'aide (`src/ui/hints.ts`), une par nature d'indice. Elles
+   * ne disent rien d'une vague en particulier : `{name}`, `{from}`, `{to}`, `{upgrade}`,
+   * `{level}` et `{wave}` y sont remplacés par l'élément désigné, dans la métaphore.
+   */
+  hints: Record<HintLine, string>;
 }
+
+export type HintLine = 'place' | 'placeMore' | 'link' | 'upgrade' | 'level' | 'remove' | 'unlink' | 'lower' | 'rewind' | 'rebuilt' | 'ready';
 
 /** Nom technique et nom dans la métaphore d'un bâtiment ; un service déjà en place a le sien. */
 export function nodeNames(node: ArchNode, catalog: Catalog, theme: Theme): { tech: string; metaphor: string } {

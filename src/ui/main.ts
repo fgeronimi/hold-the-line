@@ -12,6 +12,7 @@ import { attachChart, chartModel } from '../render/charts.ts';
 import { autoPlace, connect, insideBoard, moveNode, nodeAt, placeNode, type BoardResult } from './board.ts';
 import { changedSettings, parseField, setAt } from './calibration.ts';
 import { addLink, addNode, removeLink, removeNode, setUpgrade } from './editor.ts';
+import { askHint } from './hints.ts';
 import { load, save } from './storage.ts';
 import {
   renderCard,
@@ -19,6 +20,7 @@ import {
   renderDialog,
   renderHud,
   renderToolbar,
+  hintsOf,
   upgradePips,
   type Attempt,
   type Tool,
@@ -204,15 +206,18 @@ function syncBoard(): void {
         ? state.draft.nodes.find((n) => n.id === tool.id)?.type
         : undefined,
   );
+  // Le bâtiment que vise le dernier indice : marqué tant que rien n'est sélectionné.
+  const blink = building ? hintsOf(state).highlight : undefined;
   if (!building) scene.setMarked(undefined);
   else if (tool.kind === 'link' && tool.from) scene.setMarked(tool.from, '#3a86ff');
   else if (tool.kind === 'move') scene.setMarked(tool.id, '#9b5de5');
   else if (state.buildAt) scene.setMarkedAt(state.buildAt, '#2a9d8f');
+  else if (!state.selectedNode && blink?.node) scene.setMarked(blink.node, '#e9a23b');
   else scene.setMarked(state.selectedNode);
   // Les pastilles d'évolution, au pied du bâtiment sélectionné, seulement à la construction.
   const selected = building && tool.kind === 'select' ? state.draft.nodes.find((n) => n.id === state.selectedNode) : undefined;
   const can = selected && { move: state.catalog.components[selected.type]?.behavior !== 'source', remove: !permanent(selected) };
-  scene.setPips(selected?.id, selected && can ? upgradePips(selected, state.catalog, can) : '');
+  scene.setPips(selected?.id, selected && can ? upgradePips(selected, state.catalog, can, blink) : '');
 }
 
 /** Où l'outil courant peut agir : le curseur hexagonal rougit ailleurs. */
@@ -394,6 +399,8 @@ const actions: Record<string, (el: HTMLElement) => void> = {
     leaveWave();
     update({ phase: 'build' });
   },
+  // Un indice par essai perdu (I14) : la partie le garde, la fenêtre « que faire » le montre.
+  hint: () => update({ game: askHint({ game: state.game, scenario: state.scenario, catalog: state.catalog, draft: state.draft }) }),
   deselect: () => update({ selectedNode: undefined, buildAt: undefined }),
   undo: () => travel(undo, redo),
   redo: () => travel(redo, undo),

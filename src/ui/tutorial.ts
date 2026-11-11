@@ -21,8 +21,17 @@ export interface TutorialStep {
   says: string;
   /** La même chose en vrai. */
   real: string;
-  /** Bouton à faire clignoter : un outil, ou un composant de la palette. */
-  highlight?: { tool: 'link' | 'place' | 'launch'; type?: string };
+  /**
+   * Ce qui clignote : un outil, un composant de la palette, et pour l'aide (`hints.ts`) le
+   * bâtiment visé, la pastille d'une de ses évolutions ou le bouton qui retire un lien.
+   */
+  highlight?: {
+    tool?: 'link' | 'place' | 'launch' | 'remove';
+    type?: string;
+    node?: string;
+    upgrade?: string;
+    link?: { from: string; to: string };
+  };
 }
 
 /**

@@ -4,7 +4,7 @@ import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { calibrationGroups, changedSettings, getAt, parseField, setAt } from '../src/ui/calibration.ts';
 import { addLink, addNode, nextNodeId, removeLink, removeNode, setUpgrade } from '../src/ui/editor.ts';
-import { renderBuildMenu, upgradePips, type ViewState } from '../src/ui/views.ts';
+import { renderBuildMenu, renderDialog, renderToolbar, upgradePips, type ViewState } from '../src/ui/views.ts';
 import { newGame } from '../src/engine/game.ts';
 
 describe('editor', () => {
@@ -147,5 +147,54 @@ describe('construire sur une case vide', () => {
     const draft = { ...A.minimal, links: A.minimal.links.map((l, i) => (i === 0 ? { ...l, path: [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: 2, r: 0 }] } : l)) };
     expect(renderBuildMenu(view(draft), { q: 1, r: 0 })).toContain('s’insère dans le lien');
     expect(renderBuildMenu(view(draft), { q: 7, r: 2 })).not.toContain('s’insère');
+  });
+});
+
+describe('le bouton « Un indice »', () => {
+  // Vague 3 du raccourcisseur, depuis le cache validé en vague 2.
+  const view = (replays: number, extra: Partial<ViewState> = {}): ViewState =>
+    ({
+      catalog,
+      scenario: urlShortener,
+      game: { ...newGame(), waveIndex: 2, committed: A.withCache, history: [{ nodes: [], links: [] }, A.minimal, A.withCache], replays, hints: [] },
+      draft: A.withCache,
+      attempts: [],
+      tool: { kind: 'select' },
+      phase: 'build',
+      history: { undo: 0, redo: 0 },
+      ...extra,
+    }) as unknown as ViewState;
+  const button = (html: string) => html.match(/<button data-action="hint"[^>]*>/)![0];
+
+  it('grisé avant le premier essai perdu, et dit pourquoi', () => {
+    const html = renderToolbar(view(0));
+    expect(button(html)).toContain('disabled');
+    expect(html).toContain('Disponible après un essai perdu.');
+  });
+
+  it('actif après un essai perdu ; un indice donné s’affiche et fait clignoter son bouton', () => {
+    expect(button(renderToolbar(view(1)))).not.toContain('disabled');
+    const s = view(1);
+    const html = renderToolbar({ ...s, game: { ...s.game, hints: ['place|cdn|1'] } });
+    expect(button(html)).toContain('disabled');
+    expect(html).toContain('Un indice de plus après le prochain essai perdu.');
+    expect(html).toContain('CDN (Avant-poste)');
+    expect(html).toMatch(/class="tool build hint" data-action="tool" data-tool="place" data-type="cdn"/);
+  });
+
+  it('la pastille de l’évolution désignée clignote', () => {
+    const html = upgradePips({ id: 'db', type: 'database' }, catalog, { move: true, remove: true }, { node: 'db', upgrade: 'read-replica' });
+    expect(html).toMatch(/class="pip leveled hint"/);
+    expect(upgradePips({ id: 'db', type: 'database' }, catalog, { move: true, remove: true }, { node: 'app', upgrade: 'read-replica' })).not.toContain('hint');
+  });
+
+  it('au debrief d’une vague perdue', async () => {
+    const { simulateWave } = await import('../src/engine/simulate.ts');
+    const wave = urlShortener.waves[2]!;
+    const result = simulateWave(A.withCache, wave, catalog, A.withCache);
+    expect(result.won).toBe(false);
+    const attempt = { id: 1, label: 'x', waveIndex: 2, result, score: 0, played: true, settings: [], arch: A.withCache, stars: { held: false, firstTry: false, thrifty: false } };
+    const html = renderDialog(view(1, { phase: 'debrief', attempts: [attempt], current: 1, debriefTab: 'analysis' } as Partial<ViewState>));
+    expect(button(html)).not.toContain('disabled');
   });
 });
