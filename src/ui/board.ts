@@ -3,6 +3,7 @@ import type { Architecture, ArchLink, ArchNode, BoardCell, Catalog } from '../en
 import { findPath, hexDistance, hexKey, hexSide } from '../render/hex.ts';
 import { layoutArchitecture } from '../render/layout.ts';
 import { bridge, isRiver, riverKeys } from '../render/terrain.ts';
+import { downstreamRefusal } from '../engine/validate.ts';
 import { draftInfo } from './draft.ts';
 import { nextNodeId } from './editor.ts';
 
@@ -123,8 +124,14 @@ export function moveNode(arch: Architecture, id: string, cell: BoardCell): Board
   return { ok: true, arch: reroute(next, (l) => l.from === id || l.to === id || crosses(l, cell)) };
 }
 
-export function connect(arch: Architecture, from: string, to: string): BoardResult {
+/**
+ * Relie deux bâtiments. Avec le catalogue, un lien que le composant de départ refuse
+ * (une file vers un serveur d'application) l'est dès le geste, avec sa raison.
+ */
+export function connect(arch: Architecture, from: string, to: string, catalog?: Catalog): BoardResult {
   if (from === to) return { ok: false, reason: 'Un bâtiment ne se relie pas à lui-même.' };
+  const refused = catalog && linkRefusal(arch, from, to, catalog);
+  if (refused) return { ok: false, reason: refused };
   if (arch.links.some((l) => l.from === from && l.to === to)) return { ok: false, reason: 'Ces deux bâtiments sont déjà reliés.' };
   const path = route(arch, from, to);
   if (!path) return { ok: false, reason: 'Aucun chemin possible : des bâtiments bloquent le passage.' };
@@ -136,6 +143,18 @@ export function connect(arch: Architecture, from: string, to: string): BoardResu
  * (sauvegarde d'avant le plateau hexagonal), et un chemin à chaque lien qui n'en a pas ou
  * qui touche un bâtiment replacé. Sans effet sur une architecture déjà bien placée.
  */
+/** La raison, pour le joueur, d'un lien que le composant de départ n'accepte pas. */
+export function linkRefusal(arch: Architecture, from: string, to: string, catalog: Catalog): string | undefined {
+  const a = arch.nodes.find((n) => n.id === from);
+  const b = arch.nodes.find((n) => n.id === to);
+  const da = a && catalog.components[a.type];
+  const db = b && catalog.components[b.type];
+  if (!da || !db || !downstreamRefusal(catalog, a.type, b.type)) return undefined;
+  if (da.allowedDownstream?.length === 0) return `${da.techName} ne transmet rien : il est consulté, pas traversé.`;
+  const why = da.downstreamRule ? ` : ${da.downstreamRule}` : '';
+  return `${da.techName} ne peut pas alimenter ${db.techName}${why}.`;
+}
+
 export function autoPlace(arch: Architecture): Architecture {
   const misplaced = new Set(arch.nodes.filter((n) => !n.cell || !insideBoard(n.cell) || isRiver(n.cell)).map((n) => n.id));
   // Un chemin d'avant la rivière qui la longe ou la coupe hors d'un pont est retracé.

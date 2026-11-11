@@ -88,8 +88,8 @@ describe('runMassSim sur le raccourcisseur', () => {
     expect(report.waves.every((w) => w.meetsStrategyCriterion)).toBe(true);
   });
 
-  it('vague 2 : cache ou réplica', () => {
-    expect([...wave('read-surge').strategies].sort()).toEqual(['cache', 'réplica']);
+  it('vague 2 : cache, réplica, ou CDN depuis son prix revu (M9a)', () => {
+    expect([...wave('read-surge').strategies].sort()).toEqual(['CDN', 'cache', 'réplica']);
   });
 
   it('vague 3 : CDN, scaling permanent et autoscaling sont des stratégies distinctes', () => {

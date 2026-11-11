@@ -3,7 +3,8 @@
      serveur + base                                      1 gagnantes | meilleure : — | score 56.6 | coût 70/100 | marges coût 30 %, cx 25 %, échecs 100 %, p95 72 %
      load balancer                                       1 gagnantes | meilleure : — | score 47.5 | coût 80/100 | marges coût 20 %, cx 0 %, échecs 100 %, p95 70 %
        ↳ dominée par « serveur + base »
-[ok] read-surge — 2 stratégie(s) : réplica | cache
+[ok] read-surge — 3 stratégie(s) : CDN | réplica | cache
+     CDN                                                 1 gagnantes | meilleure : — | score 55.7 | coût 110/115 | marges coût 4 %, cx 29 %, échecs 100 %, p95 90 %
      réplica                                             1 gagnantes | meilleure : réplica 1 | score 41.8 | coût 110/115 | marges coût 4 %, cx 43 %, échecs 100 %, p95 20 %
      cache                                               1 gagnantes | meilleure : — | score 33.5 | coût 85/115 | marges coût 26 %, cx 29 %, échecs 25 %, p95 55 %
      load balancer + cache                               1 gagnantes | meilleure : — | score 27.3 | coût 95/115 | marges coût 17 %, cx 14 %, échecs 25 %, p95 53 %
@@ -13,39 +14,52 @@
      load balancer + rate limiting + cache               5 gagnantes | meilleure : rate limiting 1 | score 22.6 | coût 100/115 | marges coût 13 %, cx 0 %, échecs 25 %, p95 53 %
        ↳ dominée par « cache »
 [ok] marketing-peak — 4 stratégie(s) : CDN + cache | CDN + réplica | load balancer + scaling + autoscaling + cache | load balancer + scaling + cache
-     CDN + cache                                         1 gagnantes | meilleure : — | score 43.1 | coût 145/170 | marges coût 15 %, cx 22 %, échecs 50 %, p95 85 %
-     CDN + réplica                                       1 gagnantes | meilleure : réplica 1 | score 38.9 | coût 170/170 | marges coût 0 %, cx 33 %, échecs 50 %, p95 72 %
-     CDN + load balancer + cache                         1 gagnantes | meilleure : — | score 38.8 | coût 155/170 | marges coût 9 %, cx 11 %, échecs 50 %, p95 85 %
+     CDN + load balancer + scaling + cache               1 gagnantes | meilleure : scaling 1 | score 49.7 | coût 155/170 | marges coût 9 %, cx 0 %, échecs 100 %, p95 90 %
+       ↳ dominée par « CDN + cache »
+     CDN + cache                                         1 gagnantes | meilleure : — | score 46.0 | coût 125/170 | marges coût 26 %, cx 22 %, échecs 50 %, p95 85 %
+     CDN + réplica                                       1 gagnantes | meilleure : réplica 1 | score 41.8 | coût 150/170 | marges coût 12 %, cx 33 %, échecs 50 %, p95 72 %
+     CDN + load balancer + cache                         1 gagnantes | meilleure : — | score 41.7 | coût 135/170 | marges coût 21 %, cx 11 %, échecs 50 %, p95 85 %
        ↳ dominée par « CDN + cache »
      load balancer + scaling + autoscaling + cache       6 gagnantes | meilleure : scaling 3, autoscaling 3 | score 38.4 | coût 165/170 | marges coût 3 %, cx 0 %, échecs 100 %, p95 51 %
      load balancer + scaling + cache                     1 gagnantes | meilleure : scaling 3 | score 38.3 | coût 155/170 | marges coût 9 %, cx 22 %, échecs 100 %, p95 22 %
-     CDN + load balancer + rate limiting + cache         5 gagnantes | meilleure : rate limiting 1 | score 35.2 | coût 160/170 | marges coût 6 %, cx 0 %, échecs 50 %, p95 85 %
+     CDN + load balancer + rate limiting + cache         5 gagnantes | meilleure : rate limiting 1 | score 38.2 | coût 140/170 | marges coût 18 %, cx 0 %, échecs 50 %, p95 85 %
        ↳ dominée par « CDN + cache »
+     CDN + load balancer + réplica                       1 gagnantes | meilleure : réplica 1 | score 37.5 | coût 160/170 | marges coût 6 %, cx 22 %, échecs 50 %, p95 72 %
+       ↳ dominée par « CDN + réplica »
+     CDN + cache + réplica                               1 gagnantes | meilleure : réplica 1 | score 37.4 | coût 165/170 | marges coût 3 %, cx 11 %, échecs 50 %, p95 85 %
+       ↳ dominée par « CDN + réplica »
+     CDN + load balancer + autoscaling + réplica         2 gagnantes | meilleure : autoscaling 3, réplica 1 | score 35.2 | coût 165.67/170 | marges coût 3 %, cx 0 %, échecs 67 %, p95 72 %
+       ↳ dominée par « CDN + réplica »
      load balancer + scaling + rate limiting + cache     5 gagnantes | meilleure : scaling 3, rate limiting 1 | score 34.8 | coût 160/170 | marges coût 6 %, cx 11 %, échecs 100 %, p95 22 %
        ↳ dominée par « load balancer + scaling + cache »
-[ok] noisy-client — 2 stratégie(s) : CDN + load balancer + rate limiting + cache | load balancer + scaling + rate limiting + cache
-     CDN + load balancer + rate limiting + cache         5 gagnantes | meilleure : rate limiting 1 | score 43.4 | coût 160/165 | marges coût 3 %, cx 0 %, échecs 100 %, p95 71 %
-     load balancer + scaling + rate limiting + cache     2 gagnantes | meilleure : scaling 3, rate limiting 3 | score 32.7 | coût 160/165 | marges coût 3 %, cx 11 %, échecs 100 %, p95 17 %
+     CDN + load balancer + rate limiting + réplica       5 gagnantes | meilleure : rate limiting 1, réplica 1 | score 34.0 | coût 165/170 | marges coût 3 %, cx 11 %, échecs 50 %, p95 72 %
+       ↳ dominée par « CDN + réplica »
+[ok] noisy-client — 3 stratégie(s) : CDN + load balancer + scaling + rate limiting + cache | load balancer + scaling + rate limiting + cache | load balancer + scaling + autoscaling + rate limiting + cache
+     CDN + load balancer + scaling + rate limiting + cache    6 gagnantes | meilleure : scaling 2, rate limiting 3 | score 42.8 | coût 180/180 | marges coût 0 %, cx 0 %, échecs 100 %, p95 71 %
+     load balancer + scaling + rate limiting + cache     4 gagnantes | meilleure : scaling 4, rate limiting 3 | score 42.1 | coût 180/180 | marges coût 0 %, cx 20 %, échecs 100 %, p95 48 %
+     load balancer + scaling + autoscaling + rate limiting + cache    8 gagnantes | meilleure : scaling 2, autoscaling 3, rate limiting 4 | score 35.8 | coût 178/180 | marges coût 1 %, cx 0 %, échecs 100 %, p95 42 %
 [ok] click-tracking (réponse unique assumée) — 1 stratégie(s) : load balancer + scaling + rate limiting + cache + file
-     load balancer + scaling + rate limiting + cache + file    4 gagnantes | meilleure : scaling 4, rate limiting 3 | score 35.9 | coût 225/225 | marges coût 0 %, cx 8 %, échecs 95 %, p95 41 %
-[ok] Enchaînement read-surge, depuis la réponse 1 de launch : 9 gagnante(s) | moins chère : — | coût 85/115, dont 0 de migration
-[ok] Enchaînement marketing-peak, depuis la réponse 1 de read-surge : 19 gagnante(s) | moins chère : scaling 1, autoscaling 3 | coût 136.33/170, dont 0 de migration
-[ok] Enchaînement marketing-peak, depuis la réponse 2 de read-surge : 1 gagnante(s) | moins chère : réplica 1 | coût 170/170, dont 0 de migration
-[ok] Enchaînement noisy-client, depuis la réponse 1 de marketing-peak : 5 gagnante(s) | moins chère : rate limiting 1 | coût 160/165, dont 0 de migration
+     load balancer + scaling + rate limiting + cache + file    4 gagnantes | meilleure : scaling 4, rate limiting 3 | score 37.2 | coût 225/225 | marges coût 0 %, cx 8 %, échecs 100 %, p95 41 %
+[ok] Enchaînement read-surge, depuis la réponse 1 de launch : 10 gagnante(s) | moins chère : — | coût 85/115, dont 0 de migration
+[ok] Enchaînement marketing-peak, depuis la réponse 1 de read-surge : 22 gagnante(s) | moins chère : — | coût 125/170, dont 0 de migration
+[ok] Enchaînement marketing-peak, depuis la réponse 2 de read-surge : 11 gagnante(s) | moins chère : réplica 1 | coût 150/170, dont 0 de migration
+[ok] Enchaînement marketing-peak, depuis la réponse 3 de read-surge : 18 gagnante(s) | moins chère : — | coût 125/170, dont 0 de migration
+[ok] Enchaînement noisy-client, depuis la réponse 1 de marketing-peak : 6 gagnante(s) | moins chère : scaling 1, rate limiting 3 | coût 160/180, dont 0 de migration
 [impasse] noisy-client, depuis la réponse 2 de marketing-peak : aucune gagnante (retour en arrière, E6)
-[ok] Enchaînement noisy-client, depuis la réponse 3 de marketing-peak : 7 gagnante(s) | moins chère : scaling 3, rate limiting 3 | coût 160/165, dont 0 de migration
-[ok] Enchaînement noisy-client, depuis la réponse 4 de marketing-peak : 7 gagnante(s) | moins chère : scaling 3, rate limiting 3 | coût 165/165, dont 5 de migration
+[ok] Enchaînement noisy-client, depuis la réponse 3 de marketing-peak : 18 gagnante(s) | moins chère : scaling 3, rate limiting 3 | coût 160/180, dont 0 de migration
+[ok] Enchaînement noisy-client, depuis la réponse 4 de marketing-peak : 13 gagnante(s) | moins chère : scaling 3, rate limiting 3 | coût 165/180, dont 5 de migration
 [ok] Enchaînement click-tracking, depuis la réponse 1 de noisy-client : 4 gagnante(s) | moins chère : scaling 3, rate limiting 3 | coût 205/225, dont 0 de migration
 [ok] Enchaînement click-tracking, depuis la réponse 2 de noisy-client : 4 gagnante(s) | moins chère : scaling 3, rate limiting 3 | coût 205/225, dont 0 de migration
 [impasse] click-tracking, depuis la réponse 3 de noisy-client : aucune gagnante (retour en arrière, E6)
+[ok] Enchaînement click-tracking, depuis la réponse 4 de noisy-client : 1 gagnante(s) | moins chère : scaling 3, rate limiting 3 | coût 210/225, dont 5 de migration
 
 Architecture gagnant toutes les vagues : aucune (ok)
 Deux stratégies sur la majorité des vagues : oui
-Tout au maximum, launch : perd (ok) — Budget dépassé : 630 / 100 ; Trop complexe : 21 / 4 points
-Tout au maximum, read-surge : perd (ok) — Budget dépassé : 630 / 115 ; Trop complexe : 21 / 7 points
-Tout au maximum, marketing-peak : perd (ok) — Budget dépassé : 630 / 170 ; Trop complexe : 21 / 9 points
-Tout au maximum, noisy-client : perd (ok) — Budget dépassé : 630 / 165 ; Trop complexe : 21 / 9 points
-Tout au maximum, click-tracking : perd (ok) — Budget dépassé : 630 / 225 ; Trop complexe : 21 / 12 points ; SLA rompu : 38.29 % d'échecs (max 1.00 %)
+Tout au maximum, launch : perd (ok) — Budget dépassé : 610 / 100 ; Trop complexe : 21 / 4 points
+Tout au maximum, read-surge : perd (ok) — Budget dépassé : 610 / 115 ; Trop complexe : 21 / 7 points
+Tout au maximum, marketing-peak : perd (ok) — Budget dépassé : 610 / 170 ; Trop complexe : 21 / 9 points
+Tout au maximum, noisy-client : perd (ok) — Budget dépassé : 610 / 180 ; Trop complexe : 21 / 10 points
+Tout au maximum, click-tracking : perd (ok) — Budget dépassé : 610 / 225 ; Trop complexe : 21 / 12 points ; SLA rompu : 25.53 % d'échecs (max 1.00 %)
 
 ## Prise de commande — 768 architectures × 5 vagues
 [ok] market-open (réponse unique assumée) — 1 stratégie(s) : file

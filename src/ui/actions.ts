@@ -5,7 +5,7 @@ import { scoreWave, starsFor } from '../engine/score.ts';
 import { simulateWave } from '../engine/simulate.ts';
 import type { Architecture, ArchNode, BoardCell } from '../engine/types.ts';
 import { isRiver } from '../render/terrain.ts';
-import { connect, insideBoard, moveNode, nodeAt, placeNode, type BoardResult } from './board.ts';
+import { connect, insideBoard, linkRefusal, moveNode, nodeAt, placeNode, type BoardResult } from './board.ts';
 import { changedSettings, parseField, setAt } from './calibration.ts';
 import { analysisOf } from './debrief.ts';
 import { addLink, addNode, removeLink, removeNode, setUpgrade } from './editor.ts';
@@ -158,6 +158,8 @@ export const actions: Record<string, Action> = {
   },
   upgrade: (s, { data, value }) => patch({ draft: setUpgrade(s.draft, data.node!, data.upgrade!, Number(value)) }),
   'add-link': (s, { linkFrom, linkTo }) => {
+    const refused = linkRefusal(s.draft, linkFrom!, linkTo!, s.catalog);
+    if (refused) return patch({ boardMessage: refused });
     const result = connect(s.draft, linkFrom!, linkTo!);
     // La vue tableau garde son lien même sans chemin possible : le plateau en trace un à défaut.
     return patch(result.ok ? { draft: result.arch } : { draft: addLink(s.draft, linkFrom!, linkTo!), boardMessage: result.reason });
@@ -283,7 +285,7 @@ export function boardClick(s: ViewState, cell: BoardCell): Outcome | undefined {
     case 'link':
       if (!here) return patch({ boardMessage: 'Cliquer un bâtiment.' });
       if (!tool.from) return patch({ tool: { kind: 'link', from: here.id }, boardMessage: undefined });
-      return applied(connect(s.draft, tool.from, here.id), { tool: { kind: 'link' } });
+      return applied(connect(s.draft, tool.from, here.id, s.catalog), { tool: { kind: 'link' } });
     case 'remove':
       if (!here || permanent(s, here)) return undefined;
       return patch({ draft: removeNode(s.draft, here.id), selectedNode: undefined, boardMessage: undefined });

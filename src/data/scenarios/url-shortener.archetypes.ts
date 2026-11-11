@@ -65,7 +65,7 @@ export function inlineClicks(extraInstances: number): Architecture {
 export function queuedClicks(extraInstances: number): Architecture {
   const base = scaled(extraInstances, { rateLimitTier: TIER_40 });
   return {
-    nodes: [...base.nodes, { id: 'queue', type: 'message-queue' }, { id: 'worker', type: 'app-server' }],
+    nodes: [...base.nodes, { id: 'queue', type: 'message-queue' }, { id: 'worker', type: 'worker' }],
     links: [
       ...base.links,
       link('app', 'queue'),
@@ -76,8 +76,9 @@ export function queuedClicks(extraInstances: number): Architecture {
 }
 
 /** Réponse CDN de la vague 3 : les redirections sont servies en bordure. */
-export function withCdn(opts: { rateLimitTier?: number; queue?: boolean } = {}): Architecture {
-  const nodes: ArchNode[] = [source, { id: 'cdn', type: 'cdn' }, { id: 'app', type: 'app-server' }, { id: 'cache', type: 'cache' }, db];
+export function withCdn(opts: { rateLimitTier?: number; queue?: boolean; extraInstances?: number } = {}): Architecture {
+  const app: ArchNode = { id: 'app', type: 'app-server', ...(opts.extraInstances ? { upgrades: { 'horizontal-scaling': opts.extraInstances } } : {}) };
+  const nodes: ArchNode[] = [source, { id: 'cdn', type: 'cdn' }, app, { id: 'cache', type: 'cache' }, db];
   const links: ArchLink[] = [link('src', 'cdn')];
 
   if (opts.rateLimitTier) {
@@ -89,7 +90,7 @@ export function withCdn(opts: { rateLimitTier?: number; queue?: boolean } = {}):
   links.push(link('app', 'cache'), link('app', 'db'));
 
   if (opts.queue) {
-    nodes.push({ id: 'queue', type: 'message-queue' }, { id: 'worker', type: 'app-server' });
+    nodes.push({ id: 'queue', type: 'message-queue' }, { id: 'worker', type: 'worker' });
     links.push(link('app', 'queue'), link('queue', 'worker'), link('worker', 'db'));
   }
   return { nodes, links };

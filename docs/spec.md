@@ -45,6 +45,7 @@ Les quatre scénarios partagent une métaphore, **la cité fortifiée** (R2, S1)
 | Source de trafic | Hameaux hors les murs |
 | Load balancer (rate limiting) | Porte de la cité (caserne de la garde) |
 | Serveur d'application | Tour des scribes, une tour par instance |
+| Worker | Tour des commis, une tour par worker (modèle de la tour des scribes, autre teinte) |
 | Cache | Carnet du scribe |
 | Base de données (réplicas) | Archives royales (tours annexes) |
 | File de messages | Relais de poste |
@@ -96,6 +97,7 @@ incidents que le scénario envoie. Chaque incident a au moins une parade, et cha
 | Source de trafic | Émet les lectures, écritures et événements async de la vague | Oui, déjà posée |
 | Load balancer | Répartit le trafic entre les instances ; porte le rate limiting | Oui |
 | Serveur d'application | Traite les requêtes, capacité par instance | Oui |
+| Worker | Consomme une file ou un pub/sub, seul autorisé derrière eux avec les services en place ; se dimensionne sur l'arriéré (X8) | Oui |
 | Cache | Sert une part des lectures en cache-aside : le serveur le consulte, puis lit la base en cas d'absence (I3) | Oui |
 | Base de données | Stocke ; goulot classique en écriture | Oui |
 | File de messages | Sort un traitement lent du chemin critique ; les consommateurs se partagent ses messages, par lots | Oui |
@@ -113,10 +115,10 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 
 | Évolution | S'applique à | Résout | Compromis | Dans le jeu |
 | --- | --- | --- | --- | --- |
-| Scaling horizontal | Serveur | Manque de capacité | Coût par instance ; exige un load balancer ou une file en amont (M5) | Oui |
+| Scaling horizontal | Serveur, worker | Manque de capacité | Coût par instance ; le serveur exige un load balancer en amont, le worker une file ou un pub/sub (« Worker supplémentaire », M5, X8) | Oui |
 | Autoscaling | Serveur | Pics de trafic | Démarrage en 2 ticks (2 minutes) pendant lesquels des requêtes échouent, +2 de complexité (X2) | Oui |
 | Réplica en lecture | Base | Lectures saturées | Coût | Oui |
-| Rate limiting | Load balancer | Client abusif | Paliers par client (C1) : trop bas, il coupe des clients légitimes | Oui |
+| Rate limiting | Load balancer | Client abusif | Paliers par client (C1) : trop bas, il coupe des clients légitimes, et les événements de leurs requêtes rejetées avec eux (C6) | Oui |
 | Idempotence | Service métier | Message livré deux fois | Coût et complexité, les clés vivent dans le service (S5) | Oui |
 | Transactional outbox | Base | Événement perdu entre base et bus | Une écriture de plus par commande (S6) | Oui |
 | Circuit breaker | Serveur | Dépendance lente ou en panne qui bloque le serveur | Les appels coupés échouent : réponse dégradée (S15) | Oui |
@@ -149,7 +151,7 @@ Les incidents sont annoncés au briefing et déterministes (X5) : pas de tirage 
 | Panne brève, clients qui relancent aussitôt : tempête de relances | Backoff exponentiel et jitter, ou autoscaling | Tournoi, vagues 1 et 4 |
 | Dépendance externe en panne plus longtemps que la file ne tient | Rétention de la file | Tournoi, vague 2 |
 | Partition réseau entre le primaire et ses réplicas | Lectures critiques sur le primaire (choix CAP) | Tournoi, vagues 3 et 4 |
-| Le worker tombe | La file garde les messages pendant son redémarrage | Raccourcisseur, vague 5 |
+| Le worker tombe dix minutes | La file garde les messages, puis se vide au rythme de la base (M8, X6) | Raccourcisseur, vague 5 |
 
 ## Jauges, victoire et score
 
@@ -186,10 +188,10 @@ une vague à réponse unique le déclare dans ses données.
 | Vague | Information | Réponses gagnantes |
 | --- | --- | --- |
 | 1. Lancement | 100 req/s, 90 % de lectures | Serveur + base (tutoriel, réponse unique) |
-| 2. Les lectures explosent | 900 lectures/s ; le cache redémarre à froid | Cache ou réplica |
+| 2. Les lectures explosent | 900 lectures/s ; le cache redémarre à froid | Cache, réplica, ou CDN (X9) |
 | 3. Campagne marketing | Pic à 5 fois le trafic, en rampe ; une instance tombe | CDN + cache, CDN + réplica, scaling + cache, scaling + autoscaling + cache |
-| 4. Un client trop gourmand | Un scraper et des partenaires légitimes | Rate limiting au bon palier, avec scaling ou CDN |
-| 5. Compter les clics | Chaque redirection émet un événement de clic | File de messages (réponse unique) ; le CDN y perd les clics servis en bordure |
+| 4. Un client trop gourmand | Un scraper, et des partenaires légitimes qui appellent une API non cachable en bordure (X7) | Rate limiting au bon palier, avec scaling, autoscaling ou CDN (une instance de plus derrière lui) |
+| 5. Compter les clics | Chaque redirection émet un événement de clic ; le worker tombe dix minutes | File de messages et worker (réponse unique) ; la file garde les clics et se vide au rythme de la base ; le CDN y perd les clics servis en bordure |
 
 ### Le grand marché : la prise de commande d'une boutique
 
@@ -240,7 +242,9 @@ et déterministe, séparée de l'affichage.
 
 - **Ticks** (M1) : à chaque tick, le trafic traverse le graphe en ordre topologique. Au-delà
   de sa capacité, un nœud fait échouer l'excédent. Seule la file garde un arriéré d'un tick
-  à l'autre.
+  à l'autre. **La file impose le rythme de l'aval** (M8) : un message qu'un nœud en aval
+  ne peut pas traiter n'est pas acquitté et retourne dans sa file ; il passe après le trafic
+  direct, et compte dans l'arriéré maximal.
 - **Le temps** (M7) : un tick vaut une minute, une vague de 60 ticks montre une heure. Les
   débits restent en requêtes par seconde. Le joueur lit des minutes (« de la 31ᵉ à la 33ᵉ
   minute »), le code et le mode debug des ticks. Aucun chiffre n'a été recalibré ; limite
@@ -334,5 +338,5 @@ Les thèmes Équipe et Sécurité du calendrier restent hors du jeu.
 - Le p95 reste celui des ticks (M4) : des clients lents mais peu nombreux se diluent dans
   la moyenne. Deux populations sont mesurées à part (S17, S21) ; un vrai p95 par requête
   demanderait de suivre la distribution des chemins, et de recalibrer.
-- Un worker qui revient vide son arriéré d'un coup sur la base : aucun débit de rattrapage
-  n'est modélisé (vague 5 du raccourcisseur, crash limité à deux ticks pour cette raison).
+- La file n'a ni délai de visibilité ni compte d'essais : un message qui échoue toujours
+  la bloquerait (file des lettres mortes, ticket n° 3).

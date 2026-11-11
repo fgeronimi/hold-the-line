@@ -1,7 +1,7 @@
 import { catalog as defaultCatalog } from '../data/catalog.ts';
 import { SCENARIOS, scenarioById } from '../data/scenarios/index.ts';
-import { newGame } from '../engine/game.ts';
-import type { Architecture, Scenario } from '../engine/types.ts';
+import { newGame, type GameState } from '../engine/game.ts';
+import type { Architecture, Catalog, Scenario } from '../engine/types.ts';
 import { autoPlace } from './board.ts';
 import type { ViewState } from './views.ts';
 
@@ -64,16 +64,50 @@ export function withFixtures(draft: Architecture, scenario: Scenario): Architect
   return missing.length > 0 ? { ...draft, nodes: [...draft.nodes, ...structuredClone(missing)] } : draft;
 }
 
+/**
+ * Depuis le bâtiment Worker (ticket n° 1), une file ou un pub/sub ne peut plus alimenter un
+ * serveur d'application. Un serveur dont tout le trafic vient d'une file ou d'un pub/sub
+ * devient donc un worker, avec ses instances en workers supplémentaires ; ses évolutions de
+ * serveur de façade (autoscaling, disjoncteur), sans objet derrière une file, tombent. Même id :
+ * comme l'architecture validée et l'historique sont convertis pareil, aucune migration n'est due.
+ */
+export function withWorkers(arch: Architecture, catalog: Catalog): Architecture {
+  if (!catalog.components.worker) return arch;
+  const typeOf = new Map(arch.nodes.map((n) => [n.id, n.type]));
+  const consumes = (id: string) => {
+    const from = arch.links.filter((l) => l.to === id).map((l) => catalog.components[typeOf.get(l.from) ?? '']?.behavior);
+    return from.length > 0 && from.every((b) => b === 'queue' || b === 'pubsub');
+  };
+  const converted = arch.nodes.filter((n) => n.type === 'app-server' && consumes(n.id));
+  if (converted.length === 0) return arch;
+  const ids = new Set(converted.map((n) => n.id));
+  return {
+    ...arch,
+    nodes: arch.nodes.map((n) => {
+      if (!ids.has(n.id)) return n;
+      const instances = n.upgrades?.['horizontal-scaling'] ?? 0;
+      const { upgrades: _, ...rest } = n;
+      return { ...rest, type: 'worker', ...(instances > 0 ? { upgrades: { 'worker-scaling': instances } } : {}) };
+    }),
+  };
+}
+
+/** La partie convertie au catalogue courant : brouillon, architecture validée et historique ensemble. */
+function upgradedGame(game: GameState, catalog: Catalog): GameState {
+  return { ...game, committed: withWorkers(game.committed, catalog), history: game.history.map((a) => withWorkers(a, catalog)) };
+}
+
 /** La partie d'un scénario : celle sauvegardée, ou une nouvelle ; `calibrated` si le joueur l'avait calibrée. */
 export function gameOf(store: Store, id: string): Picked & { calibrated: boolean } {
   const saved = store.saves[id];
   const scenario = saved?.calibration?.scenario ?? structuredClone(defaultScenario(id));
+  const catalog = saved?.calibration?.catalog ?? structuredClone(defaultCatalog);
   return {
-    catalog: saved?.calibration?.catalog ?? structuredClone(defaultCatalog),
+    catalog,
     scenario,
-    game: saved?.game ?? newGame(),
+    game: saved?.game ? upgradedGame(saved.game, catalog) : newGame(),
     // Un brouillon d'avant le plateau reçoit des cases et des chemins une fois pour toutes.
-    draft: autoPlace(withFixtures(saved?.draft ?? startOf(scenario), scenario)),
+    draft: autoPlace(withWorkers(withFixtures(saved?.draft ?? startOf(scenario), scenario), catalog)),
     calibrated: !!saved?.calibration,
   };
 }

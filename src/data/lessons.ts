@@ -21,6 +21,12 @@ export const saturationLessons: Record<string, Lesson> = {
     remedy: 'Ajouter des instances derrière un load balancer (scaling horizontal), ou de l’autoscaling si le pic est court ; un CDN si ce sont des lectures de contenu stable.',
     concept: 'Scalabilité horizontale',
   },
+  worker: {
+    says: 'Débordement à {name} : les colis s’entassent plus vite que les commis ne les emportent.',
+    tech: 'Le worker est le goulot : il ne consomme pas la file aussi vite qu’elle se remplit, l’arriéré monte.',
+    remedy: 'Ajouter des workers derrière la file (ils se partagent les messages), dimensionnés sur l’arriéré à résorber ; si c’est ce qu’il écrit qui sature, soulager cette base.',
+    concept: 'Backpressure',
+  },
   database: {
     says: 'Engorgement à {name} : chaque voyageur y venait chercher sa réponse, plus vite qu’on ne pouvait les servir.',
     tech: 'La base est le goulot classique. En lecture, on la soulage par un cache ou des réplicas ; en écriture, par une file et un traitement par lots.',
@@ -42,7 +48,7 @@ export const saturationLessons: Record<string, Lesson> = {
   'message-queue': {
     says: 'Débordement à {name} : les colis arrivent plus vite que les coursiers ne les livrent.',
     tech: 'La file grossit : le consommateur ne suit pas le producteur, l’arriéré monte jusqu’à perdre des messages.',
-    remedy: 'Plus de workers derrière la file, ou des lots plus gros.',
+    remedy: 'Plus de workers derrière la file si ce sont eux qui ne suivent pas ; sinon soulager ce qu’ils écrivent (la base), car la file ne se vide qu’au rythme de l’aval. De la rétention pour tenir plus longtemps.',
     concept: 'Backpressure',
   },
   pubsub: {

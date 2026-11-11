@@ -178,3 +178,28 @@ describe('poser un bâtiment sur un chemin', () => {
     expect(next.links.find((l) => l.to === 'db')!.path!.some((c) => hexKey(c) === hexKey(cell))).toBe(false);
   });
 });
+
+describe('le consommateur d’une file (ticket n° 1)', () => {
+  const start: Architecture = { nodes: [{ id: 'src', type: 'traffic-source', cell: { q: 0, r: 0 } }], links: [] };
+  const built = (type: string) => {
+    let arch = ok(placeNode(start, 'message-queue', { q: 3, r: 0 }));
+    arch = ok(placeNode(arch, type, { q: 5, r: 0 }));
+    return arch;
+  };
+
+  it('relier une file à un serveur d’application est refusé, avec la raison', () => {
+    const r = connect(built('app-server'), 'message-queue', 'app-server', catalog);
+    expect(r).toEqual({ ok: false, reason: 'Message queue ne peut pas alimenter Application server : une file se vide par un worker, pas par un serveur d’application ni une base.' });
+  });
+
+  it('un pub/sub non plus', () => {
+    let arch = ok(placeNode(start, 'pubsub', { q: 3, r: 0 }));
+    arch = ok(placeNode(arch, 'app-server', { q: 5, r: 0 }));
+    const r = connect(arch, 'pubsub', 'app-server', catalog);
+    expect(r.ok).toBe(false);
+  });
+
+  it('une file se relie à un worker', () => {
+    expect(connect(built('worker'), 'message-queue', 'worker', catalog).ok).toBe(true);
+  });
+});

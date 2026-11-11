@@ -547,6 +547,21 @@ trois fois le même.
 | SC1 | Vague 4 : les partenaires appellent une API, non cachable par le CDN ; le bon palier redevient nécessaire sur les deux stratégies (B4) | S | moyen : vagues 4 et 5 |
 | M9a | Prix du CDN revu à la baisse **si** l'énumération garde deux stratégies en vague 3 ; sinon ligne « en vrai » | S | moyen |
 
+**État au 11 novembre 2026 : passe A faite** (branche `passe-raccourcisseur`), décisions
+M8, X6, C6, X7, X8, X9. La file rend à son arriéré ce que l'aval ne peut pas servir ; la
+panne du worker dure dix minutes sans perte ; l'async rejeté par le rate limiting est
+compté ; les partenaires ne passent plus par le cache du CDN, qui écarte aussi les
+lectures `consistent` (B11) ; le bâtiment Worker remplace le serveur derrière une file
+(ticket #1, parties en cours converties) ; le CDN coûte 40. Seul le raccourcisseur a
+bougé : vague 2 avec une troisième réponse (CDN, 110), vague 3 à 125 de seuil, vague 4 à
+180 de budget et 10 de complexité avec trois stratégies. 430 tests verts.
+
+Choix laissés tels quels, faute d'argument pour payer leur prix : l'impasse « vague 4
+depuis CDN + réplica » reste (en sortir demandait 220 de budget, où le scaling seul gagne
+tout) ; derrière un CDN, le palier 160 gagne encore la vague 4 (trop bas coupe partout,
+trop haut ne perd que sans CDN). À ajouter au rendu (R10, nouveau) : les messages rendus
+à leur file (`deferred`) s'affichent comme servis sur le lien file → worker → base.
+
 **Passe B — tournoi**
 
 | # | Action | Effort | Risque |

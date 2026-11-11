@@ -273,12 +273,14 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     }
     for (const id of ofBehavior('service')) {
       const peak = Math.max(0, ...result.ticks.map((t) => t.nodes[id]?.instances ?? 1));
-      if (peak > 1) {
-        worked.push({
-          says: line('instances', { count: String(peak) }),
-          tech: `Jusqu’à ${peak} instances du serveur derrière le load balancer : la charge est répartie (scaling horizontal).`,
-        });
-      }
+      if (peak <= 1) continue;
+      // Un consommateur de file (le worker) ne reçoit que des messages : il partage un arriéré, pas une foule.
+      const consumer = !catalog.components[typeOf.get(id) ?? '']?.accepts.some((k) => k !== 'async');
+      worked.push(
+        consumer
+          ? { says: line('workers', { count: String(peak) }), tech: `${peak} workers derrière la file : ils se partagent les messages (scaling horizontal).` }
+          : { says: line('instances', { count: String(peak) }), tech: `Jusqu’à ${peak} instances du serveur derrière le load balancer : la charge est répartie (scaling horizontal).` },
+      );
     }
     for (const n of arch.nodes) {
       const replicas = withEffect(upgradesOf(n), 'readReplicas').reduce((a, u) => a + u.level, 0);

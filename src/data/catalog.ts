@@ -26,7 +26,7 @@ export const catalog: Catalog = {
       behavior: 'edge',
       label: 'CDN',
       techName: 'CDN',
-      cost: 60,
+      cost: 40,
       complexity: 2,
       capacity: 50000,
       latencyMs: 2,
@@ -64,6 +64,23 @@ export const catalog: Catalog = {
       accepts: ['read', 'write', 'async'],
       // Assez pour ne jamais compter tant que l'aval répond vite : seule une dépendance lente
       // appelée en direct les épuise (décision S14).
+      threads: 100,
+    },
+    // Le consommateur d'une file : souvent le même code que le serveur, déployé à part. Il ne
+    // reçoit que des messages, et se dimensionne sur l'arriéré, pas sur le trafic des clients.
+    // Mêmes chiffres que le serveur d'application tant qu'aucune vague n'exige de les distinguer.
+    worker: {
+      id: 'worker',
+      behavior: 'service',
+      label: 'Worker',
+      techName: 'Worker',
+      cost: 20,
+      complexity: 1,
+      capacity: 1500,
+      latencyMs: 10,
+      workPerRequest: { async: 0.02 },
+      terminalFor: [],
+      accepts: ['async'],
       threads: 100,
     },
     // Un service métier tenu par une autre équipe (stock, facturation, e-mail) : il reçoit un
@@ -166,8 +183,10 @@ export const catalog: Catalog = {
       batchSize: 100,
       // Une file n'est pas infinie : ce qu'elle garde au-delà se paie en rétention (S20).
       maxBacklog: 200000,
-      // Une base qui consomme directement une file n'existe pas : il faut un worker.
-      allowedDownstream: ['app-server', 'domain-service', 'payment-provider', 'mail-provider'],
+      // Une base qui consomme directement une file n'existe pas, un serveur d'application non
+      // plus : il faut un worker (ticket n° 1).
+      allowedDownstream: ['worker', 'domain-service', 'payment-provider', 'mail-provider'],
+      downstreamRule: 'une file se vide par un worker, pas par un serveur d’application ni une base',
     },
     pubsub: {
       id: 'pubsub',
@@ -184,8 +203,9 @@ export const catalog: Catalog = {
       // Relié à côté d'une file, c'est lui qui reçoit les événements à diffuser.
       routingPriority: 2,
       fanOut: true,
-      // Ses abonnés : des files (un service, une file) ou directement des serveurs.
-      allowedDownstream: ['message-queue', 'app-server', 'domain-service', 'payment-provider', 'mail-provider'],
+      // Ses abonnés : des files (un service, une file) ou directement des workers et des services.
+      allowedDownstream: ['message-queue', 'worker', 'domain-service', 'payment-provider', 'mail-provider'],
+      downstreamRule: 'ses abonnés sont des files, des workers ou des services, pas un serveur d’application',
     },
   },
   upgrades: {
@@ -197,8 +217,20 @@ export const catalog: Catalog = {
       maxLevel: 9,
       cost: { base: 0, perLevel: 20 },
       complexity: { base: 1, perLevel: 0 },
-      // Derrière une file, plusieurs workers se partagent les messages.
-      requiresUpstream: ['load-balancer', 'message-queue'],
+      requiresUpstream: ['load-balancer'],
+      removalCost: 'free',
+      effect: { type: 'instances' },
+    },
+    // Derrière une file, plusieurs workers se partagent les messages (M5).
+    'worker-scaling': {
+      id: 'worker-scaling',
+      label: 'Worker supplémentaire',
+      techName: 'Horizontal scaling',
+      appliesTo: 'worker',
+      maxLevel: 9,
+      cost: { base: 0, perLevel: 20 },
+      complexity: { base: 1, perLevel: 0 },
+      requiresUpstream: ['message-queue', 'pubsub'],
       removalCost: 'free',
       effect: { type: 'instances' },
     },

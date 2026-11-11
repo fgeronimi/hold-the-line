@@ -68,7 +68,7 @@ export type HintLine = 'place' | 'placeMore' | 'link' | 'upgrade' | 'level' | 'r
 
 /**
  * - `won` (`{story}` : ce qui a marché, ou `wonQuiet`), `wonQuiet` (`{title}` : la vague), `lost` ;
- * - ce qui a marché : `edge`, `cache` (`{share}` : sur 100 lectures), `instances`, `replicas`
+ * - ce qui a marché : `edge`, `cache` (`{share}` : sur 100 lectures), `instances`, `workers`, `replicas`
  *   (`{count}`), `replica`, `rateLimit`, `pubsub` (`{count}` : abonnés), `idempotence`,
  *   `outbox`, `queue`, `queues` (`{count}`) ;
  * - `hot` : le bâtiment le plus chargé d'une vague tenue ;
@@ -81,6 +81,7 @@ export type DebriefLine =
   | 'edge'
   | 'cache'
   | 'instances'
+  | 'workers'
   | 'replica'
   | 'replicas'
   | 'rateLimit'

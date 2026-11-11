@@ -4,7 +4,7 @@ import { timedOut } from '../retries.ts';
 import type { ArchNode, ComponentDef } from '../types.ts';
 import { hasEffect, withEffect } from '../upgrades.ts';
 import { instancesNow, type Now, type World } from '../world.ts';
-import { allForwarded, failAll, ratio, serveWithin, type NodeOutcome } from './common.ts';
+import { allForwarded, deferExcess, failAll, fits, ratio, serveWithin, splitQueued, type NodeOutcome } from './common.ts';
 
 export function processDatabase(node: ArchNode, def: ComponentDef, incoming: Flow, w: World, now: Now): NodeOutcome {
   const ctx = now.ledger;
@@ -17,8 +17,10 @@ export function processDatabase(node: ArchNode, def: ComponentDef, incoming: Flo
   // la capacité qu'il lui reste, plus celle des réplicas.
   const isRead = (s: Stream) => s.kind === 'read';
   const notRead = (s: Stream) => !isRead(s);
-  const writeFlow = filterFlow(incoming, notRead);
-  const readFlow = filterFlow(incoming, isRead);
+  // Les messages d'une file passent après : ils prennent la capacité que le trafic direct laisse (M1).
+  const { direct, queued } = splitQueued(incoming);
+  const writeFlow = filterFlow(direct, notRead);
+  const readFlow = filterFlow(direct, isRead);
 
   const writeDemand = work(writeFlow, def);
   const servedWrites = serveWithin(node.id, writeFlow, timedOut(writeDemand, primary, w.timeouts), primary, ctx);
@@ -59,9 +61,20 @@ export function processDatabase(node: ArchNode, def: ComponentDef, incoming: Flo
     }
   }
 
+  // Une file ne relâche que de l'async, écrit sur le primaire : ce que les écritures et les
+  // lectures directes y laissent, les lectures prenant d'abord les réplicas.
+  let queuedDemand = 0;
+  if (queued.size > 0) {
+    const free = Math.max(0, primaryLeft - Math.max(0, Math.min(readDemand, readCapacity) - replicaCapacity));
+    const demand = work(queued, def);
+    const share = fits(demand, free);
+    for (const s of deferExcess(node.id, queued, share, w, ctx).values()) addStream(passed, s);
+    queuedDemand = demand * share;
+  }
+
   const utilization = Math.max(
-    ratio(writeDemand, primary),
-    ratio(writeDemand + readDemand, primary + replicaCapacity),
+    ratio(writeDemand + queuedDemand, primary),
+    ratio(writeDemand + queuedDemand + readDemand, primary + replicaCapacity),
   );
   return { passed, utilization, syncForwardShare: allForwarded() };
 }

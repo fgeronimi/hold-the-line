@@ -44,6 +44,8 @@ export interface ComponentDef {
   maxBacklog?: number;
   /** Types de composants autorisés en aval ; absent = tous. */
   allowedDownstream?: string[];
+  /** Pourquoi les autres sont refusés, dit au joueur qui tente le lien (« une file se vide par un worker »). */
+  downstreamRule?: string;
   /** Jamais proposé à la construction : seul un scénario le pose (les services métier, S10). */
   prePlaced?: boolean;
   /**
@@ -166,6 +168,11 @@ export interface TrafficSource {
    * tombent jamais dans un cache, CDN compris.
    */
   longTail?: boolean;
+  /**
+   * Appelle une API dont les réponses ne se mettent pas en cache en bordure (les partenaires,
+   * SC1) : un CDN les laisse passer, le cache applicatif, lui, les sert.
+   */
+  noEdgeCache?: boolean;
   /**
    * Relances par requête échouée (décision S19) : chaque échec synchrone revient au tick
    * suivant, jusqu'à ce nombre de fois en plus du trafic neuf. Absent : pas de relance.
@@ -332,6 +339,13 @@ export interface NodeTick {
   open?: string[];
   /** Base : lectures servies périmées par des réplicas coupés (req/s) : déjà dans `failed`. */
   stale?: number;
+  /**
+   * Messages sortis d'une file que ce nœud n'a pas pu traiter ce tick (req/s) : rendus à leur
+   * file, non acquittés, ni servis ni en échec (M1).
+   */
+  deferred?: number;
+  /** File : messages rendus par l'aval ce tick (req/s), déjà comptés dans `backlog`. */
+  requeued?: number;
   /** Base : ses réplicas sont coupés du primaire ce tick (partition, S21). */
   partitioned?: boolean;
 }

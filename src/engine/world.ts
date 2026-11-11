@@ -30,6 +30,8 @@ export interface World {
    */
   timeouts: boolean;
   backlogs: Map<string, Flow>;
+  /** Messages rendus à chaque file pendant le tick, remis dans son arriéré à la fin du tick (M1). */
+  requeued: Map<string, Flow>;
   autoscalers: Map<string, AutoscaleState>;
 }
 

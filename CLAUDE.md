@@ -93,7 +93,9 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 - `src/balance/` : outillage d'équilibrage (énumération canonique, rapport par vague) ;
   hors moteur, il ne fait qu'appeler `simulateWave`. Il ne connaît que des dimensions :
   chaque scénario décrit la sienne dans `src/data/balance-space.ts`.
-- `src/data/catalog.ts` : composants et évolutions. `src/data/scenarios/` : un fichier
+- `src/data/catalog.ts` : composants et évolutions. Une file ou un pub/sub n'alimente qu'un
+  `worker` ou un service en place, jamais un `app-server` (X8) ; `withWorkers` (`src/ui/session.ts`)
+  convertit les anciennes sauvegardes au chargement. `src/data/scenarios/` : un fichier
   par scénario, plus ses architectures types (`*.archetypes.ts`) ; `index.ts` liste les
   scénarios de l'écran de choix. Une partie par scénario, sauvegardées ensemble.
 - `tests/url-shortener.test.ts`, `tests/market.test.ts`, `tests/resilience.test.ts` et `tests/tournament.test.ts` verrouillent l'équilibrage : chaque vague gagnée avec la
@@ -162,6 +164,10 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 - Pas de cascade par saturation : un aval saturé ne ralentit pas l'amont (M3). La seule
   cascade est celle des fils d'exécution (S14) : un serveur qui appelle en direct une
   dépendance lente sature pour tout le monde, sauf derrière un circuit breaker ou une file.
+- La file impose le rythme de l'aval (M8) : un flux sorti d'une file porte `Stream.queue` ;
+  ce qu'un nœud ne peut pas en servir retourne dans la file (`deferred` / `requeued`, remis par
+  `settleQueues` en fin de tick) au lieu d'échouer, après le trafic direct. Un nouveau nœud
+  qui fait échouer par capacité doit passer par `serveShared` ou `deferExcess` (`nodes/common.ts`).
 - Le travail d'un flux est divisé par sa taille de lot (`batch`), comme les fils qu'il
   occupe (M6), mais les échecs se comptent toujours en messages.
 - Des clients qui relancent (`retries`, S19) changent deux règles : un échec relancé sort

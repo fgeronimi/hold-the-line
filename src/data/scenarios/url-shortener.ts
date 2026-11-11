@@ -7,8 +7,9 @@ const RAMP = { up: 8, down: 8 };
 
 const users = (rps: TrafficSource['rps']): TrafficSource => ({ id: 'users', clients: 1000, rps });
 
-// Légitimes mais gourmands : une limite trop basse les coupe (décision C2).
-const partners = (rps: TrafficSource['rps']): TrafficSource => ({ id: 'partners', clients: 50, rps });
+// Légitimes mais gourmands : une limite trop basse les coupe (décision C2). Ils appellent
+// l'API, dont les réponses ne se gardent pas en bordure : un CDN ne les arrête pas (SC1).
+const partners = (rps: TrafficSource['rps']): TrafficSource => ({ id: 'partners', clients: 50, noEdgeCache: true, rps });
 
 // Quelques adresses à très fort débit : une limite trop haute les laisse passer.
 // Il visite tous les liens, donc aucun cache ne l'arrête : seul le rate limiting le fait.
@@ -52,6 +53,8 @@ export const urlShortener: Scenario = {
       answers: [
         { cache: 1 },
         { replicas: 1 },
+        // Au prix d'un CDN réaliste (M9a), les redirections servies en bordure suffisent aussi.
+        { cdn: 1 },
       ],
       // Sans danger pour un réplica ; un cache tient, mais on voit la base encaisser la ruée.
       incidents: [{ id: 'cache-restart', title: 'Le cache redémarre à froid', component: 'cache', from: 30, until: 33, effect: { type: 'cold-cache' } }],
@@ -74,7 +77,7 @@ export const urlShortener: Scenario = {
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
       budget: 170,
       complexityCap: 9,
-      thriftyCost: 145,
+      thriftyCost: 125,
       answers: [
         { cdn: 1, cache: 1 },
         { cdn: 1, replicas: 1 },
@@ -94,13 +97,16 @@ export const urlShortener: Scenario = {
       profile: flat,
       sources: [users({ read: 3000, write: 50 }), partners({ read: 1500 }), scraper],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
-      budget: 165,
-      complexityCap: 9,
+      // Les partenaires passent le CDN (SC1) : derrière lui, il faut une instance de plus, d'où
+      // le budget et le plafond relevés pour que la stratégie CDN reste jouable.
+      budget: 180,
+      complexityCap: 10,
       thriftyCost: 160,
       answers: [
         { lb: 1, scaling: 3, rateLimit: 3, cache: 1 },
         { lb: 1, scaling: 3, rateLimit: 4, cache: 1 },
-        { cdn: 1, lb: 1, rateLimit: 3, cache: 1 },
+        { cdn: 1, lb: 1, scaling: 1, rateLimit: 3, cache: 1 },
+        { lb: 1, scaling: 1, autoscaling: 3, rateLimit: 3, cache: 1 },
       ],
       conceptRef: 'Rate Limiting',
     },
@@ -108,7 +114,7 @@ export const urlShortener: Scenario = {
       id: 'click-tracking',
       title: 'Compter les clics',
       briefing:
-        'Le marketing veut le nombre de clics de chaque lien. Chaque redirection doit être comptée, sans ralentir la redirection.',
+        'Le marketing veut le nombre de clics de chaque lien. Chaque redirection doit être comptée, sans ralentir la redirection. Et le worker qui compte les clics tombera dix minutes : aucun clic ne doit se perdre.',
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,
@@ -123,8 +129,9 @@ export const urlShortener: Scenario = {
       ],
       // La file est la seule réponse ; un CDN posé en vague 3 y perd les clics des redirections en cache.
       singleStrategy: true,
-      // Un serveur tombe : le worker aussi, et la file garde les clics le temps qu'il revienne.
-      incidents: [{ id: 'worker-crash', title: 'Une instance de serveur tombe, worker compris', component: 'app-server', from: 30, until: 32, effect: { type: 'instance-down', count: 1 } }],
+      // Le worker tombe dix minutes : la file garde les clics le temps qu'il revienne, puis se
+      // vide au rythme de ce que la base écrit (M8). Un second worker encaisserait la panne.
+      incidents: [{ id: 'worker-crash', title: 'Le worker tombe', component: 'worker', from: 30, until: 40, effect: { type: 'instance-down', count: 1 } }],
     },
   ],
 };

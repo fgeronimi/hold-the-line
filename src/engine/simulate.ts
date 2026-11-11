@@ -7,6 +7,7 @@ import { noFailures, nonZero, sumFailures, type Ledger } from './ledger.ts';
 import { lossMessages } from './messages.ts';
 import { factorAt } from './profile.ts';
 import { processNode, type NodeOutcome } from './nodes/index.ts';
+import { settleQueues } from './nodes/queue.ts';
 import { planRetries, retryPlan, syncOf, type RetryPlan } from './retries.ts';
 import { linkTraffic, messagingRoles, route, type Delivery } from './route.ts';
 import { routeTable } from './routing.ts';
@@ -61,6 +62,7 @@ export function simulateWave(
     consumers: new Set(wave.consumers ?? []),
     timeouts: retries.retrying.length > 0,
     backlogs: new Map(),
+    requeued: new Map(),
     autoscalers: new Map(),
   };
 
@@ -138,9 +140,12 @@ export function simulateWave(
       const summary = summaries.get(id)!;
       summary.peakUtilization = Math.max(summary.peakUtilization, outcome.utilization);
       if (isSaturated) summary.saturatedTicks++;
-      summary.failed += ledger.nodeFailed.get(id) ?? 0;
-
-      nodeTicks[id] = nodeTickOf(w, now, node, def, incoming, outcome);
+    }
+    // Les files reprennent ce que l'aval n'a pas traité avant que le tick soit relevé.
+    settleQueues(w, now);
+    for (const id of validation.order) {
+      summaries.get(id)!.failed += ledger.nodeFailed.get(id) ?? 0;
+      nodeTicks[id] = nodeTickOf(w, now, nodes.get(id)!, defOf(w, id), delivery.inbound.get(id)!, outcomes.get(id)!);
     }
 
     const latency = tickLatency(w, { order: validation.order, routes, routed: delivery.routed, outcomes, nodeTicks, open: now.open }, validation.sourceId, injected);

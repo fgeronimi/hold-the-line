@@ -129,6 +129,10 @@ describe('fils d’exécution (S14)', () => {
     expect(r.ticks[2]!.nodes.a!.failed).toBe(0);
     expect(r.ticks[2]!.nodes.w!.waitingOn).toBe('p');
     expect(r.events.filter((e) => e.type === 'threads-exhausted').map((e) => e.type === 'threads-exhausted' && e.node)).toEqual(['w']);
+    // Ce que ses fils ne peuvent pas prendre reste en file au lieu d'échouer (M1).
+    expect(r.ticks[2]!.nodes.w!.failed).toBe(0);
+    expect(r.ticks[2]!.nodes.q!.backlog).toBeGreaterThan(0);
+    expect(r.failed).toBe(0);
   });
 
   it('fige : une dépendance en panne appelée en direct ne retient aucun fil, et répond en 20 × sa base', () => {
@@ -405,19 +409,55 @@ describe('file bornée et quota (S20)', () => {
     expect(r.failed).toBe(0);
   });
 
-  it('fige : un worker de retour vide tout l’arriéré d’un coup, et ce que sa base refuse échoue', () => {
+  it('la file impose le rythme de l’aval : ce que la base refuse retourne dans la file (M1)', () => {
     // 20 messages par tick ; le worker tombe aux ticks 2 à 4, l'arriéré monte à 60. Au tick 5,
-    // il en absorbe 100 : il prend les 80 en attente, la base reçoit 160 unités pour 100 et
-    // fait échouer 80 × 60 / 160 = 30 messages.
-    // À changer par M1 (docs/revue-et-plan.md) : la file impose le rythme de l'aval ; ce que
-    // la base ne peut pas écrire reste en file : au tick 5, 50 messages passent (100 unités),
-    // l'arriéré vaut 30, aucun échec de saturation.
+    // la file relâche les 80 en attente, le worker les prend, mais la base n'en écrit que 50
+    // (100 unités, 2 par message) : les 30 autres ne sont pas acquittés et restent en file.
+    // Au tick 6, 30 + 20 tiennent : l'arriéré est vidé, sans un seul échec.
     const a = arch([n('s', 'src'), n('q', 'queue'), n('w', 'app'), n('d', 'db')], [['s', 'q'], ['q', 'w'], ['w', 'd']]);
     const r = simulateWave(a, wave([users({ async: 20 })], { incidents: [incident('app', 2, 5, { type: 'instance-down', count: 1 })] }), catalog);
-    expect(r.ticks.map((t) => t.nodes.q!.backlog).slice(0, 6)).toEqual([0, 0, 20, 40, 60, 0]);
+    expect(r.ticks.map((t) => t.nodes.q!.backlog ?? 0).slice(0, 7)).toEqual([0, 0, 20, 40, 60, 30, 0]);
     expect(r.ticks[5]!.links['q→w']!.async).toBe(80);
-    expect(r.ticks[5]!.nodes.d!.failed).toBeCloseTo(30, 9);
-    expect(r.failuresByReason.saturation).toBeCloseTo(30, 9);
+    expect(r.ticks[5]!.nodes.d!).toMatchObject({ deferred: 30, failed: 0, utilization: 1 });
+    expect(r.ticks[5]!.nodes.q!.requeued).toBe(30);
+    expect(r.failed).toBe(0);
+  });
+
+  it('un message rendu compte dans l’arriéré : la file déborde si l’aval ne suit pas (M1)', () => {
+    // La base n'écrit que 50 messages par seconde (2 unités chacun) pour 80 qui arrivent :
+    // 30 de plus en file à chaque tick, jusqu'aux 100 places, puis le surplus déborde.
+    const a = arch([n('s', 'src'), n('q', 'queue'), n('w', 'app', { scale: 1 }), n('d', 'db')], [['s', 'q'], ['q', 'w'], ['w', 'd']]);
+    const r = simulateWave(a, wave([users({ async: 80 })]), catalog);
+    expect(r.ticks.map((t) => +t.nodes.q!.backlog!.toFixed(9)).slice(0, 5)).toEqual([30, 60, 90, 100, 100]);
+    expect(r.failuresByReason.saturation).toBe(0);
+    expect(r.failuresByReason['queue-overflow']).toBeCloseTo(30 * 10 - 100, 9);
+  });
+
+  it('le trafic direct passe avant les messages de file, qui prennent la capacité qu’il laisse (M1)', () => {
+    // 40 écritures directes (80 unités) et 30 messages de file (60 unités) pour 100 : les
+    // écritures passent toutes, 10 messages sont écrits, 20 retournent en file. Personne n'échoue.
+    const a = arch(
+      [n('s', 'src'), n('a', 'app', { scale: 1 }), n('q', 'queue'), n('w', 'app'), n('d', 'db')],
+      [['s', 'a'], ['a', 'd'], ['a', 'q'], ['q', 'w'], ['w', 'd']],
+    );
+    const r = simulateWave(a, wave([users({ write: 40, async: 30 })], { ticks: 1, profile: [{ until: 1, factor: 1 }] }), catalog);
+    const d = r.ticks[0]!.nodes.d!;
+    expect(d.failed).toBe(0);
+    expect(d.deferred).toBeCloseTo(20, 9);
+    expect(d.utilization).toBeCloseTo(1, 9);
+    expect(r.ticks[0]!.nodes.q!.backlog).toBeCloseTo(20, 9);
+  });
+
+  it('un message de file ne fait pas s’effondrer un nœud quand les clients relancent (S19, M1)', () => {
+    // Mêmes chiffres, clients qui relancent : la base n'est pas saturée par le trafic direct,
+    // donc pas d'effondrement ; les messages prennent toujours le reste.
+    const a = arch(
+      [n('s', 'src'), n('a', 'app', { scale: 1 }), n('q', 'queue'), n('w', 'app'), n('d', 'db')],
+      [['s', 'a'], ['a', 'd'], ['a', 'q'], ['q', 'w'], ['w', 'd']],
+    );
+    const r = simulateWave(a, wave([users({ write: 40, async: 30 }, { retries: 3 })], { ticks: 1, profile: [{ until: 1, factor: 1 }] }), catalog);
+    expect(r.failed).toBe(0);
+    expect(r.ticks[0]!.nodes.d!.deferred).toBeCloseTo(20, 9);
   });
 });
 
@@ -559,15 +599,18 @@ describe('partition et lectures à jour (S21)', () => {
     expect(r.failed).toBe(30);
   });
 
-  it('fige : un CDN sert les lectures d’une source `consistent`', () => {
-    // hitRateFor (simulate.ts:793-795) ne regarde que `longTail`, alors que le cache
-    // (hitRateAt, simulate.ts:219-220) écarte aussi `consistent` : la moitié des 20 lectures
-    // à jour est servie en bordure, et le serveur n'en voit que 10.
-    // À trancher (hors docs/revue-et-plan.md) : S21 dit « jamais en cache » ; attendu :
-    // 20 lectures au serveur, charge 0,2.
+  it('un CDN ne sert pas les lectures d’une source `consistent` (B11)', () => {
+    // Comme le cache : les 20 lectures à jour traversent la bordure et arrivent au serveur.
     const a = arch([n('s', 'src'), n('e', 'edge'), n('a', 'app'), n('d', 'db')], [['s', 'e'], ['e', 'a'], ['a', 'd']]);
     const r = simulateWave(a, wave([seats(20)]), catalog);
-    expect(r.ticks[0]!.nodes.a!.utilization).toBeCloseTo(0.1, 9);
+    expect(r.ticks[0]!.nodes.a!.utilization).toBeCloseTo(0.2, 9);
+  });
+
+  it('un CDN laisse passer une API non cachable en bordure, que le cache applicatif sert (SC1)', () => {
+    const a = arch([n('s', 'src'), n('e', 'edge'), n('a', 'app'), n('c', 'cache'), n('d', 'db')], [['s', 'e'], ['e', 'a'], ['a', 'c'], ['a', 'd']]);
+    const r = simulateWave(a, wave([users({ read: 20 }, { noEdgeCache: true })]), catalog);
+    expect(r.ticks[0]!.links['e→a']).toEqual({ read: 20 });
+    expect(r.ticks[0]!.links['a→c']).toEqual({ read: 16 });
   });
 });
 

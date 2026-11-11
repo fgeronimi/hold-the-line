@@ -1,20 +1,51 @@
 import { syncWait } from '../circuits.ts';
-import { sumRps, work, type Flow } from '../flow.ts';
+import { mergeFlows, sumRps, work, type Flow } from '../flow.ts';
 import { timedOut } from '../retries.ts';
 import { REQUEST_KINDS, type ArchNode, type ComponentDef } from '../types.ts';
 import { withEffect } from '../upgrades.ts';
 import { instancesNow, type Now, type World } from '../world.ts';
-import { allForwarded, ratio, serveWithin, type NodeOutcome } from './common.ts';
+import { allForwarded, deferExcess, fits, ratio, serveWithin, splitQueued, type NodeOutcome } from './common.ts';
 
 export function processService(node: ArchNode, def: ComponentDef, incoming: Flow, w: World, now: Now): NodeOutcome {
   const base = instancesNow(w, now.incidents, node);
   const auto = autoscale(node, def, base, w, now.ledger.tick);
   const instances = base + (auto?.active ?? 0);
   const capacity = def.capacity * instances;
-  const demand = work(incoming, def);
-  auto?.plan(demand);
+  const { direct, queued } = splitQueued(incoming);
+  const own = pressure(node.id, def, direct, instances, w, now);
+  let passed = serveWithin(node.id, direct, timedOut(own.load, capacity, w.timeouts), capacity, now.ledger);
+  let taken = own;
+  if (queued.size > 0) {
+    // Les messages d'une file passent après le trafic direct et prennent ce qu'il laisse ; ils
+    // ne font pas s'effondrer le serveur (S19) : ce ne sont pas des clients qui relancent.
+    const all = pressure(node.id, def, mergeFlows(direct, queued), instances, w, now);
+    const share = fits(all.load - own.load, capacity - Math.min(own.load, capacity));
+    const served = deferExcess(node.id, queued, share, w, now.ledger);
+    taken = pressure(node.id, def, mergeFlows(direct, served), instances, w, now);
+    // Des fils tous pris par une dépendance lente laissent les messages en file : la cause reste à dire.
+    if (share < 1 && all.blockedBy) taken = { ...taken, blockedBy: all.blockedBy };
+    passed = mergeFlows(passed, served);
+  }
+  auto?.plan(taken.demand);
+  return {
+    passed,
+    utilization: taken.utilization,
+    syncForwardShare: allForwarded(),
+    instances,
+    ...(auto && auto.starting() > 0 ? { starting: auto.starting() } : {}),
+    ...(taken.threads !== undefined ? { threads: taken.threads } : {}),
+    ...(taken.blockedBy ? { blockedBy: taken.blockedBy } : {}),
+  };
+}
+
+/**
+ * Ce qu'un flux demande au serveur : son travail, ou plus si les fils manquent avant le
+ * processeur, ou si un quota le limite. `load` est le travail à servir, `utilization` la charge.
+ */
+function pressure(id: string, def: ComponentDef, flow: Flow, instances: number, w: World, now: Now) {
+  const capacity = def.capacity * instances;
+  const demand = work(flow, def);
   let utilization = ratio(demand, capacity);
-  // Travail à servir : celui des requêtes, ou plus si les fils manquent avant le processeur.
   let load = demand;
   // Loi de Little : fils occupés = débit × temps passé par requête, attente de l'aval comprise.
   let threads: number | undefined;
@@ -25,8 +56,8 @@ export function processService(node: ArchNode, def: ComponentDef, incoming: Flow
     for (const kind of REQUEST_KINDS) {
       // Un envoi groupé n'occupe qu'un fil, comme il ne coûte qu'un travail (le lot d'une file).
       let rps = 0;
-      for (const s of incoming.values()) if (s.kind === kind) rps += s.rps / s.batch;
-      const wait = syncWait(w, now, node.id, kind);
+      for (const s of flow.values()) if (s.kind === kind) rps += s.rps / s.batch;
+      const wait = syncWait(w, now, id, kind);
       const held = (rps * (def.latencyMs + wait.ms)) / 1000;
       busy += held;
       if (wait.dependency && held > worst.busy) worst = { busy: held, dependency: wait.dependency };
@@ -40,22 +71,13 @@ export function processService(node: ArchNode, def: ComponentDef, incoming: Flow
   }
   // Un quota compte des messages, pas du travail : un envoi regroupé n'y échappe pas.
   if (def.maxRps) {
-    const quota = (sumRps(incoming) / (def.maxRps * instances)) * capacity;
+    const quota = (sumRps(flow) / (def.maxRps * instances)) * capacity;
     if (quota > load) {
       load = quota;
       utilization = Math.max(utilization, ratio(quota, capacity));
     }
   }
-  load = timedOut(load, capacity, w.timeouts);
-  return {
-    passed: serveWithin(node.id, incoming, load, capacity, now.ledger),
-    utilization,
-    syncForwardShare: allForwarded(),
-    instances,
-    ...(auto && auto.starting() > 0 ? { starting: auto.starting() } : {}),
-    ...(threads !== undefined ? { threads } : {}),
-    ...(blockedBy ? { blockedBy } : {}),
-  };
+  return { demand, load, utilization, threads, blockedBy };
 }
 
 /**

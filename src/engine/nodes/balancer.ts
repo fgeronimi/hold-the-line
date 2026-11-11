@@ -1,9 +1,9 @@
-import { addStream, work, type Flow } from '../flow.ts';
+import { addStream, type Flow } from '../flow.ts';
 import { fail } from '../ledger.ts';
 import { SYNC_KINDS, type ArchNode, type ComponentDef } from '../types.ts';
 import { withEffect } from '../upgrades.ts';
 import { instancesNow, type Now, type World } from '../world.ts';
-import { allForwarded, ratio, serveWithin, type NodeOutcome } from './common.ts';
+import { allForwarded, ratio, serveShared, type NodeOutcome } from './common.ts';
 
 export function processBalancer(node: ArchNode, def: ComponentDef, incoming: Flow, w: World, now: Now): NodeOutcome {
   let flow = incoming;
@@ -13,9 +13,9 @@ export function processBalancer(node: ArchNode, def: ComponentDef, incoming: Flo
     flow = applyRateLimit(node.id, flow, limit, w, now);
   }
   const capacity = def.capacity * instancesNow(w, now.incidents, node);
-  const demand = work(flow, def);
+  const { passed, demand } = serveShared(node.id, flow, def, capacity, w, now.ledger);
   return {
-    passed: serveWithin(node.id, flow, demand, capacity, now.ledger),
+    passed,
     utilization: ratio(demand, capacity),
     syncForwardShare: allForwarded(),
   };
@@ -48,6 +48,16 @@ function applyRateLimit(nodeId: string, flow: Flow, limitPerClient: number, w: W
     else fail(ctx, nodeId, 'rate-limited', rejected);
     ctx.events.push({ type: 'rate-limited', tick: ctx.tick, node: nodeId, source: sourceId, rejectedRps: rejected });
   }
-  for (const s of flow.values()) addStream(out, { ...s, rps: s.rps * (keepShare.get(s.source) ?? 1) });
+  for (const s of flow.values()) {
+    const keep = keepShare.get(s.source) ?? 1;
+    addStream(out, { ...s, rps: s.rps * keep });
+    // L'async suit le sort de sa requête (C5) : écarté avec un abusif, en échec avec un client légitime.
+    const lost = SYNC_KINDS.includes(s.kind) ? 0 : s.rps * (1 - keep);
+    if (lost <= 0) continue;
+    if (w.sourcesById.get(s.source)?.abusive) {
+      ctx.shed.value += lost;
+      ctx.nodeShed.set(nodeId, (ctx.nodeShed.get(nodeId) ?? 0) + lost);
+    } else fail(ctx, nodeId, 'rate-limited', lost, s.duplicate ? 0 : lost);
+  }
   return out;
 }

@@ -124,7 +124,7 @@ describe('playWave', () => {
 
   it('revient à une vague antérieure avec son architecture, au prix d’un rejeu', () => {
     // Parcours CDN : il gagne les vagues 3 et 4, puis la vague 5 est ingagnable depuis là.
-    const answers = [A.minimal, A.withCache, A.withCdn(), A.withCdn({ rateLimitTier: A.TIER_40 })];
+    const answers = [A.minimal, A.withCache, A.withCdn(), A.withCdn({ rateLimitTier: A.TIER_40, extraInstances: 1 })];
     let state = newGame();
     for (const arch of answers) ({ state } = playWave(state, urlShortener, arch, catalog, scoring));
     expect(state.waveIndex).toBe(4);

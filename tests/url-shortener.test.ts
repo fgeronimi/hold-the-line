@@ -91,12 +91,20 @@ describe('Raccourcisseur d’URL', () => {
 
   it('vague 4 — le CDN n’arrête pas le scraper, qui parcourt la longue traîne', () => {
     expect(play(A.withCdn(), 'noisy-client').won).toBe(false);
-    expect(play(A.withCdn({ rateLimitTier: A.TIER_40 }), 'noisy-client').won).toBe(true);
+    expect(play(A.withCdn({ rateLimitTier: A.TIER_40, extraInstances: 1 }), 'noisy-client').won).toBe(true);
+  });
+
+  it('vague 4 — les partenaires passent le CDN : une limite trop basse les coupe aussi derrière lui (SC1)', () => {
+    const at = (tier: number) => play(A.withCdn({ rateLimitTier: tier, extraInstances: 1 }), 'noisy-client');
+    expect([1, 2].map((tier) => at(tier).won)).toEqual([false, false]);
+    expect(at(2).failuresByReason['rate-limited']).toBeGreaterThan(0);
+    // Sans instance de plus, le serveur seul ne tient pas les lectures des partenaires.
+    expect(play(A.withCdn({ rateLimitTier: A.TIER_40 }), 'noisy-client').won).toBe(false);
   });
 
   it('vague 4 — tout scaler au lieu de limiter dépasse le budget', () => {
     expect(play(A.scaled(3), 'noisy-client').won).toBe(false);
-    expect(play(A.scaled(5), 'noisy-client').lossReasons).toContain('Budget dépassé : 195 / 165');
+    expect(play(A.scaled(5), 'noisy-client').lossReasons).toContain('Budget dépassé : 195 / 180');
   });
 
   it('vague 5 — file de messages pour compter les clics hors du chemin critique', () => {
@@ -110,9 +118,15 @@ describe('Raccourcisseur d’URL', () => {
   it('vague 5 — le worker tombe : la file garde les clics, puis les rend', () => {
     const r = play(A.queuedClicks(4), 'click-tracking');
     expect(r.won).toBe(true);
-    expect(r.ticks[31]!.nodes.queue!.backlog).toBeGreaterThan(0);
-    expect(r.ticks[34]!.nodes.queue!.backlog ?? 0).toBe(0);
+    const incident = r.ticks.find((t) => t.incidents?.includes('worker-crash'))!.tick;
+    const end = incident + waveById('click-tracking').incidents![0]!.until - waveById('click-tracking').incidents![0]!.from;
+    expect(r.ticks[end - 1]!.nodes.queue!.backlog).toBeGreaterThan(0);
+    // Le worker revenu, la file se vide au rythme de ce que la base écrit (M1) : sans rien perdre.
+    const after = r.ticks.slice(end).map((t) => t.nodes.queue!.backlog ?? 0);
+    expect(after.every((b, i) => i === 0 || b <= after[i - 1]!)).toBe(true);
+    expect(after.at(-1)).toBe(0);
     expect(r.failuresByReason['queue-overflow']).toBe(0);
+    expect(r.ticks.slice(end).every((t) => t.nodes.db!.failed === 0)).toBe(true);
   });
 
   it('vague 5 — le CDN de la vague 3 perd les clics des redirections en cache', () => {

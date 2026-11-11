@@ -6,6 +6,10 @@ export interface Tally {
   deduplicated: number;
   lost: number;
   stale: number;
+  /** Messages de file que ce nœud n'a pas pu traiter, rendus à leur file sans échec (M1). */
+  deferred: number;
+  /** File : messages que l'aval lui a rendus ce tick. */
+  requeued: number;
 }
 
 /** Les compteurs d'un tick : ce que les nœuds font échouer, écartent et signalent. */
@@ -51,7 +55,7 @@ export function fail(ctx: Ledger, nodeId: string, reason: FailureReason, rps: nu
 }
 
 export function tally(ctx: Ledger, nodeId: string, key: keyof Tally, rps: number): void {
-  const t = ctx.nodeTally.get(nodeId) ?? { duplicates: 0, deduplicated: 0, lost: 0, stale: 0 };
+  const t = ctx.nodeTally.get(nodeId) ?? { duplicates: 0, deduplicated: 0, lost: 0, stale: 0, deferred: 0, requeued: 0 };
   t[key] += rps;
   ctx.nodeTally.set(nodeId, t);
 }

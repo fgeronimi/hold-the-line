@@ -1,8 +1,8 @@
-import { addStream, sumRps, work, type Flow, type Stream } from '../flow.ts';
+import { addStream, sumRps, type Flow, type Stream } from '../flow.ts';
 import { fail } from '../ledger.ts';
 import type { ArchNode, ComponentDef } from '../types.ts';
 import { instancesNow, type Now, type World } from '../world.ts';
-import { allForwarded, ratio, serveWithin, type NodeOutcome } from './common.ts';
+import { allForwarded, ratio, serveShared, type NodeOutcome } from './common.ts';
 
 /**
  * Bordure (CDN) : sert une part des lectures sans les transmettre. Les tâches async
@@ -10,8 +10,7 @@ import { allForwarded, ratio, serveWithin, type NodeOutcome } from './common.ts'
  */
 export function processEdge(node: ArchNode, def: ComponentDef, incoming: Flow, w: World, now: Now): NodeOutcome {
   const capacity = def.capacity * instancesNow(w, now.incidents, node);
-  const demand = work(incoming, def);
-  const served = serveWithin(node.id, incoming, demand, capacity, now.ledger);
+  const { passed: served, demand } = serveShared(node.id, incoming, def, capacity, w, now.ledger);
   const passed: Flow = new Map();
   for (const s of served.values()) {
     const hitRate = hitRateFor(s, def, w, now);
@@ -38,6 +37,9 @@ function readShare(served: Flow, passed: Flow): number {
   return before > 0 ? sumRps(passed, isRead) / before : 0;
 }
 
+// La bordure ne garde ni la longue traîne, ni une donnée qui doit être à jour (S21), ni les
+// réponses d'une API non cachable (SC1).
 function hitRateFor(s: Stream, def: ComponentDef, w: World, now: Now): number {
-  return w.sourcesById.get(s.source)?.longTail ? 0 : (def.hitRate ?? 0) * now.incidents.hitFactor(def.id);
+  const src = w.sourcesById.get(s.source);
+  return src?.longTail || src?.consistent || src?.noEdgeCache ? 0 : (def.hitRate ?? 0) * now.incidents.hitFactor(def.id);
 }

@@ -6,7 +6,10 @@ import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { scoring } from '../src/data/scoring.ts';
 import { hintsLeft, newGame, playWave } from '../src/engine/game.ts';
 import { setAt } from '../src/ui/calibration.ts';
-import { choices, gameOf, isStore, readStore, startOf, withFixtures, withGame, type Store } from '../src/ui/session.ts';
+import { choices, gameOf, isStore, readStore, startOf, withFixtures, withGame, withWorkers, type Store } from '../src/ui/session.ts';
+import { migrationCost } from '../src/engine/budget.ts';
+import { validateArchitecture } from '../src/engine/validate.ts';
+import type { Architecture } from '../src/engine/types.ts';
 
 const EMPTY: Store = { saves: {} };
 /** Ce que le stockage rend : la sauvegarde passée par JSON, comme dans le navigateur. */
@@ -99,5 +102,38 @@ describe('la partie gardée', () => {
     const list = choices({ saves: { [urlShortener.id]: { game, draft: A.minimal } } });
     expect(list.find((c) => c.id === urlShortener.id)).toMatchObject({ reached: 2, stars: 5, finished: false, waves: urlShortener.waves.length });
     expect(list.find((c) => c.id !== urlShortener.id)).toMatchObject({ reached: 0, stars: 0 });
+  });
+});
+
+describe('le bâtiment Worker dans une partie en cours (ticket n° 1)', () => {
+  // Avant le worker, le consommateur de la file était un second serveur d'application.
+  const legacy = (arch: Architecture, instances = 0): Architecture => ({
+    ...arch,
+    nodes: arch.nodes.map((n) =>
+      n.id === 'worker' ? { id: 'worker', type: 'app-server', ...(instances ? { upgrades: { 'horizontal-scaling': instances } } : {}) } : n,
+    ),
+  });
+
+  it('un serveur dont tout le trafic vient d’une file devient un worker, ses instances avec lui', () => {
+    const before = legacy(A.queuedClicks(3), 2);
+    expect(validateArchitecture(before, catalog).ok).toBe(false);
+    const after = withWorkers(before, catalog);
+    expect(after.nodes.find((n) => n.id === 'worker')).toEqual({ id: 'worker', type: 'worker', upgrades: { 'worker-scaling': 2 } });
+    // Le serveur de façade, lui, ne bouge pas.
+    expect(after.nodes.find((n) => n.id === 'app')!.type).toBe('app-server');
+    expect(validateArchitecture(after, catalog).ok).toBe(true);
+    expect(withWorkers(after, catalog)).toEqual(after);
+  });
+
+  it('au chargement, brouillon, architecture validée et historique sont convertis, sans migration', () => {
+    const old = legacy(A.queuedClicks(3));
+    const game = { ...newGame(), waveIndex: 4, committed: old, history: [newGame().committed, A.minimal, A.withCache, A.scaled(3), old] };
+    const store: Store = { current: urlShortener.id, saves: { [urlShortener.id]: { game, draft: old } } };
+    const picked = gameOf(readStore(throughStorage(store)), urlShortener.id);
+    for (const arch of [picked.draft, picked.game.committed, picked.game.history[4]!]) {
+      expect(arch.nodes.find((n) => n.id === 'worker')!.type).toBe('worker');
+    }
+    expect(migrationCost(picked.game.committed, picked.draft, catalog)).toBe(0);
+    expect(picked.game.history[3]).toEqual(A.scaled(3));
   });
 });

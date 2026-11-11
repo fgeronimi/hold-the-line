@@ -14,6 +14,15 @@ export function upgradeLevel(node: ArchNode, upgradeId: string): number {
   return node.upgrades?.[upgradeId] ?? 0;
 }
 
+/** Pourquoi `from` ne peut pas alimenter `to`, ou rien si le lien est permis. */
+export function downstreamRefusal(catalog: Catalog, from: string, to: string): string | undefined {
+  const def = catalog.components[from];
+  const allowed = def?.allowedDownstream;
+  if (!allowed || allowed.includes(to)) return undefined;
+  if (allowed.length === 0) return `${from} ne transmet rien : il est consulté, pas traversé`;
+  return `${from} ne peut alimenter que ${allowed.join(', ')}${def.downstreamRule ? ` : ${def.downstreamRule}` : ''}`;
+}
+
 /** Vérifie que l'architecture est simulable et renvoie un ordre topologique des nœuds. */
 export function validateArchitecture(
   arch: Architecture,
@@ -45,14 +54,8 @@ export function validateArchitecture(
     if (link.from === link.to) errors.push(`Lien d'un nœud vers lui-même : ${link.from}`);
     const target = byId.get(link.to);
     const origin = byId.get(link.from);
-    const allowed = origin && catalog.components[origin.type]?.allowedDownstream;
-    if (allowed && target && !allowed.includes(target.type)) {
-      errors.push(
-        allowed.length === 0
-          ? `${origin.type} ne transmet rien : il est consulté, pas traversé (${link.from} → ${link.to})`
-          : `${origin.type} ne peut alimenter que ${allowed.join(', ')} (${link.from} → ${link.to})`,
-      );
-    }
+    const refused = origin && target && downstreamRefusal(catalog, origin.type, target.type);
+    if (refused) errors.push(`${refused} (${link.from} → ${link.to})`);
     if (target && catalog.components[target.type]?.behavior === 'source') {
       errors.push(`Aucun lien ne peut entrer dans la source (${link.from} → ${link.to})`);
     }

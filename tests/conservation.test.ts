@@ -85,7 +85,6 @@ function conservationViolations(arch: Architecture, wave: Wave, catalog: Catalog
   const defOf = (id: string) => catalog.components[g.typeOf.get(id)!]!;
   const sourceId = arch.nodes.find((n) => defOf(n.id).behavior === 'source')!.id;
   const incidentsById = new Map((wave.incidents ?? []).map((i) => [i.id, i]));
-  const rateLimited = new Set(result.events.flatMap((e) => (e.type === 'rate-limited' ? [`${e.tick}|${e.node}`] : [])));
 
   // Deux nœuds qui relivrent en chaîne rendraient la part des doublons indéchiffrable depuis
   // les liens : aucun scénario ne le fait, on le refuse plutôt que de vérifier à moitié.
@@ -152,7 +151,8 @@ function conservationViolations(arch: Architecture, wave: Wave, catalog: Catalog
     let dedupTotal = 0;
     let shedTick = 0;
     let backlogDelta = 0;
-    let vanished = 0;
+    let deferredTick = 0;
+    let requeuedTick = 0;
     for (const n of arch.nodes) {
       const nt = t.nodes[n.id];
       if (!nt) {
@@ -197,17 +197,15 @@ function conservationViolations(arch: Architecture, wave: Wave, catalog: Catalog
       const shed = nt.shed ?? 0;
       // Un doublon reconnu par l'idempotence est écarté sans échec : il sort quand même du flux.
       const dedup = nt.deduplicated ?? 0;
-      const kept = received + prev - now - outSum - nt.failed - shed - dedup + copies;
-      const scale = received + prev + outSum + copies;
+      // Un message de file que l'aval n'a pas pu traiter retourne dans sa file au même tick (M1) :
+      // le nœud qui le rend ne le sert pas, la file le compte dans son arriéré.
+      const deferred = nt.deferred ?? 0;
+      const requeued = nt.requeued ?? 0;
+      const kept = received + prev + requeued - now - outSum - nt.failed - shed - dedup - deferred + copies;
+      const scale = received + prev + requeued + outSum + copies;
 
       const transit = def.terminalFor.length === 0 && def.behavior !== 'edge';
-      // Écart E1 (voir plus bas) : le limiteur retire l'async des requêtes qu'il rejette sans
-      // le compter nulle part. Ce reste-là, et lui seul (borné par l'async reçu), a son code à part.
-      const excused = transit && def.behavior === 'balancer' && rateLimited.has(`${t.tick}|${n.id}`) && kept > EPS * Math.max(1, scale) && kept <= inK.async + EPS * Math.max(1, scale);
-      if (excused) {
-        report('E1-async-limite', `${at} ${n.id} retire ${kept} req/s d'async sans échec ni écarté`);
-        vanished += kept;
-      } else if (transit) {
+      if (transit) {
         if (!close(kept, 0, scale)) report('transit', `${at} ${n.id} (${def.behavior}) garde ${kept} req/s sans les servir ni les compter`);
       } else {
         if (kept < -EPS * Math.max(1, scale)) report('cree', `${at} ${n.id} (${def.behavior}) sert ${kept} : trafic créé`);
@@ -232,13 +230,18 @@ function conservationViolations(arch: Architecture, wave: Wave, catalog: Catalog
       dedupTotal += dedup;
       shedTick += shed;
       backlogDelta += now - prev;
+      deferredTick += deferred;
+      requeuedTick += requeued;
       backlogPrev.set(n.id, now);
       nodeFailedTotal.set(n.id, (nodeFailedTotal.get(n.id) ?? 0) + nt.failed);
     }
 
+    // Tout ce qu'un nœud rend à une file y est remis dans le même tick : rien ne reste en route.
+    if (!close(deferredTick, requeuedTick, deferredTick)) report('retour', `${at} ${deferredTick} messages rendus ≠ ${requeuedTick} remis en file`);
+
     // Bilan global du tick : conséquence des bilans locaux, gardé pour l'énoncé qu'il donne.
     const lhs = t.offered + copiesTotal;
-    const rhs = served + nodesFailed + shedTick + dedupTotal + backlogDelta + vanished;
+    const rhs = served + nodesFailed + shedTick + dedupTotal + backlogDelta;
     if (!close(lhs, rhs, lhs)) report('global', `${at} offert + copies ${lhs} ≠ servi + échoué + écarté + dédoublonné + Δarriéré ${rhs}`);
 
     // Le seul échec qui n'appartient à aucun nœud est le « non livré », calculé par différence
@@ -366,7 +369,7 @@ const label = (arch: Architecture) =>
     .join(',');
 
 /** Écarts connus du moteur, isolés plus bas : leur code est exclu de l'invariant général. */
-const KNOWN = ['E1-async-limite', 'E2-taux-sur-1'];
+const KNOWN = ['E2-taux-sur-1'];
 
 describe('conservation du trafic', () => {
   it('chaque scénario a ses architectures types et un échantillon de son espace', () => {
@@ -402,19 +405,17 @@ describe('écarts de conservation connus', () => {
     return { wave, result: simulateWave(arch, wave, catalog) };
   };
 
-  // E1. `applyRateLimit` (simulate.ts:620-648) calcule le rejet sur le seul synchrone
-  // (l. 626, 637), compte ce rejet en échec ou en écarté (l. 640-643), puis réduit TOUS les
-  // flux de la source de la même part, async compris (l. 646). L'async des requêtes rejetées
-  // disparaît donc sans échec ni écarté. Vague 5 du raccourcisseur, palier 20 req/s : les
-  // partenaires (50 × 30 lectures et 30 clics) gardent 1 000 lectures et 1 000 clics ; les
-  // 500 lectures rejetées sont des échecs, les 500 clics ne sont comptés nulle part. Le taux
-  // d'échec les compte au dénominateur comme s'ils étaient servis. C5 veut que l'async « suive
-  // le sort de sa requête » : son sort ici est l'échec (ou l'écarté pour un abusif), comme
-  // `lost-at-edge` le fait pour la bordure.
-  it.fails('E1 — l’async d’une requête rejetée par le limiteur est compté avec elle', () => {
+  // E1, corrigé par B8 : l'async d'une requête rejetée par le limiteur suit son sort (C5),
+  // en échec `rate-limited` pour un client légitime, écarté avec un abusif. Vague 5 du
+  // raccourcisseur, palier 20 req/s : les 500 clics des 500 lectures rejetées des partenaires.
+  it('E1 — l’async d’une requête rejetée par le limiteur est compté avec elle', () => {
     const arch = U.scaled(3, { rateLimitTier: 2 });
     const { wave, result } = play(balanceSpaces[0]!.scenario, 'click-tracking', arch);
-    expect(conservationViolations(arch, wave, catalog, result).filter((v) => v.startsWith('E1-'))).toEqual([]);
+    expect(conservationViolations(arch, wave, catalog, result)).toEqual([]);
+    // Les partenaires envoient autant de clics que de lectures : chaque lecture rejetée emporte son clic.
+    const rejectedReads = result.events.reduce((a, e) => a + (e.type === 'rate-limited' && e.source === 'partners' ? e.rejectedRps : 0), 0);
+    expect(rejectedReads).toBeGreaterThan(0);
+    expect(result.failuresByReason['rate-limited']).toBeCloseTo(2 * rejectedReads, 6);
   });
 
   // E2. « Non livré » (simulate.ts:415-423) se compte par abonné attendu, copie par copie

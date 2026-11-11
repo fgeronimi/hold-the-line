@@ -50,7 +50,7 @@ function shortener(c: Choice): Architecture {
   if (on(c, 'queue')) {
     nodes.push(
       { id: 'queue', type: 'message-queue' },
-      { id: 'worker', type: 'app-server', upgrades: { 'horizontal-scaling': c.workers ?? 0 } },
+      { id: 'worker', type: 'worker', upgrades: { 'worker-scaling': c.workers ?? 0 } },
     );
     links.push(link('app', 'queue'), link('queue', 'worker'), link('worker', 'db'));
   }

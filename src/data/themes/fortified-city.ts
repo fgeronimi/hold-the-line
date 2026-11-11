@@ -35,6 +35,12 @@ export const fortifiedCity: Theme = {
         real: 'Le serveur d’application exécute le code ; on ajoute des instances pour tenir plus de charge.',
       },
       metaphor: 'Tour des scribes', icon: '📜', shape: 'tower', color: '#d6cfc0', accent: '#3d5a80' },
+    worker: {
+      role: {
+        says: 'Les commis du relais vident les sacs de colis en attente et portent chacun à son destinataire. On en embauche selon les colis qui s’empilent, pas selon les voyageurs qui passent la porte.',
+        real: 'Le worker consomme les messages d’une file. C’est souvent le même code que le serveur, déployé autrement ; il se dimensionne sur l’arriéré à résorber, pas sur le trafic entrant.',
+      },
+      metaphor: 'Tour des commis', icon: '📦', shape: 'tower', color: '#c9b79c', accent: '#6b4226' },
     'domain-service': {
       role: {
         says: 'Un maître d’un autre corps de métier, installé de l’autre côté de la rivière : il fait son ouvrage quand on le lui annonce.',
@@ -81,6 +87,7 @@ export const fortifiedCity: Theme = {
   narrator: { name: 'Le chambellan', icon: '🎩' },
   upgradeIcons: {
     'horizontal-scaling': '🗼',
+    'worker-scaling': '🗼',
     autoscaling: '🏗️',
     'read-replica': '📚',
     'rate-limiting': '🛡️',
@@ -112,6 +119,7 @@ export const fortifiedCity: Theme = {
     edge: 'Votre {name} a renvoyé {share} voyageurs sur 100 sans même les faire entrer en ville.',
     cache: 'Votre {name} a fait le travail : {share} voyageurs sur 100 y ont trouvé leur réponse sans déranger les archives.',
     instances: '{count} tours de scribes se sont partagé la foule.',
+    workers: '{count} tours de commis se sont partagé les colis du relais.',
     replica: 'La copie des archives a répondu aux lectures que les archives seules n’auraient pas tenues.',
     replicas: 'Les {count} copies des archives ont répondu aux lectures que les archives seules n’auraient pas tenues.',
     rateLimit: 'La garde de la porte a refoulé les pillards sans gêner un seul marchand honnête.',

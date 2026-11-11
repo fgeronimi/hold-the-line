@@ -286,13 +286,14 @@ describe('simulateWave', () => {
         components: { ...catalog.components, queue: { ...catalog.components.queue!, batchSize: 1 } },
       };
       const w = wave([users({ async: 40 })], {
-        ticks: 6,
-        profile: [{ until: 2, factor: 4 }, { until: 6, factor: 1 }],
+        ticks: 10,
+        profile: [{ until: 2, factor: 4 }, { until: 10, factor: 0.25 }],
       });
-      // Le worker absorbe 100 messages/s : 160 entrent pendant 2 ticks, puis 40.
+      // La base écrit 50 messages/s (2 unités chacun) : c'est elle, pas le worker, qui fixe le
+      // rythme (M1). 160 entrent pendant 2 ticks, puis 10 : l'arriéré baisse de 40 par tick.
       const r = simulateWave(arch(), w, slow);
-      expect(r.ticks.map((t) => t.nodes.q!.backlog)).toEqual([60, 120, 60, 0, 0, 0]);
-      expect(r.failuresByReason['queue-overflow']).toBe(0);
+      expect(r.ticks.map((t) => t.nodes.q!.backlog ?? 0)).toEqual([110, 220, 180, 140, 100, 60, 20, 0, 0, 0]);
+      expect(r.failed).toBe(0);
     });
 
     it('perd des messages au-delà de l’arriéré maximal', () => {
