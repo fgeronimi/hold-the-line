@@ -37,7 +37,7 @@ export const tournament: Scenario = {
       id: 'ticket-rush',
       title: 'L’ouverture des ventes',
       briefing:
-        'Les ventes ouvrent : 1 600 consultations et 50 achats par seconde, chaque billet envoyé par e-mail au prestataire, qui en accepte 10 000 par seconde. Un déploiement raté arrêtera tous les serveurs trois secondes. Et les clients relancent aussitôt, jusqu’à trois fois, ce qui échoue.',
+        'Les ventes ouvrent : 1 600 consultations et 50 achats par seconde, chaque billet envoyé par e-mail au prestataire, qui en accepte 10 000 par seconde. Un déploiement raté arrêtera tous les serveurs trois minutes. Et les clients relancent aussitôt, jusqu’à trois fois, ce qui échoue : ces clients sont votre application, vous en écrivez le code, c’est pourquoi vous pouvez y régler les relances.',
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,
@@ -58,7 +58,7 @@ export const tournament: Scenario = {
       id: 'pigeons-grounded',
       title: 'Les pigeons restent au colombier',
       briefing:
-        'Le prestataire d’e-mail tombe en panne pendant une demi-minute. Les achats continuent, 100 par seconde, et les abonnés aux alertes de places reçoivent 8 000 e-mails par seconde. Une file de messages garde 200 000 messages avant de déborder.',
+        'Le prestataire d’e-mail tombe en panne pendant une demi-heure. Les achats continuent, 100 par seconde, et les abonnés aux alertes de places reçoivent 8 000 e-mails par seconde. Une file de messages garde 200 000 messages avant de déborder (à l’échelle du jeu : ce plafond se lit en minutes de trafic, arrivées par seconde × minutes d’attente).',
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,
@@ -78,7 +78,7 @@ export const tournament: Scenario = {
       id: 'split-registry',
       title: 'Le registre coupé en deux',
       briefing:
-        'Les spectateurs cherchent leurs dates (1 000 lectures par seconde, chacune différente : aucun cache n’y aide) et regardent les places restantes (300 par seconde), qui doivent être à jour. Pendant un moment, les réplicas de la base seront coupés du primaire.',
+        'Les spectateurs cherchent leurs dates (1 000 lectures par seconde, chacune différente : aucun cache n’y aide) et regardent les places restantes (300 par seconde), qui doivent être à jour. Pendant un quart d’heure, les réplicas de la base seront coupés du primaire.',
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,

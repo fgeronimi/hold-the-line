@@ -3,6 +3,8 @@ import type { Catalog } from '../engine/types.ts';
 /**
  * Valeurs de départ, à calibrer en jouant. Unités : travail par seconde pour les
  * capacités, millisecondes pour les latences, unités de budget par vague pour les coûts.
+ * Un tick vaut une minute pour le joueur (décision M7) : les débits restent par seconde, les
+ * durées en ticks se disent en minutes.
  */
 export const catalog: Catalog = {
   components: {
@@ -269,14 +271,14 @@ export const catalog: Catalog = {
     },
     'client-backoff': {
       id: 'client-backoff',
-      label: 'Relances espacées',
+      label: 'Relances espacées (vos clients, c’est votre application)',
       techName: 'Backoff exponentiel et jitter',
       appliesTo: 'traffic-source',
       maxLevel: 1,
       cost: { base: 5, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
       removalCost: 'on-disable',
-      // Des délais qui doublent (1, 2, 4 s…) tirés au hasard : les relances s'étalent.
+      // Des délais qui doublent (1, 2, 4 min de jeu…) tirés au hasard : les relances s'étalent.
       effect: { type: 'backoff', spreadTicks: 10 },
     },
     'queue-retention': {

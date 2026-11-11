@@ -46,7 +46,7 @@ export const resilience: Scenario = {
       id: 'slow-banker',
       title: 'Le banquier traîne',
       briefing:
-        'Même trafic. Mais pendant quelques secondes, le prestataire mettra 4 secondes à répondre à chaque paiement. Le serveur traite 100 requêtes à la fois par instance.',
+        'Même trafic. Mais pendant quatre minutes, le prestataire mettra 4 secondes à répondre à chaque paiement. Le serveur traite 100 requêtes à la fois par instance.',
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,
@@ -84,7 +84,7 @@ export const resilience: Scenario = {
       id: 'banker-closed',
       title: 'Le banquier ferme',
       briefing:
-        'Le prestataire de paiement tombera en panne pendant une longue partie de la vague. Les commandes, elles, continuent d’arriver.',
+        'Le prestataire de paiement tombera en panne pendant 25 minutes. Les commandes, elles, continuent d’arriver.',
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,

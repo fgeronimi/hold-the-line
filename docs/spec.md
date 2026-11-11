@@ -64,13 +64,15 @@ Le chambellan, qui narre, parle dans la métaphore ; chacune de ses répliques a
 Une partie est une suite de vagues. Chacune passe par quatre phases (I5) :
 
 1. **Briefing** : le chambellan annonce l'information nouvelle et l'incident attendu, s'il
-   y en a un. Les chiffres (trafic, budget, SLA) restent affichés sous le récit.
+   y en a un. Les chiffres (trafic, budget, SLA) restent affichés sous le récit. Le premier
+   briefing de chaque scénario annonce la règle du temps (M7) : une vague montre une heure,
+   chaque minute passe en un tick, les débits restent par seconde.
 2. **Construction** : le jeu est en pause. Le joueur pose, déplace, relie et retire des
    bâtiments sur le plateau, et achète des évolutions par les pastilles au pied du bâtiment sélectionné (I12), ou dans sa fiche ; cliquer une case vide ouvre les fiches des bâtiments à y construire.
 3. **Vague** : le trafic est simulé, puis rejoué sur le même plateau. Les jauges et les
    incidents se lisent en direct.
 4. **Debrief** : ce qui a marché, ce qui a failli casser, ce qu'on pourrait alléger, avec
-   la notion à retenir ; et les courbes tick par tick.
+   la notion à retenir ; et les courbes minute par minute.
 
 Une vague perdue se rejoue sans limite (E4). On peut revenir au début de toute vague déjà
 atteinte, avec l'architecture validée à ce moment-là (E6) : un choix passé se paie, mais ne
@@ -112,7 +114,7 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 | Évolution | S'applique à | Résout | Compromis | Dans le jeu |
 | --- | --- | --- | --- | --- |
 | Scaling horizontal | Serveur | Manque de capacité | Coût par instance ; exige un load balancer ou une file en amont (M5) | Oui |
-| Autoscaling | Serveur | Pics de trafic | Démarrage en 2 ticks pendant lesquels des requêtes échouent, +2 de complexité (X2) | Oui |
+| Autoscaling | Serveur | Pics de trafic | Démarrage en 2 ticks (2 minutes) pendant lesquels des requêtes échouent, +2 de complexité (X2) | Oui |
 | Réplica en lecture | Base | Lectures saturées | Coût | Oui |
 | Rate limiting | Load balancer | Client abusif | Paliers par client (C1) : trop bas, il coupe des clients légitimes | Oui |
 | Idempotence | Service métier | Message livré deux fois | Coût et complexité, les clés vivent dans le service (S5) | Oui |
@@ -210,21 +212,22 @@ y est payée.
 | Vague | Information | Réponse attendue |
 | --- | --- | --- |
 | 1. Le paiement en ligne | Le prestataire répond en 30 ms | L'appeler en direct suffit (réponse unique) |
-| 2. Le banquier traîne | Quelques secondes à 4 s par paiement | Circuit breaker, ou une file ; sans eux, la cascade fait tomber tout le serveur |
+| 2. Le banquier traîne | Pendant 4 minutes, 4 s par paiement | Circuit breaker, ou une file ; sans eux, la cascade fait tomber tout le serveur |
 | 3. Minuit, tout expire | 900 lectures/s, tout le cache expire d'un coup | Cache + verrou de recalcul, ou un réplica |
-| 4. Le banquier ferme | Le prestataire tombe 25 ticks | Une file : les paiements attendent et partent à la réouverture |
+| 4. Le banquier ferme | Le prestataire tombe 25 minutes (25 ticks) | Une file : les paiements attendent et partent à la réouverture |
 | 5. La grande foire | 2 400 lectures/s, les deux incidents reviennent | Scaling, réplicas, verrou, et disjoncteur ou file |
 
 ### Le grand tournoi : une billetterie prise d'assaut
 
 Le prestataire d'e-mail (le colombier) est déjà sur le plateau, avec son quota (S18). Les
-clients relancent tout de suite ce qui échoue, jusqu'à trois fois (S19).
+clients relancent tout de suite ce qui échoue, jusqu'à trois fois (S19) : ces clients sont
+votre application, vous en écrivez le code, c'est pourquoi vous pouvez y régler les relances.
 
 | Vague | Information | Réponse attendue |
 | --- | --- | --- |
-| 1. L'ouverture des ventes | Un déploiement raté arrête tous les serveurs 3 s | Backoff sur les clients, ou autoscaling ; sinon la tempête dure jusqu'à la fin |
-| 2. Les pigeons restent au colombier | Le prestataire d'e-mail tombe 30 s, 8 000 alertes/s | Une file avec de la rétention |
-| 3. Le registre coupé en deux | Lectures non cachables et places restantes, partition des réplicas | Réplicas, et lectures critiques sur le primaire |
+| 1. L'ouverture des ventes | Un déploiement raté arrête tous les serveurs 3 minutes | Backoff sur les clients, ou autoscaling ; sinon la tempête dure jusqu'à la fin |
+| 2. Les pigeons restent au colombier | Le prestataire d'e-mail tombe une demi-heure (30 minutes), 8 000 alertes/s | Une file avec de la rétention |
+| 3. Le registre coupé en deux | Lectures non cachables et places restantes, partition des réplicas (un quart d'heure) | Réplicas, et lectures critiques sur le primaire |
 | 4. La joute finale | Les trois incidents | Backoff et scaling, ou autoscaling ; réplica et lecture sur le primaire |
 
 Les budgets, plafonds et seuils de chaque vague sont dans `docs/decisions.md` et verrouillés
@@ -238,6 +241,12 @@ et déterministe, séparée de l'affichage.
 - **Ticks** (M1) : à chaque tick, le trafic traverse le graphe en ordre topologique. Au-delà
   de sa capacité, un nœud fait échouer l'excédent. Seule la file garde un arriéré d'un tick
   à l'autre.
+- **Le temps** (M7) : un tick vaut une minute, une vague de 60 ticks montre une heure. Les
+  débits restent en requêtes par seconde. Le joueur lit des minutes (« de la 31ᵉ à la 33ᵉ
+  minute »), le code et le mode debug des ticks. Aucun chiffre n'a été recalibré ; limite
+  assumée : les compteurs cumulés (arriéré d'une file, requêtes en échec) additionnent un
+  débit par seconde une fois par tick, donc à l'échelle du jeu, pas en volumes réels. La
+  capacité d'une file se lit en minutes de trafic (arrivées par seconde × minutes d'attente).
 - **Requêtes typées** : lecture, écriture, événement async. Les liens ne sont pas typés
   (I1) : chaque composant déclare ce qu'il accepte, et un type va au voisin le plus
   spécialisé qui l'accepte.
@@ -278,10 +287,16 @@ et déterministe, séparée de l'affichage.
   circuit coupé, et l'alarme quand le SLA est rompu, sur les échecs ou sur
   la latence. Capacités, coûts et débits restent chiffrés partout (C4). Tableau de bord,
   alertes à la première saturation, ralenti, courbes en direct.
-- **Debrief** (R9, I8) : l'analyse du chambellan en trois temps, et les courbes tick par
-  tick (R13).
+- **Debrief** (R9, I8) : l'analyse du chambellan en trois temps, et les courbes minute par
+  minute (R13).
 - **Aide** : tutoriel de la vague 1 (I7), puis une fenêtre « que faire » à chaque vague,
-  qui dit ce qui bloque sans souffler la parade (I9, S9).
+  qui dit ce qui bloque sans souffler la parade (I9, S9). Un bouton « Un indice », dans cette
+  fenêtre et dans le debrief d'une vague perdue, donne le prochain élément manquant (I14) :
+  **un indice par essai perdu**, cumulés sur la vague, vidés à la victoire et au retour en
+  arrière, et pas de bouton « toute la solution ». L'indice est déduit des réponses
+  attendues de la vague (`Wave.answers`), sans texte écrit par vague : il vise la réponse
+  atteignable la plus proche du brouillon, et propose le retour en arrière (E6) quand aucune
+  ne l'est. Il désigne un élément, pas une case.
 - **Mode debug** (`?debug` ou D) : essais hors partie, vue tableau, calibrage, détail des
   tentatives. `vitrine.html` montre chaque effet d'incident seul.
 

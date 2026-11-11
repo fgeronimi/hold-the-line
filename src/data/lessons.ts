@@ -81,7 +81,7 @@ export const reasonLessons = {
   },
   queueOverflow: {
     says: 'Débordement à {name} : des colis sont perdus.',
-    tech: 'L’arriéré de la file dépasse sa capacité : les messages en trop sont perdus. Une file absorbe un pic, pas un excès qui dure : l’arriéré monte de (arrivées − départs) chaque seconde.',
+    tech: 'L’arriéré de la file dépasse sa capacité : les messages en trop sont perdus. Une file absorbe un pic, pas un excès qui dure : l’arriéré monte de (arrivées − départs) à chaque minute de jeu. Sa capacité se lit donc en minutes de trafic : arrivées par seconde × minutes d’attente, à l’échelle du jeu et non en volumes réels.',
     remedy: 'Si les consommateurs suivent en moyenne, une file plus longue (rétention) suffit à passer le pic. Sinon, plus de consommateurs derrière la file.',
     concept: 'Backpressure, dimensionner une file',
   },
@@ -165,7 +165,7 @@ export const incidentLessons: Record<IncidentEffect['type'], { hurt: Lesson; hel
   },
   'cold-cache': {
     hurt: {
-      says: '{title}. Le carnet perdu, tout le monde a couru aux archives en même temps : elles ont débordé quelques instants et {failed} voyageurs sont repartis sans réponse.',
+      says: '{title}. Le carnet perdu, tout le monde a couru aux archives en même temps : elles ont débordé quelques minutes et {failed} voyageurs sont repartis sans réponse.',
       tech: 'Un cache vidé renvoie d’un coup toutes les lectures sur la base, qui sature le temps qu’il se remplisse : c’est le cache stampede.',
       remedy: 'Une base qui tient seule le pic de lectures (réplica en lecture), un cache préchauffé, ou de la marge sur la base.',
       concept: 'Cache stampede',

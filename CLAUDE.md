@@ -41,7 +41,8 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   actions (`data-action` délégués) ; `views.ts` rend en chaînes HTML les calques posés sur
   le plateau (barre du haut, barre d'outils, fiche, fenêtres, tiroir de debug) à chaque
   changement ; `board.ts` (poser, déplacer, relier par A*), `debrief.ts` (analyse du
-  chambellan), `tutorial.ts` (guide de la vague 1), `editor.ts` et `calibration.ts` sont purs et testés.
+  chambellan), `tutorial.ts` (guide de la vague 1), `hints.ts` (le bouton « Un indice », déduit de
+  `Wave.answers`, I14), `time.ts` (les durées en minutes), `editor.ts` et `calibration.ts` sont purs et testés.
 - Mode debug : `?debug` dans l'URL ou la touche D. Essais hors partie, vue tableau et
   calibrage n'existent que là.
 - Le plateau 3D (`CityScene`) est créé une fois dans `#board`, **hors** des zones
@@ -127,6 +128,9 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 - `ArchNode.cell` et `ArchLink.path` sont de la mise en scène : la simulation les ignore.
   Tout brouillon passe par `autoPlace` dans `update()`, pour qu'un bâtiment ajouté sans
   case (vue tableau, ancienne sauvegarde) en reçoive une.
+- Un tick vaut une minute pour le joueur (M7) : tout texte de durée se calcule en minutes à
+  partir des ticks (`from`/`until` des incidents, `src/ui/time.ts`) ; les débits restent par
+  seconde, et les compteurs cumulés (arriéré d'une file) sont à l'échelle du jeu.
 - Double narration (décision I6) : nom technique d'abord, métaphore entre parenthèses ;
   toute réplique du chambellan a sa ligne « En vrai ».
 - Les incidents (X5) sont calés pour ne faire perdre aucune réponse attendue : en ajouter

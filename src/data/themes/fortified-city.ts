@@ -105,12 +105,16 @@ export const fortifiedCity: Theme = {
     rebuilt: 'Tout y est, Sire, mais {name} a été démoli puis rebâti : le trésor paie la démolition.',
     ready: 'Tout y est, Sire. Lancez la vague !',
   },
+  timeRule: {
+    says: 'Une chose, Sire : dans la cité, le temps file. Chaque vague tient une heure, et chaque minute passe en un clin d’œil. Mais les voyageurs, eux, se comptent toujours à la seconde.',
+    real: 'Le temps est accéléré : une vague montre une heure de trafic, et un tick de simulation vaut une minute (60 ticks par vague). Les débits restent en requêtes par seconde ; les compteurs cumulés (arriéré d’une file, requêtes en échec) additionnent ces débits minute après minute, à l’échelle du jeu, pas en volumes réels.',
+  },
   narratives: {
     // La billetterie du tournoi.
     'ticket-rush':
-      'Sire, la billetterie du grand tournoi ouvre ! Les spectateurs se pressent aux guichets, et chaque billet vendu part au colombier. Gare : un mauvais déploiement fera tomber tous les guichetiers un instant, et un spectateur refoulé revient aussitôt à la charge, avec ses voisins.',
+      'Sire, la billetterie du grand tournoi ouvre ! Les spectateurs se pressent aux guichets, et chaque billet vendu part au colombier. Gare : un mauvais déploiement fera tomber tous les guichetiers pendant trois minutes, et un spectateur refoulé revient aussitôt à la charge, avec ses voisins.',
     'pigeons-grounded':
-      'Le colombier fermera une demi-minute : plus un pigeon ne part. Les achats, eux, continuent, et chaque billet doit attendre quelque part son pigeon. Mais une file n’est pas un puits sans fond.',
+      'Le colombier fermera une demi-heure : plus un pigeon ne part. Les achats, eux, continuent, et chaque billet doit attendre quelque part son pigeon. Mais une file n’est pas un puits sans fond.',
     'split-registry':
       'Les spectateurs cherchent leurs dates et regardent les places restantes. Les copistes recopient le grand registre pour répondre plus vite… mais un temps, ils ne l’entendront plus. Une place promise et déjà vendue, c’est un spectateur furieux.',
     'final-joust':
@@ -119,11 +123,11 @@ export const fortifiedCity: Theme = {
     checkout:
       'Sire, la boutique encaisse enfin ses ventes. Chaque commande passe par le banquier lombard, de l’autre côté de la rivière : il répond vite, et le chaland attend sa quittance au comptoir.',
     'slow-banker':
-      'Le banquier a ses humeurs : on dit qu’au milieu du jour, il fait attendre chaque paiement de longues secondes. Vos scribes attendront-ils avec lui, au point de ne plus servir personne ?',
+      'Le banquier a ses humeurs : on dit que, quatre minutes durant, il fait attendre chaque paiement de longues secondes. Vos scribes attendront-ils avec lui, au point de ne plus servir personne ?',
     'midnight-expiry':
       'Les voyageurs affluent pour consulter leurs commandes. Mais à minuit, toutes les pages du carnet s’effacent d’un coup, et chacune devra être recopiée des archives.',
     'banker-closed':
-      'Le banquier ferme boutique pour une longue partie du jour. Les commandes, elles, ne s’arrêtent pas : il faudra bien encaisser à sa réouverture.',
+      'Le banquier ferme boutique pour vingt-cinq minutes. Les commandes, elles, ne s’arrêtent pas : il faudra bien encaisser à sa réouverture.',
     fair:
       'La grande foire, Sire ! Une foule immense, le banquier qui traîne, le carnet qui s’efface : tout ce que vous avez appris, il faudra le tenir ensemble.',
     // Le grand marché.
@@ -143,9 +147,9 @@ export const fortifiedCity: Theme = {
     'read-surge':
       'La nouvelle s’est répandue dans tout le royaume : dix fois plus de voyageurs demandent leur chemin. Les archives grondent sous les demandes. Comment les soulager sans vider le trésor ?',
     'marketing-peak':
-      'Les crieurs annoncent une grande foire : pendant un tiers de la journée, cinq fois plus de monde, et la foule arrive en quelques instants. Vos scribes tiendront-ils le choc ?',
+      'Les crieurs annoncent une grande foire : pendant un tiers de l’heure, cinq fois plus de monde, et la foule arrive en quelques minutes. Vos scribes tiendront-ils le choc ?',
     'noisy-client':
-      'La foire a réussi : la foule est restée. Cinquante marchands passent la porte toute la journée. Et deux bandes de pillards sont venues recopier tout le registre des raccourcis, page après page, même les pages que personne ne consulte jamais.',
+      'La foire a réussi : la foule est restée. Cinquante marchands passent la porte sans relâche. Et deux bandes de pillards sont venues recopier tout le registre des raccourcis, page après page, même les pages que personne ne consulte jamais.',
     'click-tracking':
       'Le trésorier veut compter chaque passage par un raccourci. Mais un voyageur ne doit jamais attendre qu’on ait fini de compter.',
   },

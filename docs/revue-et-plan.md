@@ -566,6 +566,21 @@ trois fois le même.
 | D1 | Debrief : coût métier de chaque parade ; ligne « ce qui vous aurait prévenu » (métrique, seuil d'alerte) par incident ; calcul de dimensionnement posé avec les chiffres de la vague | M | nul |
 | D3b | Lignes « en vrai » sourcées dans chaque fiche (section 7), produits réels cités là seulement ; budget de relances dans celle du backoff ; doublons permanents dans celle de l'idempotence, incident renommé « pic de relivraisons » ; vrai coût de l'outbox ; limite par classe de client et 302 derrière un CDN au debrief du raccourcisseur | M | nul |
 
+### Bâtiments ajoutés
+
+Retenus par François le 11 novembre 2026, pour rapprocher le jeu de la pratique. Un ticket
+GitHub par bâtiment.
+
+| Ticket | Bâtiment | Leçon | Quand |
+|---|---|---|---|
+| [#1](https://github.com/fgeronimi/hold-the-line/issues/1) | **Worker**, à part du serveur d'application | Un worker se dimensionne sur l'arriéré, pas sur le trafic entrant | Avec la passe A : il rend lisible la correction de la file (M1) |
+| [#3](https://github.com/fgeronimi/hold-the-line/issues/3) | **File des lettres mortes** | Un message empoisonné bloque une file ; on le met de côté après quelques essais | Après les quatre passes ; dépend de M1 et M6 |
+| [#2](https://github.com/fgeronimi/hold-the-line/issues/2) | **Passerelle d'API** | Des limites de débit par classe de client | Après les quatre passes ; à articuler avec SC1 |
+
+Écartés : le stockage objet (il lui faut un scénario), une tour de supervision (du décor
+sans mécanique), le sharding (trop gros pour le public visé). La bascule de la base,
+proposée comme évolution, n'a pas été retenue pour l'instant.
+
 ---
 
 ## 5. Cohérence avec la vraie vie : décisions

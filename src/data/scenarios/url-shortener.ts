@@ -60,7 +60,7 @@ export const urlShortener: Scenario = {
       id: 'marketing-peak',
       title: 'Campagne marketing',
       briefing:
-        'Une campagne est lancée : le trafic monte en quelques secondes jusqu’à 5 fois la normale (4 500 lectures par seconde), pendant un tiers de la vague. Une instance de serveur d’application traite 1 500 requêtes par seconde.',
+        'Une campagne est lancée : le trafic monte en quelques minutes jusqu’à 5 fois la normale (4 500 lectures par seconde), pendant un tiers de la vague (20 minutes). Une instance de serveur d’application traite 1 500 requêtes par seconde.',
       ticks: TICKS,
       ramp: RAMP,
       profile: [

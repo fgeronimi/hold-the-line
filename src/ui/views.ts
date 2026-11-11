@@ -8,6 +8,7 @@ import { calibrationGroups, formatField, getAt } from './calibration.ts';
 import { analyzeWave, type Finding } from './debrief.ts';
 import { hintPanel, type HintPanel } from './hints.ts';
 import { guideStep, type TutorialStep } from './tutorial.ts';
+import { minuteSpan, minutes } from './time.ts';
 import { SCENARIOS } from '../data/scenarios/index.ts';
 import { chartModel, renderChart } from '../render/charts.ts';
 import { nodeNames } from '../render/theme.ts';
@@ -123,11 +124,20 @@ function capacityText(node: Architecture['nodes'][number], def: Catalog['compone
     .join(', ');
   const replica = Object.values(catalog.upgrades).find((u) => u.appliesTo === node.type && u.effect.type === 'readReplicas');
   const replicas = level('readReplicas');
+  const retention = Object.values(catalog.upgrades).find((u) => u.appliesTo === node.type && u.effect.type === 'retention');
+  // Un arriéré en messages additionne des débits par seconde, une fois par minute de jeu (M7).
+  const backlog =
+    def.maxBacklog !== undefined
+      ? def.maxBacklog + (retention && retention.effect.type === 'retention' ? retention.effect.perLevel * level('retention') : 0)
+      : undefined;
   return [
     `Capacité : ${fmt(def.capacity)} unités de travail par seconde${instances > 1 ? ` × ${instances} instances = ${fmt(def.capacity * instances)}` : ''}.`,
     costs ? `Coût en travail : ${costs}.` : '',
     replica && replica.effect.type === 'readReplicas'
       ? `Chaque réplica ajoute ${fmt(replica.effect.capacityPerReplica)} unités pour les lectures${replicas > 0 ? ` (ici ${replicas}, soit +${fmt(replica.effect.capacityPerReplica * replicas)})` : ''}.`
+      : '',
+    backlog !== undefined
+      ? `Arriéré maximal : ${fmt(backlog)} messages. À l’échelle du jeu, la capacité se lit en minutes de trafic : arrivées par seconde × minutes d’attente.`
       : '',
     `Latence ${def.latencyMs} ms · prix ${def.cost} · complexité ${def.complexity}.`,
   ]
@@ -338,7 +348,7 @@ export function renderDialog(s: ViewState): string {
     ${finished ? `<p class="final">La cité a tenu toutes les vagues. <b>${totalStars(s)} / ${s.scenario.waves.length * 3}</b> ★, score final <b>${fmt(totalScore(s))}</b> 🏅</p>` : ''}
     ${attemptWave
       ? s.debriefTab === 'charts'
-        ? `${renderChart(chartModel(r, a.arch, attemptWave, s.catalog, theme))}<p class="muted">Survoler pour lire chaque tick. La courbe d’un bâtiment passe en rouge au-delà de sa capacité ; les barres rouges sont les requêtes en échec, les bandes orange les incidents.</p>`
+        ? `${renderChart(chartModel(r, a.arch, attemptWave, s.catalog, theme))}<p class="muted">Survoler pour lire chaque minute. La courbe d’un bâtiment passe en rouge au-delà de sa capacité ; les barres rouges sont les requêtes en échec, les bandes orange les incidents.</p>`
         : renderFindings(analyzeWave(r, a.arch, attemptWave, s.catalog, theme))
       : ''}
     ${a.played && !r.won && a.waveIndex === s.game.waveIndex ? renderHints(hintsOf(s)) : ''}
@@ -481,7 +491,13 @@ export function upgradePips(
               : `+${level}`;
       const price = u.cost.perLevel > 0 ? `${u.cost.base > 0 ? `${u.cost.base} + ` : ''}${u.cost.perLevel} par niveau` : `${u.cost.base}`;
       const tiers = u.effect.type === 'rateLimit' ? `<br>paliers : ${u.effect.tiersPerClientRps.join(', ')} req/s par client` : '';
-      const tip = `<em>${esc(u.techName)}</em>${esc(u.label)}<br>${price} · +${u.complexity.base + u.complexity.perLevel} complexité${tiers}`;
+      const delay =
+        u.effect.type === 'autoscaling'
+          ? `<br>une instance démarre en ${minutes(u.effect.startupTicks)}`
+          : u.effect.type === 'backoff'
+            ? `<br>relances étalées sur ${minutes(u.effect.spreadTicks)}`
+            : '';
+      const tip = `<em>${esc(u.techName)}</em>${esc(u.label)}<br>${price} · +${u.complexity.base + u.complexity.perLevel} complexité${tiers}${delay}`;
       const data = `data-action="upgrade-step" data-node="${esc(node.id)}" data-upgrade="${esc(u.id)}"`;
       const face = `<span class="icon">${icon}<b>${esc(badge)}</b></span>`;
       return leveled
@@ -519,8 +535,9 @@ function renderBriefing(wave: Wave, s: ViewState): string {
   return `
     <section>
       ${theme.narratives[wave.id] ? speech(theme.narratives[wave.id]!, wave.briefing) : `<p class="briefing">${esc(wave.briefing)}</p>`}
+      ${s.scenario.waves[0]?.id === wave.id ? speech(theme.timeRule.says, theme.timeRule.real) : ''}
       ${(wave.incidents ?? [])
-        .map((i) => `<p class="incident">⚡ <b>Incident annoncé :</b> ${esc(i.title)}, ticks ${i.from + 1} à ${i.until}. <i>${esc(nameOf(i.component, s.catalog))}</i></p>`)
+        .map((i) => `<p class="incident">⚡ <b>Incident annoncé :</b> ${esc(i.title)}, ${minuteSpan(i.from, i.until)}. <i>${esc(nameOf(i.component, s.catalog))}</i></p>`)
         .join('')}
       <p>⭐ Objectifs : tenir · du premier coup · facture ≤ ${wave.thriftyCost ?? wave.budget}</p>
       <p>Budget ${wave.budget} · complexité max ${wave.complexityCap}

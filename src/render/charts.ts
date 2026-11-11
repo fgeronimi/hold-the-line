@@ -230,7 +230,7 @@ export function renderChart(m: ChartModel, opts: { live?: boolean } = {}): strin
 
   const axisY = H - CHART.axis + 12;
   for (let t = 0; t <= m.ticks; t += 10) {
-    parts.push(`<text class="chart-axis" x="${x0 + t * step}" y="${axisY}" text-anchor="middle">${t === 0 ? 'tick 0' : t}</text>`);
+    parts.push(`<text class="chart-axis" x="${x0 + t * step}" y="${axisY}" text-anchor="middle">${t === 0 ? 'min 0' : t}</text>`);
   }
   if (opts.live) {
     parts.push(`<rect class="chart-veil" data-chart="veil" x="${x0}" y="${CHART.top - 20}" width="${x1 - x0 + CHART.right}" height="${H - CHART.top + 20 - CHART.axis}"/>`);
@@ -243,7 +243,7 @@ export function renderChart(m: ChartModel, opts: { live?: boolean } = {}): strin
   );
 
   return `<div class="chart" data-chart="root">
-    <svg viewBox="0 0 ${CHART.width} ${H}" role="img" aria-label="Courbes de la vague, tick par tick">${parts.join('')}</svg>
+    <svg viewBox="0 0 ${CHART.width} ${H}" role="img" aria-label="Courbes de la vague, minute par minute">${parts.join('')}</svg>
     <div class="chart-tip" data-chart="tip" hidden></div>
   </div>`;
 }
@@ -282,7 +282,7 @@ export function attachChart(root: HTMLElement, m: ChartModel, onSeek?: (tick: nu
 
     tip.replaceChildren();
     const head = document.createElement('b');
-    head.textContent = `Tick ${tick + 1}`;
+    head.textContent = `Minute ${tick + 1}`;
     tip.append(head);
     for (const row of tooltipRows(m, tick)) {
       const line = document.createElement('div');

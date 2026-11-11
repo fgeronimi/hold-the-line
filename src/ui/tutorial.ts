@@ -3,6 +3,7 @@ import type { Architecture, Catalog, Wave } from '../engine/types.ts';
 import { validateArchitecture } from '../engine/validate.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { nodeNames } from '../render/theme.ts';
+import { minuteSpan } from './time.ts';
 
 /** Ce qu'il faut faire maintenant, et quel bouton de la barre d'outils le montre. */
 export interface TutorialStep {
@@ -169,7 +170,7 @@ export function guideStep(
       real: `La complexité dépasse le plafond de la vague (${complexity} / ${wave.complexityCap}). Chaque composant et chaque évolution en ajoute.`,
     };
   }
-  const incidents = (wave.incidents ?? []).map((i) => ` Incident annoncé : ${i.title.toLowerCase()} (ticks ${i.from + 1} à ${i.until}).`).join('');
+  const incidents = (wave.incidents ?? []).map((i) => ` Incident annoncé : ${i.title.toLowerCase()} (${minuteSpan(i.from, i.until)}).`).join('');
   if (tutorial) return { ...tutorialStep(arch, catalog), real: `${tutorialStep(arch, catalog).real}${incidents}` };
   return {
     id: 'launch',

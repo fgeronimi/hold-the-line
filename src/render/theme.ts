@@ -43,6 +43,8 @@ export interface Theme {
   narrator: { name: string; icon: string };
   /** Le récit de chaque vague dans la métaphore (clé : id de la vague) ; les chiffres restent affichés à côté. */
   narratives: Record<string, string>;
+  /** La règle du temps (décision M7), annoncée au premier briefing de chaque scénario : sa réplique, puis « En vrai ». */
+  timeRule: { says: string; real: string };
   /** L'icône de chaque évolution sur sa pastille, au pied du bâtiment (clé : id du catalogue). */
   upgradeIcons: Record<string, string>;
   /**
