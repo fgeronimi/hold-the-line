@@ -289,3 +289,92 @@ export function outcomeOf(j: Journey): Outcome | undefined {
   if (!returns) return { ...reached, result: 'served' };
   return { node: forward[0]!.link.split('→')[0]!, at: j.start + journeyDuration(j), result: 'served' };
 }
+
+/** Un trajet et l'instant où il s'achève, calculé une fois pour toutes. */
+export interface TimedJourney {
+  j: Journey;
+  end: number;
+}
+
+/**
+ * Les trajets en route à un instant donné (`start <= time < end`), sans refiltrer toute la
+ * vague à chaque image. Les trajets sont connus d'avance : un index avance sur ceux triés par
+ * départ, et seuls les trajets en cours sont revus. Reculer dans le temps (curseur, courbes)
+ * repart de zéro : c'est rare. L'ordre rendu est celui du tableau d'origine, comme un filtre.
+ */
+export class JourneyWindow {
+  private readonly byStart: number[];
+  private next = 0;
+  private active: number[] = [];
+  private last = -Infinity;
+
+  private readonly items: readonly TimedJourney[];
+
+  constructor(items: readonly TimedJourney[]) {
+    this.items = items;
+    this.byStart = items.map((_, i) => i).sort((a, b) => items[a]!.j.start - items[b]!.j.start || a - b);
+  }
+
+  at(time: number): Journey[] {
+    if (time < this.last) {
+      this.next = 0;
+      this.active = [];
+    }
+    this.last = time;
+    while (this.next < this.byStart.length && this.items[this.byStart[this.next]!]!.j.start <= time) {
+      this.active.push(this.byStart[this.next]!);
+      this.next++;
+    }
+    // Compactage sur place : un trajet fini ne revient jamais tant que le temps avance.
+    let kept = 0;
+    for (const i of this.active) if (this.items[i]!.end > time) this.active[kept++] = i;
+    this.active.length = kept;
+    this.active.sort((a, b) => a - b);
+    return this.active.map((i) => this.items[i]!.j);
+  }
+}
+
+/** Premier indice de `sorted` dont la valeur dépasse `x` (recherche dichotomique). */
+function firstAbove(sorted: readonly number[], x: number): number {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid]! <= x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** Les issues qui viennent d'arriver (`time - 1 < at <= time`), sur des issues triées par `at`. */
+export class RecentOutcomes {
+  private readonly sorted: readonly Outcome[];
+  private readonly ats: number[];
+
+  constructor(sorted: readonly Outcome[]) {
+    this.sorted = sorted;
+    this.ats = sorted.map((o) => o.at);
+  }
+
+  at(time: number): Outcome[] {
+    return this.sorted.slice(firstAbove(this.ats, time - 1), firstAbove(this.ats, time));
+  }
+}
+
+/**
+ * Les cumuls d'issues par type, lus à n'importe quel instant par dichotomie : plus de
+ * parcours des résultats à chaque image. Reçoit les issues dans n'importe quel ordre.
+ */
+export class OutcomeTally {
+  private readonly ats: Record<Outcome['result'], number[]> = { served: [], refused: [], repelled: [], twice: [], ignored: [] };
+
+  constructor(outcomes: readonly Outcome[]) {
+    for (const o of outcomes) this.ats[o.result].push(o.at);
+    for (const list of Object.values(this.ats)) list.sort((a, b) => a - b);
+  }
+
+  /** Combien d'issues de ce type sont arrivées à l'instant `time` (inclus). */
+  count(result: Outcome['result'], time: number): number {
+    return firstAbove(this.ats[result], time);
+  }
+}

@@ -5,7 +5,8 @@ import { escapeHtml } from './html.ts';
 import { firstSaturations, replayStats } from './hud.ts';
 import type { CityScene } from './scene.ts';
 import type { Theme } from './theme.ts';
-import { journeyDuration, journeysForTick, outcomeOf, trafficScale, type Journey, type Outcome } from './traffic.ts';
+import { minuteSpan } from './time.ts';
+import { JourneyWindow, OutcomeTally, RecentOutcomes, journeyDuration, journeysForTick, outcomeOf, trafficScale, type Outcome } from './traffic.ts';
 
 export interface ReplayOptions {
   title: string;
@@ -41,7 +42,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     <span data-r="readout"></span>
     <span class="hud" data-r="hud"></span>
     <button data-r="recenter" title="Revoir tout le plateau">Recentrer</button>
-    <button data-r="charts" title="Courbes tick par tick, bâtiment par bâtiment">📈 Courbes</button>
+    <button data-r="charts" title="Courbes minute par minute, bâtiment par bâtiment">📈 Courbes</button>
     <span class="replay-legend">${Object.values(o.theme.vehicles)
       .map((v) => `<i style="background:${v.color}"></i>${escapeHtml(v.metaphor)}`)
       .join(' ')}<i style="background:${o.theme.alert}"></i>${escapeHtml(o.theme.failed)}<i style="background:${o.theme.hostile.color}"></i>${escapeHtml(o.theme.hostile.metaphor)}</span>
@@ -72,13 +73,15 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   const play = $<HTMLButtonElement>('play');
 
   const scale = trafficScale(o.result.ticks);
-  const journeys: { j: Journey; end: number }[] = o.result.ticks
-    .flatMap((t, i) => journeysForTick(t, i, scale))
-    .map((j) => ({ j, end: j.start + journeyDuration(j) }));
-  const outcomes: Outcome[] = journeys
+  const timed = o.result.ticks.flatMap((t, i) => journeysForTick(t, i, scale)).map((j) => ({ j, end: j.start + journeyDuration(j) }));
+  const outcomes: Outcome[] = timed
     .map(({ j }) => outcomeOf(j))
     .filter((o): o is Outcome => o !== undefined)
     .sort((a, b) => a.at - b.at);
+  // Les trajets et les issues sont connus d'avance : des index évitent de tout refiltrer à chaque image.
+  const journeys = new JourneyWindow(timed);
+  const recent = new RecentOutcomes(outcomes);
+  const tally = new OutcomeTally(outcomes);
 
   scene.setArchitecture(o.arch, o.catalog);
   scene.setMode('replay');
@@ -112,6 +115,8 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   const shownIncidents = new Set<number>();
   const shown = new Set<string>();
   let slowFor = 0;
+  let hudHtml = '';
+  let readoutText = '';
 
   let time = 0;
   let playing = true;
@@ -134,13 +139,13 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     incidents.forEach((i, k) => {
       if (i.tick > time || shownIncidents.has(k)) return;
       shownIncidents.add(k);
-      messages.push(`⚡ Incident au tick ${i.tick + 1} : ${i.title}.`);
+      messages.push(`⚡ Incident ${minuteSpan(i.tick, i.tick)} : ${i.title}.`);
       focus ??= i.node;
     });
     for (const a of alerts) {
       if (a.tick > time || shown.has(a.node)) continue;
       shown.add(a.node);
-      messages.push(`⚠ ${nameOf(a.node)} sature au tick ${a.tick + 1}.`);
+      messages.push(`⚠ ${nameOf(a.node)} sature ${minuteSpan(a.tick, a.tick)}.`);
       focus ??= a.node;
     }
     if (messages.length === 0) return;
@@ -151,7 +156,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   };
 
   const renderHud = () => {
-    const st = replayStats(o.result, outcomes, time);
+    const st = replayStats(o.result, tally, time);
     // Se cacher puis réapparaître rejoue l'animation : revenir avant le seuil la réarme.
     const breach = st.failureRate > o.wave.sla.maxFailureRate ? 'failures' : latencyBreach !== undefined && time >= latencyBreach ? 'latency' : undefined;
     alarm.hidden = breach === undefined;
@@ -162,12 +167,17 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     const { sla, budget } = o.wave;
     const cost = o.result.gauges.cost.value;
     const gauge = (label: string, value: string, bad: boolean) => `<span class="${bad ? 'ko' : ''}">${label} <b>${value}</b></span>`;
-    hud.innerHTML = [
+    const html = [
       gauge('échecs', `${(st.failureRate * 100).toFixed(2)} % / ${(sla.maxFailureRate * 100).toFixed(0)} %`, st.failureRate > sla.maxFailureRate),
       gauge('latence', `${Math.round(st.latencyMs)} / ${sla.maxP95LatencyMs} ms`, st.latencyMs > sla.maxP95LatencyMs),
       gauge('coût', `${Math.round(cost)} / ${budget}`, cost > budget),
       `<span class="ok">+${st.served} 👍</span> <span class="ko">−${st.refused} 👎</span>${st.repelled > 0 ? ` <span>🛡 ${st.repelled}</span>` : ''}`,
     ].join(' · ');
+    // Le tableau de bord ne change qu'une fois par minute ou par issue : inutile de le réécrire à chaque image.
+    if (html !== hudHtml) {
+      hudHtml = html;
+      hud.innerHTML = html;
+    }
   };
 
   scene.onFrame = (dt) => {
@@ -188,10 +198,16 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     scene.showTick(
       time,
       tick,
-      journeys.filter(({ j, end }) => j.start <= time && end > time).map(({ j }) => j),
-      outcomes.filter((o) => o.at <= time && o.at > time - 1),
+      journeys.at(time),
+      recent.at(time),
     );
-    if (tick) readout.textContent = `tick ${Math.floor(Math.min(time, end - 1)) + 1}/${end} · ${Math.round(tick.offered)} req/s`;
+    if (tick) {
+      const text = `minute ${Math.floor(Math.min(time, end - 1)) + 1}/${end} · ${Math.round(tick.offered)} req/s`;
+      if (text !== readoutText) {
+        readoutText = text;
+        readout.textContent = text;
+      }
+    }
     // Une fois la vague finie, le debrief prend la place : plus de bandeau.
     if (!ended) raiseAlerts();
     renderHud();

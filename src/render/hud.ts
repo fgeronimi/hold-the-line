@@ -1,5 +1,5 @@
 import type { SimEvent, WaveResult } from '../engine/types.ts';
-import type { Outcome } from './traffic.ts';
+import { OutcomeTally, type Outcome } from './traffic.ts';
 
 /** Ce que le tableau de bord du rejeu affiche à l'instant `time`. */
 export interface ReplayStats {
@@ -12,17 +12,21 @@ export interface ReplayStats {
   repelled: number;
 }
 
-export function replayStats(result: WaveResult, outcomes: Outcome[], time: number): ReplayStats {
-  const done = result.ticks.slice(0, Math.min(Math.floor(time) + 1, result.ticks.length));
-  const last = done.at(-1);
+/**
+ * Les issues peuvent venir en tableau (tests, appels ponctuels) ou déjà cumulées par
+ * `OutcomeTally` : le rejeu en construit une pour toute la vague et la relit à chaque image.
+ */
+export function replayStats(result: WaveResult, outcomes: Outcome[] | OutcomeTally, time: number): ReplayStats {
+  const tally = outcomes instanceof OutcomeTally ? outcomes : new OutcomeTally(outcomes);
+  const shown = Math.min(Math.floor(time) + 1, result.ticks.length);
+  const last = shown > 0 ? result.ticks[shown - 1] : undefined;
   const counted = last?.countedSoFar ?? 0;
-  const count = (r: Outcome['result']) => outcomes.filter((o) => o.result === r && o.at <= time).length;
   return {
     failureRate: counted > 0 ? last!.clientFailedSoFar / counted : 0,
     latencyMs: last?.slaLatencyMs ?? 0,
-    served: count('served'),
-    refused: count('refused'),
-    repelled: count('repelled'),
+    served: tally.count('served', time),
+    refused: tally.count('refused', time),
+    repelled: tally.count('repelled', time),
   };
 }
 

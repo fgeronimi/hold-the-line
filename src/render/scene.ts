@@ -186,6 +186,12 @@ export class CityScene {
   /** Case du bâtiment saisi, et si le glisser a vraiment commencé. */
   private grabbed: { cell: Hex; dragging: boolean } | undefined;
   private frameId = 0;
+  /**
+   * Hors rejeu, rien ne bouge tant que personne n'y touche : on ne rend que si ce drapeau est
+   * levé. Toute modification visible du plateau passe par `invalidate()` ; dans le doute on
+   * lève le drapeau, une image de trop ne coûte rien, une image manquante se voit.
+   */
+  private dirty = true;
   private last = performance.now();
   /** Cadrage visé par un recentrage en cours : la caméra glisse vers lui à chaque image. */
   private focus: { target: Vector3; zoom: number } | undefined;
@@ -259,11 +265,19 @@ export class CityScene {
     canvas.addEventListener('pointerdown', this.pointerDown, { capture: true });
     canvas.addEventListener('pointerup', this.pointerUp);
     canvas.addEventListener('pointerleave', this.pointerLeave);
+    // Le glisser et le zoom de la caméra (et son amortissement, s'il est activé) passent par là.
+    this.controls.addEventListener('change', this.invalidate);
+    document.addEventListener('visibilitychange', this.invalidate);
     this.frameId = requestAnimationFrame(this.frame);
   }
 
+  private readonly invalidate = () => {
+    this.dirty = true;
+  };
+
   /** Remplace bâtiments, chemins et arbres par ceux de l'architecture. */
   setArchitecture(arch: Architecture, catalog: Catalog): void {
+    this.invalidate();
     this.catalog = catalog;
     this.clearDynamic();
     this.layout = layoutArchitecture(arch);
@@ -277,6 +291,7 @@ export class CityScene {
   }
 
   setMode(mode: SceneMode): void {
+    this.invalidate();
     this.mode = mode;
     this.cursor.visible = false;
     if (this.ghost) this.ghost.visible = false;
@@ -288,6 +303,7 @@ export class CityScene {
 
   /** Bâtiment fantôme à poser sous le curseur, ou aucun. */
   setGhost(type: string | undefined): void {
+    this.invalidate();
     if (this.ghost) {
       this.scene.remove(this.ghost);
       this.disposeTree(this.ghost);
@@ -317,6 +333,7 @@ export class CityScene {
 
   /** Marque une case, bâtie ou non : la case vide où l'on s'apprête à construire. */
   setMarkedAt(cell: Hex | undefined, color = '#ffd166'): void {
+    this.invalidate();
     this.marker.visible = cell !== undefined && this.mode === 'build';
     if (!cell) return;
     const p = hexCenter(cell);
@@ -329,6 +346,7 @@ export class CityScene {
    * n'est remplacé que s'il change : une pastille survolée garde son infobulle.
    */
   setPips(nodeId: string | undefined, html: string): void {
+    this.invalidate();
     const at = nodeId ? this.buildings.get(nodeId)?.home : undefined;
     this.pipsFor = at && html && this.mode === 'build' ? nodeId : undefined;
     this.pips.visible = this.pipsFor !== undefined;
@@ -343,12 +361,14 @@ export class CityScene {
 
   /** Recentre doucement la vue sur un bâtiment (zoom avant), ou sur tout le plateau. */
   focusOn(nodeId: string | undefined, zoom = 1.8): void {
+    this.invalidate();
     const at = nodeId ? this.layout.nodes[nodeId] : undefined;
     this.focus = at ? { target: new Vector3(at.x, 0, at.z), zoom } : { target: this.home.target.clone(), zoom: this.home.zoom };
   }
 
   /** Affiche l'état du tick courant et les véhicules en route à l'instant `time`. */
   showTick(time: number, tick: TickMetrics | undefined, journeys: Journey[], outcomes: Outcome[] = []): void {
+    this.invalidate();
     this.effects.begin(performance.now() / 1000);
     this.updateBuildings(tick);
     this.updateWaiting(tick);
@@ -387,6 +407,8 @@ export class CityScene {
   dispose(): void {
     cancelAnimationFrame(this.frameId);
     window.removeEventListener('resize', this.fit);
+    document.removeEventListener('visibilitychange', this.invalidate);
+    this.controls.removeEventListener('change', this.invalidate);
     this.controls.dispose();
     this.disposeTree(this.scene);
     this.renderer.dispose();
@@ -398,10 +420,17 @@ export class CityScene {
     const dt = Math.min((now - this.last) / 1000, 0.1);
     this.last = now;
     this.onFrame?.(dt);
+    // Le recentrage bouge la caméra à chaque image jusqu'à son arrivée, dernière image comprise.
+    if (this.focus) this.dirty = true;
     this.glideToFocus(dt);
+    // Peut lever le drapeau (événement `change`) : à lire après.
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
-    this.labels.render(this.scene, this.camera);
+    // Un rejeu anime à chaque image (flammes, fumée, pas des voyageurs) : rendu continu.
+    if (this.dirty || this.onFrame || this.mode === 'replay') {
+      this.dirty = false;
+      this.renderer.render(this.scene, this.camera);
+      this.labels.render(this.scene, this.camera);
+    }
     this.frameId = requestAnimationFrame(this.frame);
   };
 
@@ -431,6 +460,7 @@ export class CityScene {
 
   private readonly fit = () => {
     const { clientWidth: w, clientHeight: h } = this.host;
+    this.invalidate();
     this.renderer.setSize(w, h);
     this.labels.setSize(w, h);
     const { minX, maxX, minZ, maxZ } = this.layout.bounds;
@@ -465,6 +495,7 @@ export class CityScene {
       this.grabbed.dragging = true;
       this.events.onDragStart?.(this.grabbed.cell);
     }
+    this.invalidate();
     this.hovered = this.cellUnder(e);
     if (!this.hovered) return this.pointerLeave();
     const ok = this.events.canUse?.(this.hovered) ?? true;
@@ -506,6 +537,7 @@ export class CityScene {
   };
 
   private readonly pointerLeave = () => {
+    this.invalidate();
     this.hovered = undefined;
     this.cursor.visible = false;
     if (this.ghost) this.ghost.visible = false;

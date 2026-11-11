@@ -881,7 +881,7 @@ const ENTRIES: Entry[] = [
   {
     title: 'Autoscaling en chantier',
     chip: { text: 'branché', kind: 'ok' },
-    text: 'L’autoscaling réserve des fondations sur la case voisine. Quand la charge monte, un échafaudage se dresse et une tour pousse en deux ticks ; pendant ce temps, des voyageurs repartent refoulés. Une fois en service, la tour soulage les autres ; la foule partie, elle est rendue. On voit enfin le délai de démarrage.',
+    text: 'L’autoscaling réserve des fondations sur la case voisine. Quand la charge monte, un échafaudage se dresse et une tour pousse en deux minutes ; pendant ce temps, des voyageurs repartent refoulés. Une fois en service, la tour soulage les autres ; la foule partie, elle est rendue. On voit enfin le délai de démarrage.',
     trigger: '<code>autoscaling</code> du serveur, <code>instances</code> du tick et délai de démarrage',
     setup: (v) => {
       const site = v.site(towers(v, 2));
@@ -906,7 +906,7 @@ const ENTRIES: Entry[] = [
         const grow = starting ? building : p >= 0.56 && p < 0.85 ? 1 : p >= 0.85 ? 1 - between(p, 0.85, 0.95) : 0;
         slot.tower.scale.set(1, Math.max(0.02, grow), 1);
         stage.style.opacity = p >= 0.3 && p < 0.95 ? '1' : '0';
-        stage.textContent = starting ? `🏗 démarrage ${building < 0.5 ? 1 : 2}/2 ticks` : serving ? '✔ en service' : '↘ instance rendue';
+        stage.textContent = starting ? `🏗 démarrage ${building < 0.5 ? 1 : 2}/2 minutes` : serving ? '✔ en service' : '↘ instance rendue';
         for (const { i, go, back } of crowd) {
           const f = phase(t, 1.6, i / crowd.length);
           const lane = ((i % 2) - 0.5) * 0.4;
