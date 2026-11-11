@@ -66,7 +66,8 @@ npm install
 npm run dev        # le jeu en local
 npm test           # tests (Vitest)
 npm run typecheck  # TypeScript
-npm run balance    # simulation en masse : l'équilibrage des vagues (~30 s)
+npm run balance    # simulation en masse : l'équilibrage des vagues (~1 min)
+npm run balance:check  # compare l'équilibrage à docs/balance-snapshot.txt
 npm run build      # site statique dans dist/
 ```
 

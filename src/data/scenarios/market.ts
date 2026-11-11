@@ -47,6 +47,9 @@ export const market: Scenario = {
       budget: 100,
       complexityCap: 5,
       thriftyCost: 95,
+      answers: [
+        { delivery: 2 },
+      ],
       consumers: ['mail'],
       singleStrategy: true,
     },
@@ -63,6 +66,9 @@ export const market: Scenario = {
       budget: 180,
       complexityCap: 12,
       thriftyCost: 175,
+      answers: [
+        { delivery: 4 },
+      ],
       consumers: ALL,
       singleStrategy: true,
     },
@@ -79,6 +85,9 @@ export const market: Scenario = {
       budget: 210,
       complexityCap: 15,
       thriftyCost: 205,
+      answers: [
+        { delivery: 4, idempotence: 1 },
+      ],
       consumers: ALL,
       singleStrategy: true,
       incidents: [{ id: 'redelivery', title: 'Le bus relivre des messages', component: 'pubsub', from: 20, until: 40, effect: { type: 'duplicate-delivery', share: 0.2 } }],
@@ -96,6 +105,14 @@ export const market: Scenario = {
       budget: 260,
       complexityCap: 19,
       thriftyCost: 240,
+      // Les deux premières gardent l'idempotence de la vague 3 : sans incident de doublon ici elle
+      // est superflue (les deux dernières), mais la retirer coûterait une migration au joueur.
+      answers: [
+        { delivery: 4, idempotence: 1, outbox: 1, cache: 1 },
+        { delivery: 4, idempotence: 1, outbox: 1, replicas: 1 },
+        { delivery: 4, outbox: 1, cache: 1 },
+        { delivery: 4, outbox: 1, replicas: 1 },
+      ],
       consumers: ALL,
       incidents: [{ id: 'crash-before-publish', title: 'Le serveur tombe avant de publier', component: 'app-server', from: 20, until: 35, effect: { type: 'publish-loss', share: 0.3 } }],
     },
@@ -112,6 +129,9 @@ export const market: Scenario = {
       budget: 270,
       complexityCap: 21,
       thriftyCost: 265,
+      answers: [
+        { delivery: 4, scaling: 1, idempotence: 1, outbox: 1, cache: 1 },
+      ],
       consumers: ALL,
       // Le réplica de la vague 4 ne suffit plus : l'outbox et les soldes chargent trop la base.
       singleStrategy: true,

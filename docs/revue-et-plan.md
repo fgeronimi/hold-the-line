@@ -447,13 +447,56 @@ casser l'équilibrage ou le jeu.
 | A5 | Corriger la dérive des docs (B7) | S | nul | — |
 | A6 | **Les réponses attendues de chaque vague passent en données** (`Wave.answers` : des choix dans l'espace d'équilibrage du scénario). Les quatre tests de verrouillage les lisent au lieu de les réécrire | S | nul | Le système d'aide (H1) ; une seule source pour les tests, l'aide et la doc |
 
+**État au 11 novembre 2026 : étape 0 faite** (branche `filets-equilibrage`). 299 tests
+verts et 2 échecs attendus, typecheck propre, `npm run balance:check` identique à
+l'instantané. Ce qu'elle a trouvé en plus de la revue, figé dans les tests et ajouté aux
+passes de l'étape 3 :
+
+| # | Écart | Où | Figé par | Passe |
+|---|---|---|---|---|
+| B8 | Le rate limiting fait disparaître l'async des requêtes qu'il rejette : ni servi, ni échoué, alors que le CDN compte en échec l'async qu'il perd | `simulate.ts:620-648` | `tests/conservation.test.ts`, E1 (`it.fails`) | A |
+| B9 | Le taux d'échec peut dépasser 100 % : les « non livrés » se comptent par abonné, le dénominateur en requêtes (119 % sur le marché sans livraison) | `simulate.ts:415-423`, `:465-467` | `conservation.test.ts`, E2 (`it.fails`) ; `engine-mechanics.test.ts` | D |
+| B10 | Un doublon traité deux fois est relancé comme un échec synchrone quand les clients relancent ; `undelivered` sans doute aussi | `simulate.ts:1033`, `:430`, `:421` | `engine-mechanics.test.ts` | B, avec M3 |
+| B11 | Le CDN sert les lectures d'une source `consistent`, que le cache écarte : contredit S21 | `simulate.ts:793-795` | `engine-mechanics.test.ts` | B |
+| B12 | L'effondrement capacité / charge s'applique à tout nœud saturé dès qu'une seule source relance, même s'il ne la voit jamais | `simulate.ts:334` | non figé | B, avec M3 |
+
+Écarts de calibrage relevés en passant les réponses en données, sans conséquence sur les
+tests : l'idempotence est superflue en vague 4 du marché (205 et 230 gagnent sans elle,
+`decisions.md` annonce 235 et 260) ; en vague 4 du tournoi, 3 instances + backoff gagnent
+à 210 alors que la doc et le test verrouillent 4 instances à 230. À reprendre dans les
+passes B et D, qui recalibrent ces vagues.
+
+**Étape 1, système d'aide : fait** (H1, H2, H3), non commité. 363 tests verts et 4 échecs
+attendus, typecheck et build propres, instantané d'équilibrage identique. Reste à écrire
+I14 dans `decisions.md` et `spec.md`, à vérifier l'aide à l'œil dans le navigateur, et les
+textes du temps compressé (D3a).
+
+Le test « suivre les indices mène à la victoire » a trouvé un défaut bloquant du jeu :
+
+| # | Écart | Preuve | Figé par | Correction |
+|---|---|---|---|---|
+| B13 | **La vague 4 du tournoi est ingagnable après une vague 3 gagnée.** La vague 3 exige 2 réplicas ; en vague 4, les garder ou en retirer un (40 de migration) mène au mieux à 245 pour un budget de 235. Aucun retour en arrière n'y change rien : toute vague 3 gagnante a 2 réplicas | Énumération des 2 100 architectures de l'espace, jouées depuis chacune des deux réponses de la vague 3 : 0 gagnante ; 67 tiennent le SLA et la complexité, la moins chère à 245 | `tests/hints.test.ts`, `DATA_DEFECTS` (2 `it.fails`) | Recalibrer la vague 4 (`src/data/scenarios/tournament.ts`) : budget à 250 et seuil d'économie à 245, à vérifier par l'énumération. À faire avant tout test de jeu, sans attendre la passe B |
+
+L'énumération ne voyait pas ce défaut parce qu'elle joue chaque vague sans architecture
+précédente. **Corrigé** : `npm run balance` contrôle maintenant l'enchaînement (décision
+B7). Une vague qu'aucune réponse de la précédente ne permet de gagner est un blocage, et
+un KO ; un départ sans gagnante alors qu'un autre passe est une impasse, listée sans KO,
+dont on sort par le retour en arrière (E6). La vague 4 du tournoi passe à 250 de budget et
+245 de seuil d'économie ; aucune architecture sans la parade attendue ne s'est mise à
+gagner.
+
+Impasses restantes, à reprendre dans la passe de leur scénario : raccourcisseur, vague 4
+depuis « CDN + réplica » et vague 5 depuis la réponse CDN (celle-ci est assumée, X1) ;
+marché, vague 5 depuis les variantes à réplica de la vague 4 ; tournoi, vague 2 depuis
+« backoff + autoscaling » (151,33 pour 150).
+
 ### Étape 1 — aide et temps compressé
 
 | # | Action | Effort | Risque | Débloque |
 |---|---|---|---|---|
 | H1 | `src/ui/hints.ts`, pur et testé : le prochain élément manquant, déduit du brouillon et des réponses attendues (section 6) | M | faible | H2 |
-| H2 | Boutons « Un indice » et « Toute la solution » dans la fenêtre « que faire » et dans le debrief d'une vague perdue ; l'élément désigné clignote, comme au tutoriel | S | faible | Personne ne reste bloqué en test de jeu |
-| H3 | Coût d'une aide dans le score, compteur dans la partie, clé de sauvegarde `v10` ; décision I14 dans `decisions.md` (amende I9) | S | faible : la sauvegarde | — |
+| H2 | Bouton « Un indice » dans la fenêtre « que faire » et dans le debrief d'une vague perdue, un indice par essai perdu ; l'élément désigné clignote, comme au tutoriel | S | faible | Personne ne reste bloqué en test de jeu |
+| H3 | Indices obtenus gardés dans la partie (un par essai perdu, remis à zéro à chaque vague), en champ optionnel pour ne pas invalider les sauvegardes en cours ; décision I14 dans `decisions.md` (amende I9) | S | faible : la sauvegarde | — |
 | D3a | Textes : « un tick vaut une minute » au premier briefing ; durées des briefings et des incidents réexprimées en minutes ; les clients du tournoi sont « votre application » | S | nul | Des durées crédibles sans recalibrer |
 
 ### Étape 2 — refactorisations sans changement de comportement
@@ -589,12 +632,9 @@ brouillon aux réponses attendues de la vague, qui deviennent des données (A6),
 qui manque. Un recalibrage qui change une réponse change donc l'aide sans y toucher, et le
 test qui verrouille la réponse verrouille l'aide.
 
-**Deux boutons**, dans la fenêtre « que faire » pendant la construction, et dans le
-debrief d'une vague perdue (le moment où on en a besoin) :
-
-- **« Un indice »** : le prochain élément manquant, un seul. Chaque clic en donne un de
-  plus.
-- **« Toute la solution »** : la liste de tout ce qui manque, dans l'ordre de pose.
+**Un bouton, « Un indice »**, dans la fenêtre « que faire » pendant la construction et
+dans le debrief d'une vague perdue (le moment où on en a besoin). Il donne le prochain
+élément manquant, un seul.
 
 **Comment le prochain élément est choisi** (`src/ui/hints.ts`, pur) :
 
@@ -620,11 +660,15 @@ et la ligne « En vrai » qui nomme l'élément et dit pourquoi, en reprenant la
 bâtiment concerné clignote, par le `highlight` qui sert déjà au tutoriel
 (`src/ui/tutorial.ts`).
 
-**Ce que ça coûte au joueur.** Proposition, à confirmer : un indice compte comme un essai
-perdu, avec le mécanisme qui existe déjà (E5 : 20 % des points de la vague, et l'étoile
-« du premier coup » s'en va) ; « Toute la solution » ramène les points de la vague à zéro.
-L'étoile « tenir la vague » et l'étoile d'économie restent à prendre. Aucun concept
-nouveau à expliquer, et l'écran le dit avant le clic.
+**Quand l'aide est disponible.** Tranché par François le 11 novembre 2026 : **une aide
+par essai perdu.** Chaque vague perdue donne droit à un indice de plus sur cette vague ;
+avant le premier échec, le bouton est grisé et dit pourquoi. Les indices déjà obtenus
+restent affichés. L'aide ne coûte donc rien de plus que l'essai perdu qui l'a ouverte
+(E5 le pénalise déjà) : aucun barème nouveau. Conséquence : le bouton « Toute la
+solution » disparaît ; la solution complète s'obtient indice après indice, au rythme des
+échecs. Le droit suit le compteur d'essais perdus qui existe déjà (`GameState.replays`) : il
+repart de zéro à chaque vague gagnée, et un retour en arrière, qui compte comme un rejeu
+(E6), ouvre un indice.
 
 **Tests.**
 - Pour chaque vague de chaque scénario, partir de la réponse de la vague précédente et
@@ -633,6 +677,7 @@ nouveau à expliquer, et l'écran le dit avant le clic.
 - Depuis un brouillon vide, même chose.
 - Depuis le parcours CDN en vague 5 du raccourcisseur : l'indice est le retour en arrière.
 - Un brouillon déjà gagnant ne reçoit aucun indice de pose.
+- Sans essai perdu, aucun indice ; après n essais perdus, n indices au plus.
 
 **Limites assumées.** L'aide ne connaît que les réponses attendues : une architecture
 exotique mais gagnante sera ramenée vers la réponse de référence la plus proche. Et elle
@@ -744,4 +789,4 @@ après M4.
 
 **Ajout hors ronde** : le système d'aide (section 6).
 
-**Reste ouvert** : le coût d'un indice dans le score (proposition en section 6).
+**Tranché ensuite** : une aide est disponible par essai perdu (section 6).

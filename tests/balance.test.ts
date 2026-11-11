@@ -1,13 +1,15 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { enumerate, reductions, strategyName, strategyParts, type BalanceSpace, type Choice } from '../src/balance/canonical.ts';
 import { runMassSim, type MassSimReport } from '../src/balance/mass-sim.ts';
-import { marketSpace, resilienceSpace, shortenerSpace, tournamentSpace } from '../src/data/balance-space.ts';
+import { formatScenarioReport } from '../src/balance/report.ts';
+import { answersOf, balanceSpaces, marketSpace, resilienceSpace, shortenerSpace, tournamentSpace } from '../src/data/balance-space.ts';
 import { catalog } from '../src/data/catalog.ts';
 import { market } from '../src/data/scenarios/market.ts';
 import { resilience } from '../src/data/scenarios/resilience.ts';
 import { tournament } from '../src/data/scenarios/tournament.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { scoring } from '../src/data/scoring.ts';
+import { simulateWave } from '../src/engine/simulate.ts';
 import { validateArchitecture } from '../src/engine/validate.ts';
 
 /** Le même espace avec d'autres bornes. */
@@ -134,5 +136,77 @@ describe('ce que la simulation en masse a trouvé', () => {
   it('soldes : des services abonnés au pub/sub sans file ne gagnent plus, noyés dans les lectures (S17)', () => {
     const sales = runMassSim({ ...market, waves: market.waves.filter((w) => w.id === 'sales') }, catalog, marketSpace, scoring).waves[0]!;
     expect(sales.groups.some((g) => g.strategy.includes('pub/sub sans files'))).toBe(false);
+  });
+});
+
+describe('les réponses attendues (Wave.answers)', () => {
+  it('sont des architectures valides, sur des dimensions de l’espace', () => {
+    for (const { scenario, space } of balanceSpaces) {
+      const ids = new Set(space.dimensions.map((d) => d.id));
+      scenario.waves.forEach((w, i) => {
+        for (const choice of w.answers ?? []) {
+          expect(Object.keys(choice).filter((k) => !ids.has(k)), `${scenario.id}/${w.id}`).toEqual([]);
+        }
+        for (const arch of answersOf(scenario.id, i)) {
+          expect(validateArchitecture(arch, catalog).ok, `${scenario.id}/${w.id}`).toBe(true);
+        }
+      });
+    }
+  });
+
+  it('la moins chère de chaque vague tient sous le seuil de l’étoile d’économie', () => {
+    for (const { scenario } of balanceSpaces) {
+      scenario.waves.forEach((w, i) => {
+        if (w.thriftyCost === undefined) return;
+        const costs = answersOf(scenario.id, i).map((arch) => simulateWave(arch, w, catalog).gauges.cost.value);
+        expect(Math.min(...costs), `${scenario.id}/${w.id}`).toBeLessThanOrEqual(w.thriftyCost);
+      });
+    }
+  });
+});
+
+describe('le contrôle d’enchaînement', () => {
+  // Les deux dernières vagues du tournoi dans un espace réduit, qui contient leurs réponses.
+  const small = narrowed(tournamentSpace, { scaling: [0, 1, 3], retention: [0], replicas: [0, 1, 2] });
+  const lastTwo = (finalBudget: number): typeof tournament => ({
+    ...tournament,
+    waves: tournament.waves.slice(2).map((w) => (w.id === 'final-joust' ? { ...w, budget: finalBudget } : w)),
+  });
+
+  it('trouve une gagnante depuis chaque réponse de la vague précédente', () => {
+    const { chaining } = runMassSim(lastTwo(250), catalog, small, scoring);
+    expect(chaining).toHaveLength(1);
+    expect(chaining[0]!.starts.map((s) => s.winners > 0)).toEqual([true, true]);
+    const cheapest = chaining[0]!.starts[0]!.cheapest!;
+    expect(cheapest.cost).toBeLessThanOrEqual(250);
+    expect(cheapest.migration).toBeGreaterThan(0);
+  });
+
+  it('signale un blocage : aucune réponse de la vague 3 ne mène à gagner la vague 4 à 235 de budget', () => {
+    const report = runMassSim(lastTwo(235), catalog, small, scoring);
+    expect(report.chaining[0]!.starts.map((s) => s.winners)).toEqual([0, 0]);
+    // Elle reste gagnable isolément : c'est ce que l'énumération seule ne voyait pas.
+    expect(report.waves[1]!.groups.length).toBeGreaterThan(0);
+    const { lines, ko } = formatScenarioReport(lastTwo(235), small, report);
+    expect(lines.filter((l) => l.startsWith('[KO] Blocage final-joust'))).toHaveLength(2);
+    expect(ko).toBe(1);
+  });
+
+  it('une impasse (un seul départ sans gagnante) est listée sans KO', () => {
+        const scenario = lastTwo(250);
+    const report = runMassSim(scenario, catalog, small, scoring);
+    const [first, second] = report.chaining[0]!.starts;
+    // Mise en forme seule : le départ 1 est rapporté sans gagnante, le départ 2 en garde.
+    const impasse = { ...report, chaining: [{ ...report.chaining[0]!, starts: [{ answerIndex: 0, winners: 0 }, second!] }] };
+    expect(first!.winners).toBeGreaterThan(0);
+    const { lines, ko } = formatScenarioReport(scenario, small, impasse);
+    expect(lines.some((l) => l.startsWith('[impasse] final-joust, depuis la réponse 1') && l.includes('E6'))).toBe(true);
+    expect(lines.some((l) => l.includes('Blocage'))).toBe(false);
+    expect(ko).toBe(formatScenarioReport(scenario, small, report).ko);
+  });
+
+  it('ne rejoue pas les vagues sans réponse déclarée en amont', () => {
+    const noAnswers = { ...tournament, waves: lastTwo(250).waves.map(({ answers: _, ...w }) => w) };
+    expect(runMassSim(noAnswers, catalog, small, scoring).chaining).toEqual([]);
   });
 });

@@ -6,6 +6,7 @@ import { market } from './market.ts';
 const link = (from: string, to: string): ArchLink => ({ from, to });
 const source: ArchNode = { id: 'src', type: 'traffic-source' };
 const SERVICES = ['stock', 'billing', 'mail'];
+const queueOf = (service: string) => (service === 'mail' ? 'queue' : `q-${service}`);
 
 /** Les trois services déjà en place ; `idempotence` les rend idempotents. */
 const services = (idempotence = false): ArchNode[] =>
@@ -75,8 +76,10 @@ export function ordering(delivery: Delivery, o: FanOutOptions = {}): Architectur
       links.push(link('app', 'queue'), ...(delivery === 'queue' ? ['mail'] : SERVICES).map((s) => link('queue', s)));
       break;
     case 'pubsub':
-      nodes.push({ id: 'bus', type: 'pubsub' }, ...SERVICES.map((s): ArchNode => ({ id: `q-${s}`, type: 'message-queue' })));
-      links.push(link('app', 'bus'), ...SERVICES.flatMap((s) => [link('bus', `q-${s}`), link(`q-${s}`, s)]));
+      // La file du service e-mail garde l'id `queue` des variantes « file » : le joueur la
+      // conserve en posant le pub/sub, et `migrationCost` compare par id.
+      nodes.push({ id: 'bus', type: 'pubsub' }, ...SERVICES.map((s): ArchNode => ({ id: queueOf(s), type: 'message-queue' })));
+      links.push(link('app', 'bus'), ...SERVICES.flatMap((s) => [link('bus', queueOf(s)), link(queueOf(s), s)]));
       break;
     case 'pubsub-direct':
       nodes.push({ id: 'bus', type: 'pubsub' });

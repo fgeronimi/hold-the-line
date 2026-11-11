@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { answersOf } from '../src/data/balance-space.ts';
 import { catalog } from '../src/data/catalog.ts';
 import { checkout } from '../src/data/scenarios/resilience.archetypes.ts';
 import { resilience } from '../src/data/scenarios/resilience.ts';
@@ -12,26 +13,23 @@ const play = (arch: Architecture, id: string) => simulateWave(arch, wave(id), ca
 const app = (r: WaveResult, tick: number) => r.ticks[tick]!.nodes.app!;
 
 describe('le comptoir des paiements', () => {
-  it('chaque vague est gagnée par sa réponse attendue, et perdue sans elle', () => {
-    expect(play(checkout(), 'checkout').won).toBe(true);
+  // Les réponses attendues sont des données (`Wave.answers`), jouées isolément.
+  it('chaque vague est gagnée par chacune de ses réponses attendues', () => {
+    resilience.waves.forEach((w, i) => {
+      const answers = answersOf(resilience.id, i);
+      expect(answers.length, w.id).toBeGreaterThan(0);
+      answers.forEach((arch, k) => expect(play(arch, w.id).won, `${w.id} #${k}`).toBe(true));
+    });
+  });
+
+  it('chaque vague est perdue sans sa réponse', () => {
     expect(play(checkout({ queue: true }), 'checkout').won).toBe(false);
-
     expect(play(checkout(), 'slow-banker').won).toBe(false);
-    expect(play(checkout({ breaker: true }), 'slow-banker').won).toBe(true);
-    expect(play(checkout({ queue: true }), 'slow-banker').won).toBe(true);
-
     expect(play(checkout({ cache: true }), 'midnight-expiry').won).toBe(false);
-    expect(play(checkout({ cache: true, coalescing: true }), 'midnight-expiry').won).toBe(true);
-    expect(play(checkout({ replicas: 1 }), 'midnight-expiry').won).toBe(true);
-
     expect(play(checkout({ breaker: true, cache: true, coalescing: true }), 'banker-closed').won).toBe(false);
-    expect(play(checkout({ queue: true, cache: true }), 'banker-closed').won).toBe(true);
-    expect(play(checkout({ queue: true, replicas: 1 }), 'banker-closed').won).toBe(true);
 
     const fair = { cache: true, coalescing: true, replicas: 2, extraInstances: 2 };
     expect(play(checkout(fair), 'fair').won).toBe(false);
-    expect(play(checkout({ ...fair, breaker: true }), 'fair').won).toBe(true);
-    expect(play(checkout({ ...fair, queue: true }), 'fair').won).toBe(true);
   });
 
   it('la réponse sur-dimensionnée perd sur le coût ou la complexité', () => {

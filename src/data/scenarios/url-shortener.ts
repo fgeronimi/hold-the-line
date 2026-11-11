@@ -33,6 +33,9 @@ export const urlShortener: Scenario = {
       // Vague tutoriel : poser les briques de base, il n'y a rien à arbitrer.
       singleStrategy: true,
       thriftyCost: 70,
+      answers: [
+        {  },
+      ],
     },
     {
       id: 'read-surge',
@@ -46,6 +49,10 @@ export const urlShortener: Scenario = {
       budget: 115,
       complexityCap: 7,
       thriftyCost: 85,
+      answers: [
+        { cache: 1 },
+        { replicas: 1 },
+      ],
       // Sans danger pour un réplica ; un cache tient, mais on voit la base encaisser la ruée.
       incidents: [{ id: 'cache-restart', title: 'Le cache redémarre à froid', component: 'cache', from: 30, until: 33, effect: { type: 'cold-cache' } }],
     },
@@ -68,6 +75,12 @@ export const urlShortener: Scenario = {
       budget: 170,
       complexityCap: 9,
       thriftyCost: 145,
+      answers: [
+        { cdn: 1, cache: 1 },
+        { cdn: 1, replicas: 1 },
+        { lb: 1, scaling: 3, cache: 1 },
+        { lb: 1, scaling: 1, autoscaling: 3, cache: 1 },
+      ],
       // Après le pic : une cité à serveur unique perd quelques requêtes, pas la vague.
       incidents: [{ id: 'server-crash', title: 'Une instance du serveur tombe', component: 'app-server', from: 45, until: 48, effect: { type: 'instance-down', count: 1 } }],
     },
@@ -84,6 +97,11 @@ export const urlShortener: Scenario = {
       budget: 165,
       complexityCap: 9,
       thriftyCost: 160,
+      answers: [
+        { lb: 1, scaling: 3, rateLimit: 3, cache: 1 },
+        { lb: 1, scaling: 3, rateLimit: 4, cache: 1 },
+        { cdn: 1, lb: 1, rateLimit: 3, cache: 1 },
+      ],
       conceptRef: 'Rate Limiting',
     },
     {
@@ -100,6 +118,9 @@ export const urlShortener: Scenario = {
       complexityCap: 12,
       conceptRef: 'Backpressure',
       thriftyCost: 205,
+      answers: [
+        { lb: 1, scaling: 3, rateLimit: 3, cache: 1, queue: 1 },
+      ],
       // La file est la seule réponse ; un CDN posé en vague 3 y perd les clics des redirections en cache.
       singleStrategy: true,
       // Un serveur tombe : le worker aussi, et la file garde les clics le temps qu'il revienne.

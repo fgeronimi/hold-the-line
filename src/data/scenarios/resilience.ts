@@ -37,6 +37,9 @@ export const resilience: Scenario = {
       budget: 80,
       complexityCap: 4,
       thriftyCost: 70,
+      answers: [
+        {  },
+      ],
       singleStrategy: true,
     },
     {
@@ -52,6 +55,10 @@ export const resilience: Scenario = {
       budget: 100,
       complexityCap: 7,
       thriftyCost: 80,
+      answers: [
+        { breaker: 1 },
+        { queue: 1 },
+      ],
       incidents: [{ id: 'banker-slow', title: 'Le banquier fait attendre chaque paiement', component: 'payment-provider', from: 25, until: 29, effect: { type: 'slow-dependency', latencyMs: 4000 } }],
     },
     {
@@ -67,6 +74,10 @@ export const resilience: Scenario = {
       budget: 125,
       complexityCap: 10,
       thriftyCost: 90,
+      answers: [
+        { cache: 1, coalescing: 1 },
+        { replicas: 1 },
+      ],
       incidents: [{ id: 'midnight', title: 'Tout le cache expire à minuit', component: 'cache', from: 30, until: 32, effect: { type: 'cache-stampede', herd: 4 } }],
     },
     {
@@ -82,6 +93,10 @@ export const resilience: Scenario = {
       budget: 140,
       complexityCap: 12,
       thriftyCost: 110,
+      answers: [
+        { queue: 1, cache: 1 },
+        { queue: 1, replicas: 1 },
+      ],
       incidents: [{ id: 'banker-down', title: 'Le banquier ferme boutique', component: 'payment-provider', from: 15, until: 40, effect: { type: 'dependency-down' } }],
     },
     {
@@ -97,6 +112,10 @@ export const resilience: Scenario = {
       budget: 250,
       complexityCap: 18,
       thriftyCost: 230,
+      answers: [
+        { scaling: 2, breaker: 1, cache: 1, coalescing: 1, replicas: 2 },
+        { scaling: 2, queue: 1, cache: 1, coalescing: 1, replicas: 2 },
+      ],
       incidents: [
         { id: 'fair-slow', title: 'Le banquier fait attendre chaque paiement', component: 'payment-provider', from: 15, until: 19, effect: { type: 'slow-dependency', latencyMs: 4000 } },
         { id: 'fair-midnight', title: 'Tout le cache expire d’un coup', component: 'cache', from: 35, until: 37, effect: { type: 'cache-stampede', herd: 4 } },

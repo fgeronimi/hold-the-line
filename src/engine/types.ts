@@ -252,6 +252,13 @@ export interface Wave {
    * moins chère (décision E7). Absent : le budget.
    */
   thriftyCost?: number;
+  /**
+   * Les réponses attendues de la vague, une par stratégie gagnante non dominée : chacune est
+   * un choix dans l'espace d'équilibrage du scénario (id de dimension → niveau, 0 = absent,
+   * le format de `Choice` dans `src/balance/`). La simulation les ignore : elles servent aux
+   * tests de verrouillage et à l'aide, qui les passent par le `build` de l'espace.
+   */
+  answers?: Record<string, number>[];
 }
 
 export interface Scenario {

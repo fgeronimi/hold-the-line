@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { answersOf } from '../src/data/balance-space.ts';
 import { catalog } from '../src/data/catalog.ts';
 import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
@@ -20,8 +21,17 @@ const play = (arch: Architecture, waveId: string, previous?: Architecture) =>
  * a changé, pas seulement un chiffre.
  */
 describe('Raccourcisseur d’URL', () => {
+  // Les réponses attendues sont des données (`Wave.answers`), jouées ici isolément, sans
+  // architecture précédente, comme l'énumération en masse : on vérifie ce qui peut gagner.
+  it('chaque vague est gagnée par chacune de ses réponses attendues', () => {
+    urlShortener.waves.forEach((w, i) => {
+      const answers = answersOf(urlShortener.id, i);
+      expect(answers.length, w.id).toBeGreaterThan(0);
+      answers.forEach((arch, k) => expect(play(arch, w.id).won, `${w.id} #${k}`).toBe(true));
+    });
+  });
+
   it('vague 1 — un serveur et une base suffisent', () => {
-    expect(play(A.minimal, 'launch').won).toBe(true);
     expect(play(A.noDatabase, 'launch').won).toBe(false);
     expect(play(A.withCache, 'launch').lossReasons).toEqual(['Trop complexe : 5 / 4 points']);
   });
@@ -29,8 +39,6 @@ describe('Raccourcisseur d’URL', () => {
   it('vague 2 — cache ou réplica en lecture, deux profils différents', () => {
     const cache = play(A.withCache, 'read-surge', A.minimal);
     const replica = play(A.withReplica, 'read-surge', A.minimal);
-    expect(cache.won).toBe(true);
-    expect(replica.won).toBe(true);
     expect(cache.gauges.cost.value).toBeLessThan(replica.gauges.cost.value);
     expect(replica.gauges.complexity.value).toBeLessThan(cache.gauges.complexity.value);
 
@@ -47,8 +55,6 @@ describe('Raccourcisseur d’URL', () => {
   it('vague 3 — trois familles de réponses aux profils différents', () => {
     const permanent = play(A.scaled(3), 'marketing-peak');
     const auto = play(A.autoscaled(1, 3), 'marketing-peak');
-    const cdn = play(A.withCdn(), 'marketing-peak');
-    expect([permanent.won, auto.won, cdn.won]).toEqual([true, true, true]);
 
     // L'autoscaling est moins cher que le scaling permanent, mais échoue un peu pendant la montée en charge.
     expect(auto.gauges.cost.value).toBeLessThan(permanent.gauges.cost.value);

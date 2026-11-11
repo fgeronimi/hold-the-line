@@ -151,3 +151,23 @@ export const balanceSpaces: { scenario: Scenario; space: BalanceSpace }[] = [
   { scenario: resilience, space: resilienceSpace },
   { scenario: tournament, space: tournamentSpace },
 ];
+
+/** L'espace d'un scénario, par son id. */
+export function spaceOf(scenarioId: string): BalanceSpace {
+  const found = balanceSpaces.find((b) => b.scenario.id === scenarioId);
+  if (!found) throw new Error(`Scénario sans espace d'équilibrage : ${scenarioId}`);
+  return found.space;
+}
+
+/**
+ * Les architectures des réponses attendues d'une vague (`Wave.answers`), construites par
+ * l'espace du scénario : une seule définition de « la réponse » pour les tests, l'aide et
+ * l'équilibrage. Vide si la vague n'en déclare pas.
+ */
+export function answersOf(scenarioId: string, waveIndex: number): Architecture[] {
+  const found = balanceSpaces.find((b) => b.scenario.id === scenarioId);
+  if (!found) throw new Error(`Scénario sans espace d'équilibrage : ${scenarioId}`);
+  const wave = found.scenario.waves[waveIndex];
+  if (!wave) throw new Error(`Vague ${waveIndex} inconnue dans ${scenarioId}`);
+  return (wave.answers ?? []).map((choice) => found.space.build(choice));
+}

@@ -11,9 +11,13 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 
 - `npm test` : Vitest, tous les tests
 - `npm run typecheck` : `tsc --noEmit` (TypeScript 7)
-- `npm run balance` : simulation en masse des trois scénarios, ~17 000 architectures
+- `npm run balance` : simulation en masse des quatre scénarios, ~17 000 architectures
   canoniques pour le raccourcisseur, ~1 min (Node exécute le TypeScript nativement, sans
-  build) ; `npm run balance -- market` n'en joue qu'un, par son id
+  build) ; `npm run balance -- market` n'en joue qu'un, par son id ; sort en code 1 s'il y a
+  un KO
+- `npm run balance:snapshot` : réécrit `docs/balance-snapshot.txt` (rapport sans durées,
+  coûts arrondis à 2 décimales) ; `npm run balance:check` le compare au rapport courant et
+  échoue sur un écart ou un KO (tous les scénarios, pas de filtre)
 - `npm run dev` : interface de jeu et de calibrage ; `npm run build` : site statique
   dans `dist/`, chemins relatifs pour GitHub Pages
 
@@ -72,10 +76,22 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 
 ## Pièges
 
+- Après tout changement voulu de l'équilibrage, régénérer l'instantané (`npm run
+  balance:snapshot`) et relire le diff ; une refactorisation du moteur doit le laisser
+  identique (`npm run balance:check`).
+
 - Recalibrer le catalogue casse souvent `url-shortener.test.ts` : c'est voulu, vérifier
   que le scénario reste jouable avant d'ajuster les tests.
-- `tests/engine.test.ts` utilise son propre catalogue : ne pas le brancher sur
-  `src/data/catalog.ts`, sinon le calibrage casse les tests du moteur.
+- `tests/engine.test.ts` et `tests/engine-mechanics.test.ts` utilisent chacun leur propre
+  catalogue : ne pas les brancher sur `src/data/catalog.ts`, sinon le calibrage casse les
+  tests du moteur. Le second fige aussi des comportements à corriger (« À changer par… ») :
+  une correction du moteur doit se voir dans son diff.
+- `tests/conservation.test.ts` vérifie que le moteur ne crée ni ne perd de trafic, sur un
+  échantillon des quatre espaces ; ses `it.fails` sont des bugs connus, à lever en les
+  corrigeant.
+- Les réponses attendues de chaque vague sont des données (`Wave.answers`, des choix de
+  `src/data/balance-space.ts`) : les tests de verrouillage et l'aide les lisent. Un
+  recalibrage qui déplace une réponse la met à jour là, nulle part ailleurs.
 - La latence du SLA compte lectures, écritures et événements async ; l'async sort du chemin
   critique dès qu'il passe par une file (décision S10). Un service métier appelé en direct
   met sa latence (200 ms) sur le chemin du client, entière : un tick vaut la moyenne, ou
@@ -85,6 +101,12 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   de palier, pas des quantités.
 - Imports relatifs avec l'extension `.ts` obligatoire : c'est ce qui permet à Node
   de lancer `scripts/` sans build.
+- Une réponse attendue doit rester atteignable depuis celles de la vague précédente
+  (migration comprise, E2/E3) : `npm run balance` le vérifie par un contrôle d'enchaînement
+  et sort en KO s'il y a blocage, c'est-à-dire qu'aucune ne mène à gagner (décision B7) ; une
+  impasse isolée se sort par un retour en arrière (E6) et reste listée. Un même bâtiment
+  porte le même id dans toutes les variantes d'un espace, sinon la migration est facturée à tort.
+  Recalibrer le budget d'une vague, c'est le relancer.
 - Un composant ou une évolution ajouté à un scénario doit entrer dans son espace de
   `src/data/balance-space.ts`, sinon `npm run balance` ne voit pas les réponses qui s'en
   servent. Une dimension avec `requires` vient après celle dont elle dépend.

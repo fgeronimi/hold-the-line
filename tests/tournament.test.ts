@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { answersOf } from '../src/data/balance-space.ts';
 import { catalog } from '../src/data/catalog.ts';
 import { boxOffice } from '../src/data/scenarios/tournament.archetypes.ts';
 import { tournament } from '../src/data/scenarios/tournament.ts';
@@ -12,26 +13,38 @@ const wave = (id: string) => tournament.waves.find((w) => w.id === id)!;
 const play = (arch: Architecture, id: string) => simulateWave(arch, wave(id), catalog);
 
 describe('la billetterie du tournoi', () => {
-  it('chaque vague est gagnée par sa réponse attendue, et perdue sans elle', () => {
+  // Les réponses attendues sont des données (`Wave.answers`), jouées isolément.
+  it('chaque vague est gagnée par chacune de ses réponses attendues', () => {
+    tournament.waves.forEach((w, i) => {
+      const answers = answersOf(tournament.id, i);
+      expect(answers.length, w.id).toBeGreaterThan(0);
+      answers.forEach((arch, k) => expect(play(arch, w.id).won, `${w.id} #${k}`).toBe(true));
+    });
+  });
+
+  // `npm run balance` le vérifie sur tout l'espace ; ici, sur les réponses attendues elles-mêmes.
+  // Limité à la finale : depuis la réponse 3 de la vague 1 (backoff + autoscaling), la vague 2
+  // n'a pas de réponse atteignable, défaut connu que l'outillage d'équilibrage signale.
+  it('depuis chaque réponse de la vague 3, une réponse de la finale est atteignable avec sa migration', () => {
+    const final = wave('final-joust');
+    for (const [k, previous] of answersOf(tournament.id, 2).entries()) {
+      const reachable = answersOf(tournament.id, 3).some((arch) => simulateWave(arch, final, catalog, previous).won);
+      expect(reachable, `réponse ${k + 1} de split-registry`).toBe(true);
+    }
+  });
+
+  it('chaque vague est perdue sans sa réponse', () => {
     const rush = { extraInstances: 1, cache: true };
-    expect(play(boxOffice({ ...rush, backoff: true }), 'ticket-rush').won).toBe(true);
-    expect(play(boxOffice({ ...rush, autoscaling: 3 }), 'ticket-rush').won).toBe(true);
     expect(play(boxOffice(rush), 'ticket-rush').won).toBe(false);
     expect(play(boxOffice({ ...rush, backoff: true, queue: false }), 'ticket-rush').won).toBe(false);
 
-    const grounded = { extraInstances: 1, cache: true };
-    expect(play(boxOffice({ ...grounded, retention: 1 }), 'pigeons-grounded').won).toBe(true);
-    expect(play(boxOffice({ cache: true, autoscaling: 3, retention: 1 }), 'pigeons-grounded').won).toBe(true);
-    expect(play(boxOffice(grounded), 'pigeons-grounded').won).toBe(false);
+    expect(play(boxOffice(rush), 'pigeons-grounded').won).toBe(false);
 
     const split = { extraInstances: 1, replicas: 2 };
-    expect(play(boxOffice({ ...split, leaderReads: true }), 'split-registry').won).toBe(true);
     expect(play(boxOffice(split), 'split-registry').won).toBe(false);
     expect(play(boxOffice({ ...split, replicas: 3 }), 'split-registry').won).toBe(false);
 
     const final = { cache: true, replicas: 1, leaderReads: true };
-    expect(play(boxOffice({ ...final, extraInstances: 3, backoff: true }), 'final-joust').won).toBe(true);
-    expect(play(boxOffice({ ...final, autoscaling: 3 }), 'final-joust').won).toBe(true);
     expect(play(boxOffice({ ...final, extraInstances: 3, backoff: true, leaderReads: false }), 'final-joust').won).toBe(false);
     expect(play(boxOffice({ cache: true, extraInstances: 3, backoff: true }), 'final-joust').won).toBe(false);
   });

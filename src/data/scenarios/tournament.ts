@@ -46,6 +46,11 @@ export const tournament: Scenario = {
       budget: 150,
       complexityCap: 11,
       thriftyCost: 145,
+      answers: [
+        { backoff: 1, scaling: 1, cache: 1, queue: 1 },
+        { scaling: 1, autoscaling: 3, cache: 1, queue: 1 },
+        { backoff: 1, autoscaling: 3, cache: 1, queue: 1 },
+      ],
       consumers: ['mail'],
       incidents: [{ id: 'bad-deploy', title: 'Un déploiement raté redémarre tous les guichetiers', component: 'app-server', from: 20, until: 23, effect: { type: 'instance-down', count: 10 } }],
     },
@@ -62,6 +67,10 @@ export const tournament: Scenario = {
       budget: 150,
       complexityCap: 11,
       thriftyCost: 145,
+      answers: [
+        { scaling: 1, cache: 1, queue: 1, retention: 1 },
+        { autoscaling: 3, cache: 1, queue: 1, retention: 1 },
+      ],
       consumers: ['mail'],
       incidents: [{ id: 'mail-down', title: 'Le colombier est fermé', component: 'mail-provider', from: 15, until: 45, effect: { type: 'dependency-down' } }],
     },
@@ -78,6 +87,10 @@ export const tournament: Scenario = {
       budget: 230,
       complexityCap: 13,
       thriftyCost: 210,
+      answers: [
+        { scaling: 1, replicas: 2, leaderReads: 1, queue: 1 },
+        { autoscaling: 3, replicas: 2, leaderReads: 1, queue: 1 },
+      ],
       consumers: ['mail'],
       incidents: [{ id: 'partition', title: 'Les copistes n’entendent plus le grand registre', component: 'database', from: 20, until: 35, effect: { type: 'partition' } }],
     },
@@ -91,9 +104,16 @@ export const tournament: Scenario = {
       profile: flat,
       sources: [fans(2000, 50), seats(300)],
       sla: SLA,
-      budget: 235,
+      budget: 250,
       complexityCap: 14,
-      thriftyCost: 205,
+      thriftyCost: 245,
+      answers: [
+        { backoff: 1, scaling: 3, cache: 1, replicas: 1, leaderReads: 1, queue: 1 },
+        { autoscaling: 3, cache: 1, replicas: 1, leaderReads: 1, queue: 1 },
+        // Les deux réplicas de la vague 3 gardés : seule réponse sans retrait de réplica, et
+        // donc sans les 40 de migration qui rendaient la vague ingagnable après une vague 3 gagnée.
+        { autoscaling: 3, cache: 1, replicas: 2, leaderReads: 1, queue: 1 },
+      ],
       consumers: ['mail'],
       incidents: [
         { id: 'final-crash', title: 'Un déploiement raté redémarre tous les guichetiers', component: 'app-server', from: 12, until: 15, effect: { type: 'instance-down', count: 10 } },

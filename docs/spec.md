@@ -77,7 +77,8 @@ atteinte, avec l'architecture validée à ce moment-là (E6) : un choix passé s
 bloque jamais la partie.
 
 Un écran de choix ouvre chaque session (S2) : *Les portes de la cité* (débutant),
-*Le grand marché* (suite) et *Le banquier lombard* (résilience), sans verrou. Une partie par scénario, sauvegardées ensemble dans
+*Le grand marché* (suite), *Le banquier lombard* (résilience) et *Le grand tournoi*
+(distribué), sans verrou. Une partie par scénario, sauvegardées ensemble dans
 le navigateur.
 
 ## Composants, évolutions, incidents

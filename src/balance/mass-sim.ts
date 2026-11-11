@@ -28,8 +28,30 @@ export interface WaveReport {
   meetsStrategyCriterion: boolean;
 }
 
+/** Un départ de l'enchaînement : une réponse attendue de la vague précédente. */
+export interface ChainStart {
+  /** Rang de la réponse dans `Wave.answers` de la vague précédente. */
+  answerIndex: number;
+  /** Architectures de l'espace qui gagnent la vague jouées depuis ce départ. */
+  winners: number;
+  /** La moins chère des gagnantes, migration comprise ; absente si aucune ne gagne. */
+  cheapest?: { choice: Choice; cost: number; migration: number; limit: number };
+}
+
+export interface ChainReport {
+  /** La vague jouée, et celle dont on part. */
+  waveId: string;
+  fromWaveId: string;
+  starts: ChainStart[];
+}
+
 export interface MassSimReport {
   waves: WaveReport[];
+  /**
+   * Contrôle d'enchaînement (décision B7) : depuis chaque réponse attendue de la vague
+   * n - 1, au moins une architecture de l'espace doit gagner la vague n.
+   */
+  chaining: ChainReport[];
   /** Critère de sortie : aucune architecture ne doit gagner toutes les vagues. */
   universalWinners: Choice[];
   /** Critère B1 : au moins deux stratégies non dominées sur la majorité des vagues. */
@@ -46,16 +68,22 @@ export function runMassSim(scenario: Scenario, catalog: Catalog, space: BalanceS
   const candidates = [...enumerate(space)];
   const winsEverywhere = new Set(candidates.map((_, i) => i));
 
-  const waves = scenario.waves.map((wave): WaveReport => {
+  // Gagnantes de chaque vague jouée sans `previous`, pour l'enchaînement.
+  const winnerIndexes: number[][] = [];
+
+  const waves = scenario.waves.map((wave, waveIndex): WaveReport => {
     const groups = new Map<string, StrategyGroup>();
     const winners = new Set<string>();
     const winningChoices = new Map<string, Choice[]>();
+    const wonHere: number[] = [];
+    winnerIndexes[waveIndex] = wonHere;
     candidates.forEach((c, i) => {
       const result = simulateWave(c.arch, wave, catalog);
       if (!result.won) {
         winsEverywhere.delete(i);
         return;
       }
+      wonHere.push(i);
       winners.add(choiceKey(space, c.choice));
       winningChoices.set(c.strategy, [...(winningChoices.get(c.strategy) ?? []), c.choice]);
       const score = scoreWave(result, 0, scoring);
@@ -94,9 +122,36 @@ export function runMassSim(scenario: Scenario, catalog: Catalog, space: BalanceS
     };
   });
 
+  const chaining = scenario.waves.flatMap((wave, n): ChainReport[] => {
+    const from = scenario.waves[n - 1];
+    if (!from?.answers?.length) return [];
+    const starts = from.answers.map((answer, answerIndex): ChainStart => {
+      const previous = space.build(answer);
+      let winners = 0;
+      let cheapest: ChainStart['cheapest'];
+      // `previous` n'entre que dans la jauge de coût, en ajoutant une migration positive
+      // ou nulle (voir `simulateWave`) : gagner avec `previous` suppose de gagner sans.
+      // Seules les gagnantes de la vague jouée isolément sont donc à rejouer. Les ids de
+      // nœuds sont stables d'un choix à l'autre (un seul `build` par espace, ids fixes),
+      // ce qui rend la migration juste : un id qui change est bien un autre bâtiment.
+      for (const i of winnerIndexes[n] ?? []) {
+        const c = candidates[i]!;
+        const r = simulateWave(c.arch, wave, catalog, previous);
+        if (!r.won) continue;
+        winners++;
+        if (!cheapest || r.gauges.cost.value < cheapest.cost) {
+          cheapest = { choice: c.choice, cost: r.gauges.cost.value, migration: r.bill.migration, limit: r.gauges.cost.limit };
+        }
+      }
+      return { answerIndex, winners, ...(cheapest ? { cheapest } : {}) };
+    });
+    return [{ waveId: wave.id, fromWaveId: from.id, starts }];
+  });
+
   const withTwo = waves.filter((w) => w.strategies.length >= 2).length;
   return {
     waves,
+    chaining,
     universalWinners: [...winsEverywhere].map((i) => candidates[i]!.choice),
     majorityHasTwoStrategies: withTwo > waves.length / 2,
     overprovisioned: scenario.waves.map((wave) => {
