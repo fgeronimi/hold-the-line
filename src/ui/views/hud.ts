@@ -4,33 +4,43 @@ import { draftInfo } from '../draft.ts';
 import { icon, type IconName } from '../icons.ts';
 import { decimal as fmt, esc, totalScore, totalStars, type ViewState } from './common.ts';
 
-const KIND_ICONS: Record<string, IconName> = { read: 'read', write: 'write', async: 'async' };
+const KINDS: { k: 'read' | 'write' | 'async'; icon: IconName; short: string; tip: string }[] = [
+  { k: 'read', icon: 'read', short: 'lectures/s', tip: 'Lectures par seconde au plus fort de la vague' },
+  { k: 'write', icon: 'write', short: 'écritures/s', tip: 'Écritures par seconde au plus fort de la vague' },
+  { k: 'async', icon: 'async', short: 'événements/s', tip: 'Événements par seconde au plus fort de la vague' },
+];
 
-/** Le trafic de la vague à son plus fort, par type : ce que le joueur doit dimensionner. */
+/**
+ * Une jauge, au format des ressources de la planche (I18) : un pictogramme, la valeur, et ce
+ * qu'elle mesure en petit dessous ; le détail au survol ou au clavier.
+ */
+const gauge = (name: IconName, short: string, tip: string, value: string, bad: boolean, extra = '') =>
+  `<span class="gauge${bad ? ' ko' : ''}${extra}" data-tip="${esc(tip)}" tabindex="0">${icon(name)}<b>${value}</b><small>${esc(short)}</small></span>`;
+
+/** Le trafic de la vague à son plus fort, une jauge par type : ce que le joueur doit dimensionner. */
 function trafficPeak(wave: Wave): string {
   const peak = Math.max(...wave.profile.map((p) => p.factor));
-  return (['read', 'write', 'async'] as const)
-    .map((k) => ({ k, rps: wave.sources.reduce((a, src) => a + (src.rps[k] ?? 0), 0) * peak }))
+  return KINDS.map((x) => ({ ...x, rps: wave.sources.reduce((a, src) => a + (src.rps[x.k] ?? 0), 0) * peak }))
     .filter((x) => x.rps > 0)
-    .map((x) => `${icon(KIND_ICONS[x.k]!)}<b>${fmt(x.rps)}</b>`)
-    .join(' ');
+    .map((x) => gauge(x.icon, x.short, x.tip, fmt(x.rps), false))
+    .join('');
 }
 
-/** Une jauge : un pictogramme, une valeur, et ce qu'elle mesure au survol ou au clavier. */
-const gauge = (name: IconName | undefined, label: string, value: string, bad: boolean, extra = '') =>
-  `<span class="gauge${bad ? ' ko' : ''}${extra}" data-tip="${esc(label)}" tabindex="0">${name ? icon(name) : ''}${value}</span>`;
+/** Les losanges de la progression : vagues tenues en or, la vague en cours en rouge. */
+const pips = (current: number, total: number) =>
+  `<span class="wave-pips" aria-hidden="true">${Array.from({ length: total }, (_, k) => `<i class="${k < current ? 'done' : k === current ? 'now' : ''}"></i>`).join('')}</span>`;
 
 /** Les jauges de la construction : facture et complexité prévues face aux plafonds, trafic, SLA. */
 function buildGauges(s: ViewState, wave: Wave): string {
   const info = draftInfo(s.draft, s.catalog);
   const cost = info.cost + migrationCost(s.game.committed, s.draft, s.catalog);
   const complexity = info.complexity;
-  const sla = `${(wave.sla.maxFailureRate * 100).toFixed(0)} % · ${wave.sla.maxP95LatencyMs} ms`;
+  const sla = `${(wave.sla.maxFailureRate * 100).toFixed(0)} % <em>· ${wave.sla.maxP95LatencyMs} ms</em>`;
   return [
-    gauge('coin', 'Coût de la vague / budget', `<b>${fmt(cost)}</b> / ${wave.budget}`, cost > wave.budget),
-    gauge('cog', 'Complexité / plafond', `<b>${complexity}</b> / ${wave.complexityCap}`, complexity > wave.complexityCap),
-    gauge(undefined, 'Trafic au plus fort de la vague, en requêtes par seconde : lectures, écritures, événements', trafficPeak(wave), false, ' traffic'),
-    gauge('target', 'SLA : échecs max, latence p95 (approx.) max', `<b>${sla}</b>`, false),
+    gauge('coin', 'budget', 'Coût de la vague / budget', `${fmt(cost)} <em>/ ${wave.budget}</em>`, cost > wave.budget),
+    gauge('cog', 'complexité', 'Complexité / plafond', `${complexity} <em>/ ${wave.complexityCap}</em>`, complexity > wave.complexityCap),
+    trafficPeak(wave),
+    gauge('target', 'SLA', 'SLA : échecs max, latence p95 max', sla, false),
   ].join('');
 }
 
@@ -57,16 +67,19 @@ export function renderHud(s: ViewState): string {
   const building = s.phase !== 'wave' && s.phase !== 'debrief' && s.phase !== 'choose';
   const gauges = wave && building ? buildGauges(s, wave) : '';
   const menu = s.showMenu ? renderMenu(s) : '';
-  const title = wave ? `Vague ${shownIndex + 1}/${n} — ${esc(wave.title)}` : 'Partie terminée';
+  const title = wave ? `Vague ${shownIndex + 1} / ${n}` : 'Partie terminée';
+  const subtitle = wave ? esc(wave.title) : esc(s.scenario.subtitle);
   const briefing = wave ? `<button class="round" data-action="show-briefing" data-tip="Revoir le briefing" aria-label="Revoir le briefing">${icon('hat')}</button>` : '';
   return `
     <div class="hud-bar">
-      <div class="plaque hud-title"><b>${esc(s.scenario.subtitle)}</b>
-        <span>${title}</span></div>
+      <div class="wave-badge" data-tip="${esc(s.scenario.subtitle)}">
+        <span class="wave-skull">${icon('skull')}</span>
+        <div class="plaque hud-title"><b>${title}</b><span>${subtitle}</span>${wave ? pips(shownIndex, n) : ''}</div>
+      </div>
       ${gauges ? `<div class="plaque hud-gauges">${gauges}</div>` : ''}
       <div class="plaque hud-actions">
-        ${gauge('star', 'Étoiles gagnées', `<b>${totalStars(s)}</b> / ${n * 3}`, false, ' stars')}
-        ${gauge('medal', 'Score', `<b>${fmt(totalScore(s))}</b>`, false)}
+        ${gauge('star', 'étoiles', 'Étoiles gagnées', `${totalStars(s)} <em>/ ${n * 3}</em>`, false, ' stars')}
+        ${gauge('medal', 'score', 'Score', fmt(totalScore(s)), false)}
         ${briefing}
         <button class="round" data-action="menu" data-tip="Menu" aria-label="Menu">${icon('menu')}</button>
       </div>

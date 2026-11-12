@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hold the Line — planche de design</title>
+    <!--
+      Planche d'essai de l'interface, hors build comme vitrine.html (`npm run dev`, puis
+      /design.html). Rien n'y est branché sur le jeu : on y compare des pictogrammes, des
+      boutons et des badges en SVG et CSS pur, dans trois matières, avant d'en choisir une.
+    -->
+    <style>
+      @font-face { font-family: 'Lilita One'; src: url('/src/ui/fonts/lilita-one.woff2') format('woff2'); font-display: swap; }
+
+      :root {
+        --display: 'Lilita One', Georgia, serif;
+        --ink: #3b2a1a;
+        /* Le fond du plateau, pour juger chaque élément là où il sera posé. */
+        --board: radial-gradient(120% 90% at 50% 30%, #9cc25a 0%, #7fa845 45%, #5f8a34 100%);
+        --hexes: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97'%3E%3Cpath d='M28 0 56 16v32L28 64 0 48V16zM28 64v33M0 16 -28 0M56 16 84 0' fill='none' stroke='%23000' stroke-opacity='.08' stroke-width='2'/%3E%3C/svg%3E");
+        --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .24 0 0 0 0 .12 0 0 0 .1 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+        /* Le fil du bois : de fines veines, plus une légère ondulation. */
+        --woodgrain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='60'%3E%3Cfilter id='w'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .35' numOctaves='3' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 .25 0 0 0 0 .14 0 0 0 0 .05 0 0 0 .55 -.18'/%3E%3C/filter%3E%3Crect width='240' height='60' filter='url(%23w)'/%3E%3C/svg%3E");
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; color: var(--ink); font: 14px/1.5 system-ui, sans-serif; background: #efe6d2; }
+      main { max-width: 1240px; margin: 0 auto; padding: 24px 16px 64px; display: grid; gap: 28px; }
+      header h1 { margin: 0; font: 30px var(--display); letter-spacing: .5px; }
+      header p { margin: 6px 0 0; max-width: 78ch; color: #5b4630; }
+      section > h2 { margin: 0 0 4px; font: 22px var(--display); }
+      section > p.lead { margin: 0 0 12px; max-width: 80ch; color: #5b4630; }
+      .note { font-size: 12px; color: #6d5a43; margin: 6px 0 0; }
+
+      /* ——— Les trois matières ———
+       * Chaque colonne pose les mêmes éléments ; seules ces variables changent. */
+      .t-parch {
+        --name: 'Parchemin & laiton';
+        --plank: var(--grain), linear-gradient(175deg, #fdf6e3, #efdcb2);
+        --edge: #9c7647; --edge-dark: #6b4a2b;
+        --rim: linear-gradient(160deg, #fbe7a6, #d9a83d 45%, #a9781f);
+        --rim-edge: #8a6118;
+        --face: var(--grain), radial-gradient(circle at 35% 30%, #fffaf0, #ecd9ad);
+        --face-solid: radial-gradient(circle at 35% 30%, #fffaf0, #ecd9ad);
+        --text: #3b2a1a; --text-soft: #7a6146;
+        --hi: rgba(255, 255, 255, .75); --lo: rgba(110, 75, 30, .22);
+        --k: #3b2a1a;
+      }
+      .t-blond {
+        --name: 'Bois blond';
+        --plank: var(--woodgrain), linear-gradient(175deg, #e9bf82, #c88d4f);
+        --edge: #7a4f27; --edge-dark: #4f3015;
+        --rim: linear-gradient(160deg, #eef2f4, #aab4ba 50%, #6f7a80);
+        --rim-edge: #4e575c;
+        --face: var(--woodgrain), radial-gradient(circle at 35% 30%, #f3d39f, #cf9a5c);
+        --face-solid: radial-gradient(circle at 35% 30%, #f6dcae, #cf9a5c);
+        --text: #3a2210; --text-soft: #6b4521;
+        --hi: rgba(255, 240, 210, .7); --lo: rgba(70, 40, 15, .3);
+        --k: #3a2210;
+      }
+      .t-dark {
+        --name: 'Bois sombre (maquette)';
+        --plank: var(--woodgrain), linear-gradient(175deg, #8a5a33, #5c3a1e);
+        --edge: #2b1a0e; --edge-dark: #1a0f07;
+        --rim: linear-gradient(160deg, #d9dee1, #8f989e 50%, #50585d);
+        --rim-edge: #23282b;
+        --face: var(--woodgrain), radial-gradient(circle at 35% 30%, #9b6a3f, #5e3c20);
+        --face-solid: radial-gradient(circle at 35% 30%, #a3713f, #5e3c20);
+        --text: #fff3dc; --text-soft: #e7cfa6;
+        --hi: rgba(255, 220, 170, .35); --lo: rgba(0, 0, 0, .35);
+        --k: #2b1a0e;
+      }
+
+      .themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+      /* Les barres font toute la largeur de l'écran : une matière par ligne. */
+      .themes.wide { grid-template-columns: 1fr; }
+      .themes.wide .stage { grid-template-columns: auto 1fr auto; align-items: start; }
+      .themes.wide .stage > .tag { grid-column: 1 / -1; }
+      .themes.wide .bottombar { grid-column: 1 / -1; justify-self: center; margin-top: 18px; }
+      .stage { position: relative; border-radius: 14px; padding: 18px 16px 20px; background: var(--hexes), var(--board); box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); display: grid; gap: 16px; align-content: start; }
+      .stage > .tag { font: 13px var(--display); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.5); letter-spacing: .3px; }
+      .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+      /* ——— Pictogrammes ——— */
+      svg.i { width: 1em; height: 1em; vertical-align: -.15em; overflow: visible; }
+      .icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 10px; }
+      .icon-card { background: var(--grain), linear-gradient(175deg, #fdf6e3, #efdcb2); border: 1px solid #c9a978; border-radius: 12px; padding: 10px 8px 8px; display: grid; justify-items: center; gap: 4px; text-align: center; }
+      .icon-card .big { font-size: 56px; line-height: 1; filter: drop-shadow(0 2px 1px rgba(40, 25, 10, .25)); }
+      .icon-card .sizes { display: flex; gap: 6px; align-items: end; color: var(--ink); }
+      .icon-card .sizes span:nth-child(1) { font-size: 16px; } .icon-card .sizes span:nth-child(2) { font-size: 24px; } .icon-card .sizes span:nth-child(3) { font-size: 32px; }
+      .icon-card b { font-size: 12px; } .icon-card small { font-size: 11px; color: #7a6146; line-height: 1.3; }
+      .icon-card .old { font-size: 22px; color: var(--ink); opacity: .9; border-top: 1px dashed #c9a978; padding-top: 4px; width: 100%; }
+      .icon-card .old .ico { width: 1em; height: 1em; }
+      .icon-card .old small { display: block; }
+
+      /* ——— Boutons ——— */
+      .btn {
+        --bg: var(--plank); --fg: var(--text);
+        font: 17px var(--display); letter-spacing: .3px; color: var(--fg);
+        display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px 11px; cursor: pointer;
+        background: var(--bg); border: 2px solid var(--edge); border-radius: 12px;
+        box-shadow: inset 0 2px 0 var(--hi), inset 0 -4px 0 var(--lo), 0 3px 0 var(--edge-dark), 0 7px 14px rgba(20, 12, 4, .3);
+        text-shadow: 0 1px 0 var(--hi);
+        transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+      }
+      .btn .i { font-size: 1.35em; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .25)); }
+      .btn:hover, .btn.is-hover { transform: translateY(-2px); filter: brightness(1.06) saturate(1.05); box-shadow: inset 0 2px 0 var(--hi), inset 0 -4px 0 var(--lo), 0 5px 0 var(--edge-dark), 0 11px 18px rgba(20, 12, 4, .32); }
+      .btn:active, .btn.is-pressed { transform: translateY(2px); box-shadow: inset 0 3px 6px var(--lo), 0 1px 0 var(--edge-dark), 0 3px 6px rgba(20, 12, 4, .25); }
+      .btn[disabled] { filter: grayscale(.85) brightness(.95); opacity: .7; cursor: not-allowed; transform: none; }
+      .btn:focus-visible { outline: 3px solid #fff3b0; outline-offset: 3px; }
+
+      /* Le seul gros bouton : « Lancer la vague ». Rouge sang et laiton en clair, planche ferrée en sombre. */
+      .btn.launch {
+        font-size: 22px; padding: 12px 26px 15px; border-radius: 14px; --fg: #fff6e0;
+        --bg: linear-gradient(175deg, #e0573f, #a92e1f 60%, #7c1f14);
+        border-color: #5a160d; text-shadow: 0 2px 0 rgba(60, 10, 4, .6);
+        --hi: rgba(255, 210, 190, .55); --lo: rgba(60, 8, 2, .35); --edge-dark: #4a1209;
+        position: relative;
+      }
+      .btn.launch::before { content: ''; position: absolute; inset: 3px; border-radius: 10px; border: 1.5px solid rgba(255, 220, 150, .55); pointer-events: none; }
+      .t-dark .btn.launch { --bg: var(--woodgrain), linear-gradient(175deg, #a8703f, #6e4322); border-color: var(--edge); --edge-dark: var(--edge-dark); --hi: rgba(255, 220, 170, .4); }
+      .t-dark .btn.launch::before { border-color: rgba(200, 210, 215, .6); }
+      .btn.small { font-size: 14px; padding: 5px 12px 7px; border-radius: 9px; }
+      .btn.ghost { --bg: transparent; box-shadow: none; border-style: dashed; text-shadow: none; }
+
+      /* Médaillons : une icône seule, cerclée de laiton (clair) ou de fer (bois). */
+      .medal {
+        width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; position: relative;
+        font-size: 28px; color: var(--text);
+        /* La face et l'anneau de métal dans la même boîte : la face s'arrête à la bordure,
+           l'anneau la remplit. Un pseudo-élément derrière recouvrait la face. */
+        border: 4px solid transparent; background: var(--face-solid) padding-box, var(--rim) border-box;
+        box-shadow: 0 0 0 2px var(--rim-edge), 0 0 0 0 transparent, inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo), 0 4px 0 var(--edge-dark), 0 8px 14px rgba(20, 12, 4, .3);
+        transition: transform .12s ease, box-shadow .12s ease;
+      }
+      .medal .i { filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .25)); }
+      .medal:hover { transform: translateY(-2px) rotate(-3deg); }
+      .medal:active, .medal.is-pressed { transform: translateY(2px); }
+      .medal.on { box-shadow: 0 0 0 2px var(--rim-edge), 0 0 0 5px #ffe58a, 0 0 18px 6px rgba(255, 214, 90, .65), inset 0 3px 6px var(--lo); }
+      .medal.sm { width: 40px; height: 40px; font-size: 20px; }
+      .medal[disabled] { filter: grayscale(.9); opacity: .55; cursor: not-allowed; transform: none; }
+      .badge-count { position: absolute; top: -8px; right: -8px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; display: grid; place-items: center;
+        font: 14px var(--display); color: #fff; background: linear-gradient(#f08a3c, #c95214); border: 2px solid #fff3dc; box-shadow: 0 2px 4px rgba(0,0,0,.35); }
+
+      /* Ruban « Constructible » : vert qui s'enfonce dans la carte, encoches en queue d'aronde. */
+      .ribbon {
+        --c1: #7cc24a; --c2: #3f8a2a; --cd: #2b5e1c;
+        position: relative; display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 30px;
+        font: 17px var(--display); color: #fff; text-shadow: 0 1px 0 var(--cd), 0 2px 3px rgba(0, 0, 0, .35);
+        background: linear-gradient(var(--c1), var(--c2));
+        clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 50%, 100% 100%, 0 100%, 12px 50%);
+        filter: drop-shadow(0 3px 0 var(--cd));
+      }
+      .ribbon::after { content: ''; position: absolute; inset: 4px 14px; border-top: 1.5px dashed rgba(255, 255, 255, .45); border-bottom: 1.5px dashed rgba(0, 0, 0, .18); pointer-events: none; }
+      .ribbon .i { font-size: 1.2em; }
+      .ribbon.ko { --c1: #e2683f; --c2: #b33a22; --cd: #6e1f10; }
+      .ribbon.wait { --c1: #e6c46a; --c2: #c29433; --cd: #7a5714; }
+
+      /* Pilule de prix, telle qu'au pied d'une carte. */
+      .price { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 4px 6px; border-radius: 99px; font: 16px var(--display); color: var(--text);
+        background: var(--face); border: 1.5px solid var(--edge); box-shadow: inset 0 1px 0 var(--hi), 0 2px 0 var(--edge-dark); }
+      .price .i { font-size: 1.25em; }
+
+      /* ——— Badges de vague ——— */
+      .wave-a { display: inline-flex; align-items: center; isolation: isolate; }
+      .wave-a .skull { width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; font-size: 38px; position: relative; z-index: 1;
+        border: 5px solid transparent; background: var(--face-solid) padding-box, var(--rim) border-box;
+        box-shadow: 0 0 0 2px var(--rim-edge), inset 0 2px 0 var(--hi), inset 0 -4px 0 var(--lo), 0 5px 10px rgba(20, 12, 4, .35); }
+      .wave-a .plate { margin-left: -18px; padding: 8px 18px 8px 28px; border-radius: 0 12px 12px 0; background: var(--plank); border: 2px solid var(--edge); border-left: 0;
+        box-shadow: inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo), 0 4px 10px rgba(20, 12, 4, .3); }
+      .wave-a .plate b { display: block; font: 22px/1 var(--display); color: var(--text); text-shadow: 0 1px 0 var(--hi); }
+      .wave-a .plate small { display: block; font-size: 12px; color: var(--text-soft); margin-top: 2px; }
+      .pips { display: flex; gap: 3px; margin-top: 5px; }
+      .pips i { width: 9px; height: 9px; transform: rotate(45deg); border-radius: 2px; background: rgba(0, 0, 0, .18); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25); }
+      .pips i.done { background: linear-gradient(#ffe58a, #d9a83d); box-shadow: inset 0 0 0 1px #8a6118; }
+      .pips i.now { background: linear-gradient(#ff8a65, #c0392b); box-shadow: inset 0 0 0 1px #6e1f10, 0 0 6px rgba(255, 120, 80, .8); }
+
+      /* Bannière suspendue : le numéro de vague dans un écu, la queue en pointe. */
+      .wave-b { width: 92px; text-align: center; padding: 10px 0 26px; position: relative; color: var(--text);
+        background: var(--plank); border: 2px solid var(--edge); border-bottom: 0;
+        clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%); filter: drop-shadow(0 4px 4px rgba(20, 12, 4, .35)); }
+      .wave-b .i { font-size: 34px; display: block; margin: 0 auto 2px; }
+      .wave-b b { font: 26px/1 var(--display); display: block; }
+      .wave-b small { font-size: 11px; color: var(--text-soft); }
+
+      /* Écu rond, le numéro au centre, la progression en couronne. */
+      .wave-c { --p: 25%; width: 86px; height: 86px; border-radius: 50%; display: grid; place-items: center; position: relative;
+        background: conic-gradient(#d9a83d var(--p), rgba(0, 0, 0, .2) 0); padding: 7px; box-shadow: 0 0 0 2px var(--rim-edge), 0 5px 10px rgba(20, 12, 4, .35); }
+      .wave-c > div { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; align-content: center; background: var(--face-solid); box-shadow: inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo); color: var(--text); }
+      .wave-c small { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-soft); line-height: 1; }
+      .wave-c b { font: 28px/1 var(--display); }
+
+      /* ——— Barres ——— */
+      .topbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .plaque { display: flex; align-items: center; gap: 2px; padding: 6px 10px; border-radius: 14px; background: var(--plank); border: 2px solid var(--edge);
+        box-shadow: inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo), 0 4px 0 var(--edge-dark), 0 8px 16px rgba(20, 12, 4, .3); position: relative; }
+      /* Clous aux quatre coins, sur le bois seulement. */
+      .t-blond .plaque::before, .t-dark .plaque::before { content: ''; position: absolute; inset: 5px; pointer-events: none;
+        background:
+          radial-gradient(circle at 3px 3px, #f2f4f5 0 1px, #8f989e 1.5px 3px, transparent 3.5px) top left / 7px 7px no-repeat,
+          radial-gradient(circle at 3px 3px, #f2f4f5 0 1px, #8f989e 1.5px 3px, transparent 3.5px) top right / 7px 7px no-repeat,
+          radial-gradient(circle at 3px 3px, #f2f4f5 0 1px, #8f989e 1.5px 3px, transparent 3.5px) bottom left / 7px 7px no-repeat,
+          radial-gradient(circle at 3px 3px, #f2f4f5 0 1px, #8f989e 1.5px 3px, transparent 3.5px) bottom right / 7px 7px no-repeat; }
+      .res { display: grid; grid-template-columns: auto auto; column-gap: 6px; align-items: center; padding: 0 10px; position: relative; color: var(--text); }
+      .res + .res::before { content: ''; position: absolute; left: -2px; top: 50%; width: 6px; height: 6px; transform: translateY(-50%) rotate(45deg); background: var(--edge); opacity: .55; }
+      .res .i { grid-row: span 2; font-size: 30px; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .25)); }
+      .res b { font: 20px/1 var(--display); text-shadow: 0 1px 0 var(--hi); white-space: nowrap; }
+      .res b em { font-style: normal; font-size: 14px; color: var(--text-soft); }
+      .res small { font-size: 11px; line-height: 1.1; color: var(--text-soft); }
+      .res.warn b { color: #c0392b; }
+      .t-dark .res.warn b { color: #ff9b7a; }
+
+      .bottombar { display: flex; align-items: end; justify-content: center; gap: 12px; padding: 12px 18px 14px; border-radius: 18px 18px 6px 6px;
+        background: var(--plank); border: 2px solid var(--edge); box-shadow: inset 0 2px 0 var(--hi), inset 0 -4px 0 var(--lo), 0 8px 18px rgba(20, 12, 4, .35); position: relative; }
+      .bottombar .sep { width: 2px; align-self: stretch; margin: 6px 2px; background: linear-gradient(transparent, var(--edge), transparent); opacity: .6; }
+      .bottombar .launch { margin-top: -26px; }
+
+
+      /* ——— Variantes, dans la matière retenue ——— */
+      .chosen { background: var(--hexes), var(--board); border-radius: 14px; padding: 18px 16px 22px; display: grid; gap: 18px; }
+      .chosen h3 { margin: 0; font: 18px var(--display); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+      .variants { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
+      .variant { display: grid; justify-items: center; gap: 8px; padding: 12px 8px 10px; border-radius: 14px; background: var(--plank); border: 2px solid var(--edge);
+        box-shadow: inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo), 0 4px 0 var(--edge-dark), 0 8px 14px rgba(20,12,4,.25); text-align: center; color: var(--text); }
+      .variant .big { font-size: 56px; line-height: 1; filter: drop-shadow(0 2px 1px rgba(40,25,10,.25)); }
+      .variant b { font: 15px var(--display); } .variant small { font-size: 11px; color: var(--text-soft); line-height: 1.3; }
+      .variant .inuse { display: flex; gap: 10px; align-items: center; }
+      .variant .wave-a .skull { width: 52px; height: 52px; font-size: 30px; }
+      .variant .wave-a .plate { padding: 5px 10px 5px 22px; } .variant .wave-a .plate b { font-size: 15px; white-space: nowrap; }
+
+      /* Une carte réduite, juste pour voir où vit le statut « constructible ». */
+      .cards-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 22px 14px; }
+      .demo { display: grid; gap: 8px; justify-items: center; }
+      .demo > small { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); font-size: 12px; text-align: center; max-width: 24ch; }
+      .mcard { position: relative; width: 168px; padding: 10px 10px 12px; border-radius: 14px; background: var(--plank); border: 2px solid var(--edge); color: var(--text);
+        box-shadow: inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo), 0 4px 0 var(--edge-dark), 0 10px 18px rgba(20,12,4,.3); display: grid; gap: 7px; justify-items: center; }
+      .mcard .t { font: 16px var(--display); }
+      .mcard .art { width: 100%; height: 76px; border-radius: 9px; display: grid; place-items: center; font-size: 46px; background: linear-gradient(#cfe6f5, #a8cf7a); border: 1.5px solid var(--edge); }
+      .mcard .costs { display: flex; gap: 6px; }
+      .mcard.no .art { filter: saturate(.35) brightness(.95); }
+      /* A. Sceau de cire au coin. */
+      .seal { position: absolute; top: -10px; right: -10px; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font-size: 22px;
+        background: radial-gradient(circle at 35% 30%, #8ed35c, #3f8a2a 70%); box-shadow: 0 0 0 3px #2b5e1c, 0 0 0 5px rgba(43,94,28,.25), 0 3px 4px rgba(0,0,0,.35);
+        clip-path: polygon(50% 0, 61% 6%, 74% 3%, 80% 15%, 93% 20%, 92% 33%, 100% 45%, 94% 57%, 97% 70%, 86% 78%, 80% 92%, 66% 92%, 55% 100%, 44% 93%, 30% 97%, 23% 85%, 9% 80%, 9% 66%, 0 56%, 7% 43%, 3% 30%, 15% 22%, 19% 8%, 33% 7%, 42% 0); }
+      .seal.ko { background: radial-gradient(circle at 35% 30%, #f07a5a, #a92e1f 70%); box-shadow: none; --k: #5a160d; }
+      /* C. Le prix dit lui-même ce qui manque. */
+      .price.ok { box-shadow: inset 0 1px 0 var(--hi), 0 2px 0 var(--edge-dark), 0 0 0 2px #6cb243; }
+      .price.miss { color: #a92e1f; box-shadow: inset 0 1px 0 var(--hi), 0 2px 0 var(--edge-dark), 0 0 0 2px #d25a3c; }
+      .need { font-size: 12px; font-weight: 600; color: #a92e1f; }
+      /* D. Étiquette suspendue à une ficelle. */
+      .tagline { position: absolute; top: -4px; right: -26px; transform: rotate(8deg); transform-origin: top left; display: grid; justify-items: center; }
+      .tagline::before { content: ''; width: 2px; height: 14px; background: #8a6a3c; }
+      .tagline span { font: 12px var(--display); padding: 4px 9px 5px 13px; border-radius: 4px 8px 8px 4px; background: var(--grain), linear-gradient(#fffaf0, #ecd9ad); border: 1.5px solid var(--edge); color: #2b6e1f;
+        clip-path: polygon(8px 0, 100% 0, 100% 100%, 8px 100%, 0 50%); box-shadow: 0 2px 3px rgba(0,0,0,.2); white-space: nowrap; }
+      .tagline.ko span { color: #a92e1f; }
+      /* E. La carte elle-même : un liseré doré qui luit, ou un cadenas posé sur l'image. */
+      .mcard.glow { box-shadow: inset 0 2px 0 var(--hi), 0 0 0 3px #f2c94c, 0 0 18px 4px rgba(255,214,90,.7), 0 10px 18px rgba(20,12,4,.3); }
+      .mcard .locked { position: absolute; top: 44px; left: 50%; transform: translateX(-50%); font-size: 40px; filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
+      /* F. Un filet sobre au pied de la carte. */
+      .foot { width: 100%; display: flex; justify-content: center; align-items: center; gap: 5px; padding-top: 6px; border-top: 1.5px dashed var(--edge); font: 13px var(--display); color: #2b6e1f; }
+      .foot.ko { color: #a92e1f; }
+      .foot .i { font-size: 1.2em; }
+      /* Les icônes d'aujourd'hui, pour comparer (src/ui/icons.ts). */
+      .ico { width: 1em; height: 1em; }
+      .ico { --ico-w: 1.7px; --ico-o: 1.4px; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Les pictogrammes, une seule fois, en <symbol> : un contour sombre épais (sa couleur suit
+      `--k` de la matière), deux ou trois tons d'aplat, un reflet clair. Dessinés sur 48.
+    -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <linearGradient id="g-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe17a" /><stop offset=".55" stop-color="#f2b934" /><stop offset="1" stop-color="#c8871d" /></linearGradient>
+        <linearGradient id="g-steel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef2f4" /><stop offset=".55" stop-color="#b6c0c6" /><stop offset="1" stop-color="#7d888e" /></linearGradient>
+        <linearGradient id="g-paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffaf0" /><stop offset="1" stop-color="#ecd9ad" /></linearGradient>
+        <linearGradient id="g-wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d99a58" /><stop offset="1" stop-color="#8f5a2a" /></linearGradient>
+        <linearGradient id="g-red" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f06a4d" /><stop offset="1" stop-color="#a52a1b" /></linearGradient>
+        <linearGradient id="g-blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6aa3ea" /><stop offset="1" stop-color="#2f5fa8" /></linearGradient>
+        <linearGradient id="g-green" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd25a" /><stop offset="1" stop-color="#3f8a2a" /></linearGradient>
+        <linearGradient id="g-bone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffaf0" /><stop offset="1" stop-color="#d9c8a2" /></linearGradient>
+        <linearGradient id="g-glass" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d9f0ff" stop-opacity=".9" /><stop offset="1" stop-color="#9fc8e4" stop-opacity=".9" /></linearGradient>
+      </defs>
+
+      <!-- Budget : un écu d'or, la tranche en dessous, une étoile frappée. -->
+      <symbol id="i-coin" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <ellipse cx="24" cy="27" rx="18" ry="17" fill="#a8701a" />
+          <ellipse cx="24" cy="23.5" rx="18" ry="17" fill="url(#g-gold)" />
+          <ellipse cx="24" cy="23.5" rx="12.5" ry="11.8" fill="#eaa92c" stroke-width="1.6" />
+          <path d="M24 15.5l2.4 5 5.4.6-4 3.7 1.1 5.3-4.9-2.7-4.9 2.7 1.1-5.3-4-3.7 5.4-.6z" fill="#ffe486" stroke-width="1.4" />
+        </g>
+        <path d="M11 17a14 14 0 0 1 9-7" fill="none" stroke="#fff6cf" stroke-width="3" stroke-linecap="round" opacity=".9" />
+      </symbol>
+
+      <!-- Complexité : des rouages, l'un dans l'autre. Les dents sont calculées plus bas. -->
+      <symbol id="i-cog" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.4" stroke-linejoin="round">
+          <path id="cog-big" fill="url(#g-steel)" />
+          <circle cx="20" cy="22" r="6" fill="#6b767c" />
+          <path id="cog-small" fill="url(#g-gold)" />
+          <circle cx="36" cy="36" r="3.2" fill="#a8701a" />
+        </g>
+        <path d="M11 15a12 12 0 0 1 6-5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".8" />
+      </symbol>
+
+      <!-- Lectures : un livre ouvert sur sa couverture. -->
+      <symbol id="i-read" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M3 14v25q11-3 21 2 10-5 21-2V14" fill="url(#g-wood)" />
+          <path d="M6 10q10-3 18 3v25q-8-5-18-2z" fill="url(#g-paper)" />
+          <path d="M42 10q-10-3-18 3v25q8-5 18-2z" fill="url(#g-paper)" />
+        </g>
+        <g stroke="#b59a6a" stroke-width="1.6" stroke-linecap="round" fill="none">
+          <path d="M10 17q5-1 10 1M10 22q5-1 10 1M10 27q5-1 10 1M28 18q5-2 10-1M28 23q5-2 10-1M28 28q5-2 10-1" />
+        </g>
+        <path d="M33 8l-2 12 3.5-2.5L38 20l-1-12z" fill="#c0392b" stroke="var(--k, #3b2a1a)" stroke-width="1.6" stroke-linejoin="round" />
+      </symbol>
+
+      <!-- Écritures : une plume sur un feuillet. -->
+      <symbol id="i-write" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M6 14h22l6 6v22H6z" fill="url(#g-paper)" />
+          <path d="M42 4c-15 2-24 13-27 29l4 2c4-12 13-22 23-31z" fill="#fbf7ee" />
+          <path d="M15 33l-3 9 7-6z" fill="#3b2a1a" />
+        </g>
+        <path d="M40 6C29 12 22 21 18 32" fill="none" stroke="#b59a6a" stroke-width="1.6" stroke-linecap="round" />
+        <path d="M10 22h10M10 27h7M10 32h5" stroke="#b59a6a" stroke-width="1.8" stroke-linecap="round" />
+      </symbol>
+
+      <!-- Événements : une lettre scellée de cire. -->
+      <symbol id="i-async" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <rect x="5" y="11" width="38" height="27" rx="3" fill="url(#g-paper)" />
+          <path d="M5 13l19 14 19-14" fill="none" />
+          <circle cx="24" cy="28" r="7" fill="url(#g-red)" />
+        </g>
+        <path d="M21 25.5l3 3.5 3-3.5" fill="none" stroke="#ffd3c4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M5 38l-3 4M43 38l3 4" stroke="var(--k, #3b2a1a)" stroke-width="2" stroke-linecap="round" opacity=".5" />
+      </symbol>
+
+      <!-- SLA : l'écu bleu de la cité, une coche dessus. -->
+      <symbol id="i-sla" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M24 4l17 6v12c0 12-8 19.5-17 22.5C15 41.5 7 34 7 22V10z" fill="url(#g-blue)" />
+          <path d="M24 9l12 4v9c0 9-5.5 14.5-12 17" fill="none" stroke="#a9c9f2" stroke-width="2" />
+        </g>
+        <path d="M15.5 24l6 6 11-12" fill="none" stroke="var(--k, #3b2a1a)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M15.5 24l6 6 11-12" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
+
+      <!-- La vague : un crâne. -->
+      <symbol id="i-skull" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M24 4C13.5 4 7 11 7 20c0 6 2.6 9.6 6 11.8V39a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3v-7.2c3.4-2.2 6-5.8 6-11.8C41 11 34.5 4 24 4z" fill="url(#g-bone)" />
+          <path d="M19 42v-5M24 42v-5M29 42v-5" />
+          <ellipse cx="16.5" cy="22" rx="4.6" ry="5" fill="#3b2a1a" />
+          <ellipse cx="31.5" cy="22" rx="4.6" ry="5" fill="#3b2a1a" />
+          <path d="M24 27l-2.8 5h5.6z" fill="#3b2a1a" />
+        </g>
+        <circle cx="15" cy="20.5" r="1.4" fill="#ff7b54" />
+        <circle cx="30" cy="20.5" r="1.4" fill="#ff7b54" />
+        <path d="M12 12a12 12 0 0 1 8-5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".9" />
+      </symbol>
+
+      <!-- Les réglages : un engrenage d'acier. -->
+      <symbol id="i-gear" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round">
+          <path id="gear-path" fill="url(#g-steel)" />
+          <circle cx="24" cy="24" r="6.5" fill="#6b767c" />
+        </g>
+        <path d="M14 16a12 12 0 0 1 7-6" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".85" />
+      </symbol>
+
+      <!-- Bâtir : un marteau, manche de bois, tête d'acier. -->
+      <symbol id="i-hammer" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M8 37l16-16 4 4-16 16a2.8 2.8 0 0 1-4-4z" fill="url(#g-wood)" />
+          <path d="M19 15l9-9 4 1 10 10 1 4-9 9-4-1-10-10z" fill="url(#g-steel)" />
+          <path d="M28 6l14 14" stroke-width="2" />
+        </g>
+        <path d="M21 16l7-7" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".85" />
+      </symbol>
+
+      <!-- Lancer la vague : deux épées croisées. -->
+      <symbol id="i-swords" viewBox="0 0 48 48">
+        <g id="sword" style="stroke: var(--k, #3b2a1a); stroke-width: 2.4" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M6 4l4 1 22 22-3 3L7 8z" fill="url(#g-steel)" />
+          <path d="M26 34l8-8 3 3-8 8z" fill="url(#g-gold)" />
+          <path d="M33 33l7 7" stroke-width="5.5" />
+          <path d="M33 33l7 7" stroke="#8f5a2a" stroke-width="2.8" />
+          <circle cx="41.5" cy="41.5" r="2.8" fill="url(#g-gold)" />
+        </g>
+        <use href="#sword" transform="translate(48 0) scale(-1 1)" />
+        <path d="M9 7l17 17" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".85" />
+      </symbol>
+
+      <!-- Sélection : un curseur trapu. -->
+      <symbol id="i-select" viewBox="0 0 48 48">
+        <path d="M12 5l25 17-10.5 2 6.5 11.5-5.5 3.2-6.5-11.6-8 7z" fill="url(#g-paper)" style="stroke: var(--k, #3b2a1a); stroke-width: 2.8" stroke-linejoin="round" />
+        <path d="M15 11v15" stroke="#fff" stroke-width="2.4" stroke-linecap="round" />
+      </symbol>
+
+      <!-- Relier : deux maillons de chaîne. -->
+      <symbol id="i-link" viewBox="0 0 48 48">
+        <g transform="rotate(-40 24 24)" fill="none" stroke-linecap="round">
+          <rect x="4" y="17" width="22" height="14" rx="7" style="stroke: var(--k, #3b2a1a)" stroke-width="8.5" />
+          <rect x="22" y="17" width="22" height="14" rx="7" style="stroke: var(--k, #3b2a1a)" stroke-width="8.5" />
+          <rect x="4" y="17" width="22" height="14" rx="7" stroke="url(#g-steel)" stroke-width="4.2" />
+          <rect x="22" y="17" width="22" height="14" rx="7" stroke="url(#g-gold)" stroke-width="4.2" />
+        </g>
+      </symbol>
+
+      <!-- Retirer : la dynamite, mèche allumée. -->
+      <symbol id="i-dynamite" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <rect x="7" y="18" width="10" height="25" rx="2.5" fill="url(#g-red)" />
+          <rect x="16" y="16" width="10" height="27" rx="2.5" fill="url(#g-red)" />
+          <rect x="25" y="18" width="10" height="25" rx="2.5" fill="url(#g-red)" />
+          <rect x="5" y="27" width="32" height="6" rx="1.5" fill="#e6c58a" />
+          <path d="M21 16q1-8 9-10" fill="none" />
+        </g>
+        <path d="M33 1l1.6 4.2L39 4l-3 3.4 4 2.4-4.6.3-.5 4.6-2-4.1-4.3 1.6 2.9-3.6L27.6 5.5l4.4-.4z" fill="#ffd23f" stroke="#e8761b" stroke-width="1" stroke-linejoin="round" />
+      </symbol>
+
+      <!-- Annuler, rétablir : une flèche pleine en arc. -->
+      <symbol id="i-undo" viewBox="0 0 48 48">
+        <path d="M20 9L6 21l14 12v-7c9 0 15 2.5 20 10 0-13-8-20-20-20z" fill="url(#g-gold)" style="stroke: var(--k, #3b2a1a); stroke-width: 2.8" stroke-linejoin="round" />
+        <path d="M17 15l-6 5" stroke="#fff6cf" stroke-width="2.4" stroke-linecap="round" />
+      </symbol>
+
+      <!-- La main de cartes. -->
+      <symbol id="i-cards" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round">
+          <rect x="6" y="9" width="21" height="30" rx="3" transform="rotate(-14 16 24)" fill="url(#g-paper)" />
+          <rect x="20" y="8" width="21" height="30" rx="3" transform="rotate(10 30 23)" fill="url(#g-paper)" />
+          <path d="M31 16l2.5 5 5 .5-3.8 3.3 1.2 5-4.9-2.8-4.9 2.8 1.2-5-3.8-3.3 5-.5z" fill="url(#g-gold)" stroke-width="1.6" transform="rotate(10 30 23)" />
+        </g>
+      </symbol>
+
+      <!-- Étoiles : une étoile d'or bombée. -->
+      <symbol id="i-star" viewBox="0 0 48 48">
+        <path id="star-path" fill="url(#g-gold)" style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" />
+        <path d="M17 18l5-1" stroke="#fff6cf" stroke-width="2.6" stroke-linecap="round" />
+      </symbol>
+
+      <!-- Score : une médaille au ruban. -->
+      <symbol id="i-medal" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.4" stroke-linejoin="round">
+          <path d="M14 3h8l5 13h-8z" fill="url(#g-blue)" />
+          <path d="M34 3h-8l-5 13h8z" fill="url(#g-red)" />
+          <circle cx="24" cy="30" r="14" fill="url(#g-gold)" />
+          <circle cx="24" cy="30" r="9" fill="#eaa92c" stroke-width="1.6" />
+        </g>
+        <path d="M14 26a10 10 0 0 1 5-6" fill="none" stroke="#fff6cf" stroke-width="2.6" stroke-linecap="round" />
+      </symbol>
+
+      <!-- Indice : une ampoule… plutôt une lanterne, pour la cité. -->
+      <symbol id="i-lantern" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M19 6h10M24 3v3" fill="none" />
+          <path d="M15 12l3-6h12l3 6z" fill="#5d6a70" />
+          <path d="M15 12h18l-2 24H17z" fill="#ffd96a" />
+          <path d="M14 36h20v5H14z" fill="#5d6a70" />
+          <path d="M24 12v24" stroke-width="2" />
+        </g>
+        <ellipse cx="24" cy="24" rx="4" ry="6" fill="#fff6cf" />
+        <circle cx="24" cy="24" r="15" fill="#ffd96a" opacity=".18" />
+      </symbol>
+
+      <!-- Courbes : un tableau aux barres de couleur. -->
+      <symbol id="i-chart" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round">
+          <rect x="5" y="6" width="38" height="36" rx="3" fill="url(#g-paper)" />
+          <rect x="11" y="26" width="6" height="11" fill="url(#g-green)" stroke-width="2" />
+          <rect x="21" y="18" width="6" height="19" fill="url(#g-gold)" stroke-width="2" />
+          <rect x="31" y="12" width="6" height="25" fill="url(#g-red)" stroke-width="2" />
+        </g>
+      </symbol>
+
+      <!-- Latence : un sablier. -->
+      <symbol id="i-hourglass" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M14 7h20c0 9-6 12-10 17 4 5 10 8 10 17H14c0-9 6-12 10-17-4-5-10-8-10-17z" fill="url(#g-glass)" />
+          <path d="M18 39c1-5 4-7 6-8 2 1 5 3 6 8z" fill="#e2b04a" stroke-width="1.6" />
+          <path d="M19 13h10c-1 3-3 5-5 7-2-2-4-4-5-7z" fill="#e2b04a" stroke-width="1.6" />
+          <rect x="10" y="3" width="28" height="5" rx="2" fill="url(#g-wood)" />
+          <rect x="10" y="40" width="28" height="5" rx="2" fill="url(#g-wood)" />
+        </g>
+      </symbol>
+
+      <!-- Le chambellan : un haut-de-forme. -->
+      <symbol id="i-hat" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round">
+          <path d="M14 7h20l-2 27H16z" fill="#3a3f46" />
+          <path d="M15.4 26h17.2l-.5 6H16z" fill="url(#g-red)" />
+          <ellipse cx="24" cy="36" rx="19" ry="6" fill="#2b2f35" />
+        </g>
+        <path d="M18 10l-1 13" stroke="#8b939c" stroke-width="2.4" stroke-linecap="round" />
+      </symbol>
+
+      <!-- Coche et croix, pour les rubans et les verdicts. -->
+      <symbol id="i-check" viewBox="0 0 48 48">
+        <path d="M8 25l11 11L41 12" fill="none" style="stroke: var(--k, #2b5e1c)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M8 25l11 11L41 12" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
+      <symbol id="i-cross" viewBox="0 0 48 48">
+        <path d="M11 11l26 26M37 11L11 37" fill="none" style="stroke: var(--k, #6e1f10)" stroke-width="11" stroke-linecap="round" />
+        <path d="M11 11l26 26M37 11L11 37" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" />
+      </symbol>
+
+      <!-- ——— Variantes de la vague ——— -->
+      <!-- Un crâne de dessin animé : grand front, pommettes, mâchoire à part. -->
+      <symbol id="i-skull2" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M14 33h20v5a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4z" fill="url(#g-bone)" />
+          <path d="M24 4C13 4 6 11.5 6 21c0 5.5 2.4 9.3 6 11.5V35h24v-2.5c3.6-2.2 6-6 6-11.5C42 11.5 35 4 24 4z" fill="url(#g-bone)" />
+          <path d="M19.5 37v5M24 37v5M28.5 37v5" stroke-width="2" />
+          <path d="M10 22c0-4 3-7 7-7s6 3 6 6.5-3 6-6.5 6S10 26 10 22zM38 22c0-4-3-7-7-7s-6 3-6 6.5 3 6 6.5 6S38 26 38 22z" fill="#3b2a1a" />
+          <path d="M24 26.5c-1.6 0-3 2.3-3 3.5 0 1 1.3 1.5 3 1.5s3-.5 3-1.5c0-1.2-1.4-3.5-3-3.5z" fill="#3b2a1a" stroke-width="1.6" />
+        </g>
+        <circle cx="15" cy="20" r="1.8" fill="#fff" opacity=".9" />
+        <circle cx="29" cy="20" r="1.8" fill="#fff" opacity=".9" />
+        <path d="M11 11a13 13 0 0 1 9-5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".9" />
+      </symbol>
+
+      <!-- Un heaume de chevalier, plumet rouge. -->
+      <symbol id="i-helm" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M24 10c3-5 9-7 13-5-4 1-7 4-8 8z" fill="url(#g-red)" />
+          <path d="M9 27c0-11 6.5-19 15-19s15 8 15 19v12a3 3 0 0 1-3 3H12a3 3 0 0 1-3-3z" fill="url(#g-steel)" />
+          <path d="M13 22h22v5H13z" fill="#3b2a1a" />
+          <path d="M24 8v14" stroke-width="2" />
+          <path d="M24 27v15" stroke-width="2" />
+        </g>
+        <g fill="#3b2a1a"><circle cx="17" cy="33" r="1.3" /><circle cx="17" cy="37" r="1.3" /><circle cx="31" cy="33" r="1.3" /><circle cx="31" cy="37" r="1.3" /></g>
+        <path d="M13 18a12 12 0 0 1 6-7" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".9" />
+      </symbol>
+
+      <!-- Le cor de guerre : la vague s'annonce. -->
+      <symbol id="i-horn" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M5 33c8 1 21-3 30-15l7 5C35 37 21 43 8 41z" fill="url(#g-bone)" />
+          <path d="M35 18l7 5 2-6-6-4z" fill="url(#g-gold)" />
+          <path d="M15 37.5l-1.5-6.5M23 35l-2.5-6.5M30 30.5l-3.5-5.5" fill="none" stroke="#a8701a" stroke-width="3.2" />
+          <path d="M5 33l-2 6 5 2" fill="url(#g-gold)" />
+        </g>
+        <path d="M34 9l3-5M40 12l5-3M28 8l-1-5" stroke="var(--k, #3b2a1a)" stroke-width="2.4" stroke-linecap="round" />
+      </symbol>
+
+      <!-- L'étendard de la cité, sur sa hampe. -->
+      <symbol id="i-banner" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M12 6h26l-6 9 6 9H12z" fill="url(#g-red)" />
+          <path d="M10 4v40" stroke-width="5.5" />
+          <path d="M10 4v40" stroke="#b5793d" stroke-width="2.6" />
+          <circle cx="10" cy="4" r="2.6" fill="url(#g-gold)" stroke-width="1.6" />
+          <path d="M22 9.5l1.6 3.2 3.5.4-2.6 2.4.7 3.4-3.2-1.8-3.2 1.8.7-3.4-2.6-2.4 3.5-.4z" fill="#ffe486" stroke-width="1.3" />
+        </g>
+      </symbol>
+
+      <!-- Bouclier rond et deux épées : l'assaut. -->
+      <symbol id="i-assault" viewBox="0 0 48 48">
+        <use href="#sword" transform="translate(-2 -2) scale(.9)" />
+        <use href="#sword" transform="translate(50 -2) scale(-.9 .9)" />
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <circle cx="24" cy="27" r="13" fill="url(#g-wood)" />
+          <circle cx="24" cy="27" r="8" fill="url(#g-blue)" stroke-width="2" />
+          <circle cx="24" cy="27" r="3" fill="url(#g-gold)" stroke-width="1.6" />
+        </g>
+        <g fill="#3b2a1a"><circle cx="24" cy="16.5" r="1.2" /><circle cx="34.5" cy="27" r="1.2" /><circle cx="24" cy="37.5" r="1.2" /><circle cx="13.5" cy="27" r="1.2" /></g>
+      </symbol>
+
+      <!-- Le tambour de guerre. -->
+      <symbol id="i-drum" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M8 18v16c0 4 7 7 16 7s16-3 16-7V18" fill="url(#g-red)" />
+          <path d="M8 21l6 15 6-15 6 15 6-15 6 15 2-5" fill="none" stroke="#f2c94c" stroke-width="2.2" />
+          <ellipse cx="24" cy="18" rx="16" ry="7" fill="url(#g-paper)" />
+          <path d="M30 3l-8 13M40 6L26 15" stroke-width="2.6" />
+        </g>
+        <circle cx="30" cy="3" r="2.6" fill="url(#g-wood)" stroke="var(--k, #3b2a1a)" stroke-width="1.6" />
+        <circle cx="40" cy="6" r="2.6" fill="url(#g-wood)" stroke="var(--k, #3b2a1a)" stroke-width="1.6" />
+      </symbol>
+
+
+      <!-- ——— Une famille de crânes, tous bâtis sur le crâne rond ——— -->
+      <!-- Os croisés derrière. -->
+      <symbol id="i-sk-bones" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M7 37L37 9M11 9l30 28" stroke-width="8.5" />
+          <path d="M7 37L37 9M11 9l30 28" stroke="#f1e6cc" stroke-width="4.2" />
+          <circle cx="7" cy="37" r="3.6" fill="url(#g-bone)" /><circle cx="37" cy="9" r="3.6" fill="url(#g-bone)" />
+          <circle cx="11" cy="9" r="3.6" fill="url(#g-bone)" /><circle cx="41" cy="37" r="3.6" fill="url(#g-bone)" />
+        </g>
+        <use href="#i-skull2" x="9" y="6" width="30" height="30" />
+      </symbol>
+
+      <!-- Couronné : le roi des pillards. -->
+      <symbol id="i-sk-crown" viewBox="0 0 48 48">
+        <use href="#i-skull2" x="4" y="9" width="40" height="40" />
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M11 13l2-10 6 6 5-8 5 8 6-6 2 10z" fill="url(#g-gold)" />
+          <path d="M11 13h26" stroke-width="2" />
+        </g>
+        <circle cx="24" cy="8" r="1.8" fill="#c0392b" />
+      </symbol>
+
+      <!-- Casqué de cornes. -->
+      <symbol id="i-sk-viking" viewBox="0 0 48 48">
+        <use href="#i-skull2" x="4" y="7" width="40" height="40" />
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M9 20c-6-2-8-9-6-15 2 5 6 7 10 8z" fill="url(#g-bone)" />
+          <path d="M39 20c6-2 8-9 6-15-2 5-6 7-10 8z" fill="url(#g-bone)" />
+          <path d="M8 21c0-9 7-15 16-15s16 6 16 15z" fill="url(#g-steel)" />
+          <path d="M8 21h32" stroke-width="3" />
+          <path d="M24 6v15" stroke-width="2" />
+        </g>
+        <g fill="#3b2a1a"><circle cx="13" cy="17" r="1.1" /><circle cx="35" cy="17" r="1.1" /></g>
+      </symbol>
+
+      <!-- Fêlé, les yeux qui rougeoient. -->
+      <symbol id="i-sk-cursed" viewBox="0 0 48 48">
+        <circle cx="16" cy="21" r="9" fill="#ff5a3a" opacity=".22" />
+        <circle cx="32" cy="21" r="9" fill="#ff5a3a" opacity=".22" />
+        <use href="#i-skull2" x="0" y="0" width="48" height="48" />
+        <path d="M27 5l-3 6 4 3-3 5" fill="none" stroke="var(--k, #3b2a1a)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        <circle cx="16" cy="21.5" r="3" fill="#ff6a3d" /><circle cx="32" cy="21.5" r="3" fill="#ff6a3d" />
+        <circle cx="16" cy="21.5" r="1.3" fill="#ffe08a" /><circle cx="32" cy="21.5" r="1.3" fill="#ffe08a" />
+      </symbol>
+
+      <!-- En flammes : la vague qui déferle. -->
+      <symbol id="i-sk-flame" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M24 2c4 6 12 6 14 15 2-3 2-6 1-9 6 6 8 14 5 22H4c-3-8-1-16 5-22-1 3-1 6 1 9 2-9 10-9 14-15z" fill="#ff9a3c" />
+        </g>
+        <path d="M24 9c3 5 8 6 9 13H15c1-7 6-8 9-13z" fill="#ffd96a" />
+        <use href="#i-skull2" x="7" y="12" width="34" height="34" />
+      </symbol>
+
+      <!-- Sur un écu : le blason des assaillants. -->
+      <symbol id="i-sk-shield" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M24 3l18 6v12c0 13-8.5 20.5-18 24C14.5 41.5 6 34 6 21V9z" fill="url(#g-red)" />
+          <path d="M24 8l13 4.5v8.5c0 9.5-6 15.5-13 18.5" fill="none" stroke="#f6a08a" stroke-width="2" />
+        </g>
+        <use href="#i-skull2" x="12" y="10" width="24" height="24" />
+      </symbol>
+
+      <!-- Le squelette guerrier : casque à nasal, comme les pillards du plateau. -->
+      <symbol id="i-sk-warrior" viewBox="0 0 48 48">
+        <use href="#i-skull2" x="4" y="6" width="40" height="40" />
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M8 22c0-10 7-17 16-17s16 7 16 17l-4 1c0-8-5-13-12-13S12 15 12 23z" fill="url(#g-steel)" />
+          <path d="M22 9h4v18h-4z" fill="url(#g-steel)" />
+        </g>
+        <path d="M14 13a12 12 0 0 1 6-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".9" />
+      </symbol>
+
+      <!-- Le crâne qui sourit : la vague, pas la mort. -->
+      <symbol id="i-sk-grin" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M24 4C13 4 6 11.5 6 21c0 6 3 10 7 12v4a5 5 0 0 0 5 5h12a5 5 0 0 0 5-5v-4c4-2 7-6 7-12C42 11.5 35 4 24 4z" fill="url(#g-bone)" />
+          <path d="M11 22a5.5 5.5 0 0 1 11 0M26 22a5.5 5.5 0 0 1 11 0" fill="none" stroke-width="3.2" />
+          <path d="M15 31q9 7 18 0" fill="#3b2a1a" />
+          <path d="M19 32.6v2.4M24 34v2.5M29 32.6v2.4" stroke="#f1e6cc" stroke-width="1.6" />
+          <path d="M22.5 27h3" stroke-width="2.6" />
+        </g>
+        <circle cx="12" cy="27" r="2.6" fill="#f2a08a" opacity=".7" /><circle cx="36" cy="27" r="2.6" fill="#f2a08a" opacity=".7" />
+        <path d="M11 11a13 13 0 0 1 9-5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".9" />
+      </symbol>
+
+
+      <!-- Le crâne en colère dans sa flamme : aplats francs, façon pictogramme plat. -->
+      <symbol id="i-sk-hell-flat" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M24 45c-10 0-17-6.5-17-16 0-7 3.5-11 6-15 1 3 2.5 4.5 4.5 5-1-7 2-13 8-17 0 4 2 6.5 4.5 8.5 1.5-2 2-4 1.8-6.5C37 7.5 41 15 41 26c0 11-7 19-17 19z" fill="#f2603a" />
+          <path d="M24 41c-7.5 0-12-5-12-11.5 0-4 1.5-6.5 3.5-9 .5 2 1.8 3 3.5 3.5-.5-5 1.5-9 5.5-12 .5 3 2 5 4 6.5 1-1.5 1.4-3 1.3-5 4.5 3.5 6.7 9 6.7 15.5C36.5 35.5 31.5 41 24 41z" fill="#f9834f" stroke-width="0" />
+          <path d="M24 19c-6.6 0-11 4.3-11 10.2 0 3.6 1.7 6 4 7.4V39a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2.4c2.3-1.4 4-3.8 4-7.4C35 23.3 30.6 19 24 19z" fill="#ffffff" />
+          <path d="M21 41v-4M24 41v-4M27 41v-4" stroke-width="1.8" />
+          <path d="M16.5 26.5l6 2.6c0 2.4-1.4 4-3.3 4s-3.2-1.7-2.7-6.6zM31.5 26.5l-6 2.6c0 2.4 1.4 4 3.3 4s3.2-1.7 2.7-6.6z" fill="#e8432a" stroke-width="2" />
+          <path d="M24 32.4l-1.5 2.4h3z" fill="#3b2a1a" stroke-width="1.4" />
+        </g>
+        <path d="M18 23c2-1.6 4.5-2.3 6-2.3" fill="none" stroke="#d9d9d9" stroke-width="1.6" stroke-linecap="round" />
+        
+      </symbol>
+      <!-- Le même, dans le rendu de la planche : dégradés, reflet. -->
+      <symbol id="i-sk-hell" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M24 45c-10 0-17-6.5-17-16 0-7 3.5-11 6-15 1 3 2.5 4.5 4.5 5-1-7 2-13 8-17 0 4 2 6.5 4.5 8.5 1.5-2 2-4 1.8-6.5C37 7.5 41 15 41 26c0 11-7 19-17 19z" fill="url(#g-red)" />
+          <path d="M24 41c-7.5 0-12-5-12-11.5 0-4 1.5-6.5 3.5-9 .5 2 1.8 3 3.5 3.5-.5-5 1.5-9 5.5-12 .5 3 2 5 4 6.5 1-1.5 1.4-3 1.3-5 4.5 3.5 6.7 9 6.7 15.5C36.5 35.5 31.5 41 24 41z" fill="#ff9a3c" stroke-width="0" />
+          <path d="M24 19c-6.6 0-11 4.3-11 10.2 0 3.6 1.7 6 4 7.4V39a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2.4c2.3-1.4 4-3.8 4-7.4C35 23.3 30.6 19 24 19z" fill="url(#g-bone)" />
+          <path d="M21 41v-4M24 41v-4M27 41v-4" stroke-width="1.8" />
+          <path d="M16.5 26.5l6 2.6c0 2.4-1.4 4-3.3 4s-3.2-1.7-2.7-6.6zM31.5 26.5l-6 2.6c0 2.4 1.4 4 3.3 4s3.2-1.7 2.7-6.6z" fill="#c0392b" stroke-width="2" />
+          <path d="M24 32.4l-1.5 2.4h3z" fill="#3b2a1a" stroke-width="1.4" />
+        </g>
+        <path d="M18 23c2-1.6 4.5-2.3 6-2.3" fill="none" stroke="#c9b892" stroke-width="1.6" stroke-linecap="round" />
+        <path d="M14 21a12 12 0 0 1 6-6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".9" />
+        <circle cx="19.4" cy="29.5" r=".9" fill="#ffe08a" /><circle cx="28.6" cy="29.5" r=".9" fill="#ffe08a" />
+      </symbol>
+
+
+      <!-- Le crâne de l'enfer, anguleux : pans coupés, mâchoire carrée, orbites en triangles. -->
+      <symbol id="i-sk-hell-sharp" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M24 45c-10 0-17-6.5-17-16 0-7 3.5-11 6-15 1 3 2.5 4.5 4.5 5-1-7 2-13 8-17 0 4 2 6.5 4.5 8.5 1.5-2 2-4 1.8-6.5C37 7.5 41 15 41 26c0 11-7 19-17 19z" fill="#f2603a" />
+          <path d="M24 41c-7.5 0-12-5-12-11.5 0-4 1.5-6.5 3.5-9 .5 2 1.8 3 3.5 3.5-.5-5 1.5-9 5.5-12 .5 3 2 5 4 6.5 1-1.5 1.4-3 1.3-5 4.5 3.5 6.7 9 6.7 15.5C36.5 35.5 31.5 41 24 41z" fill="#f9834f" stroke-width="0" />
+          <path d="M15 26.5l1.8-5.5 3.7-2.4h7l3.7 2.4 1.8 5.5-1.2 5-2 1.9v4.6l-1.6 2.5h-9.4l-1.6-2.5v-4.6l-2-1.9z" fill="#ffffff" stroke-linejoin="miter" />
+          <path d="M21 40.5v-3.4M24 40.5v-3.4M27 40.5v-3.4" stroke-width="1.8" />
+          <path d="M17.2 25.6l5.8 2.6-1 3.5-4.2-.6zM30.8 25.6l-5.8 2.6 1 3.5 4.2-.6z" fill="#e8432a" stroke-width="2" stroke-linejoin="miter" />
+          <path d="M24 32.2l-1.6 2.6h3.2z" fill="#3b2a1a" stroke-width="1.4" stroke-linejoin="miter" />
+        </g>
+      </symbol>
+      <symbol id="i-sk-hell-sharp2" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M24 45c-10 0-17-6.5-17-16 0-7 3.5-11 6-15 1 3 2.5 4.5 4.5 5-1-7 2-13 8-17 0 4 2 6.5 4.5 8.5 1.5-2 2-4 1.8-6.5C37 7.5 41 15 41 26c0 11-7 19-17 19z" fill="url(#g-red)" />
+          <path d="M24 41c-7.5 0-12-5-12-11.5 0-4 1.5-6.5 3.5-9 .5 2 1.8 3 3.5 3.5-.5-5 1.5-9 5.5-12 .5 3 2 5 4 6.5 1-1.5 1.4-3 1.3-5 4.5 3.5 6.7 9 6.7 15.5C36.5 35.5 31.5 41 24 41z" fill="#ff9a3c" stroke-width="0" />
+          <path d="M15 26.5l1.8-5.5 3.7-2.4h7l3.7 2.4 1.8 5.5-1.2 5-2 1.9v4.6l-1.6 2.5h-9.4l-1.6-2.5v-4.6l-2-1.9z" fill="url(#g-bone)" stroke-linejoin="miter" />
+          <path d="M21 40.5v-3.4M24 40.5v-3.4M27 40.5v-3.4" stroke-width="1.8" />
+          <path d="M17.2 25.6l5.8 2.6-1 3.5-4.2-.6zM30.8 25.6l-5.8 2.6 1 3.5 4.2-.6z" fill="#c0392b" stroke-width="2" stroke-linejoin="miter" />
+          <path d="M24 32.2l-1.6 2.6h3.2z" fill="#3b2a1a" stroke-width="1.4" stroke-linejoin="miter" />
+        </g><circle cx="20" cy="29" r=".9" fill="#ffe08a" /><circle cx="28" cy="29" r=".9" fill="#ffe08a" />
+      </symbol>
+
+
+      <!-- Le crâne retenu : celui de l'enfer, à plat, sans sa flamme. Le cadrage serre le crâne
+           (viewBox de 26), d'où un trait plus fin en unités pour le même rendu que les autres. -->
+      <symbol id="i-sk-wave" viewBox="11 17.2 26 26">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 1.45" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M24 19c-6.6 0-11 4.3-11 10.2 0 3.6 1.7 6 4 7.4V39a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2.4c2.3-1.4 4-3.8 4-7.4C35 23.3 30.6 19 24 19z" fill="#ffffff" />
+          <path d="M21 41v-4M24 41v-4M27 41v-4" stroke-width="1.1" />
+          <path d="M16.5 26.5l6 2.6c0 2.4-1.4 4-3.3 4s-3.2-1.7-2.7-6.6zM31.5 26.5l-6 2.6c0 2.4 1.4 4 3.3 4s3.2-1.7 2.7-6.6z" fill="#e8432a" stroke-width="1.2" />
+          <path d="M24 32.4l-1.5 2.4h3z" fill="#3b2a1a" stroke-width=".9" />
+        </g>
+        <path d="M18 23c2-1.6 4.5-2.3 6-2.3" fill="none" stroke="#d9d9d9" stroke-width="1" stroke-linecap="round" />
+      </symbol>
+
+      <!-- ——— Variantes de « Relier » ——— -->
+      <!-- Une pancarte : poteau et planche en flèche, comme celles du plateau. -->
+      <symbol id="i-sign" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M20 14h4v30h-4z" fill="url(#g-wood)" />
+          <path d="M8 9h26l8 7-8 7H8z" fill="url(#g-wood)" />
+          <path d="M14 43h16" stroke-width="3" />
+        </g>
+        <path d="M12 16h18" stroke="#6b4421" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 3" />
+        <path d="M10 11.5h22" stroke="#f3cf98" stroke-width="1.8" stroke-linecap="round" opacity=".9" />
+      </symbol>
+
+      <!-- Une pancarte à deux bras : d'ici, vers là. -->
+      <symbol id="i-sign2" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M22 6h4v38h-4z" fill="url(#g-wood)" />
+          <path d="M10 8h24l7 6-7 6H10z" fill="url(#g-paper)" />
+          <path d="M38 23H14l-7 6 7 6h24z" fill="url(#g-wood)" />
+          <path d="M16 44h16" stroke-width="3" />
+        </g>
+        <path d="M14 14h16" stroke="#b59a6a" stroke-width="2" stroke-linecap="round" />
+        <path d="M17 29h16" stroke="#6b4421" stroke-width="2" stroke-linecap="round" />
+      </symbol>
+
+      <!-- Une route qui serpente d'un bâtiment à l'autre. -->
+      <symbol id="i-road" viewBox="0 0 48 48">
+        <path d="M9 40c4-9 18-6 18-15S14 14 20 7" fill="none" style="stroke: var(--k, #3b2a1a)" stroke-width="11" stroke-linecap="round" />
+        <path d="M9 40c4-9 18-6 18-15S14 14 20 7" fill="none" stroke="#e7c98f" stroke-width="6.5" stroke-linecap="round" />
+        <path d="M9 40c4-9 18-6 18-15S14 14 20 7" fill="none" stroke="#b58a4f" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="2.5 4" />
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M29 4h12v9H29z" fill="url(#g-red)" />
+          <path d="M29 4v16" stroke-width="2.6" />
+          <circle cx="9" cy="40" r="5" fill="url(#g-blue)" />
+        </g>
+      </symbol>
+
+      <!-- Un pont de pierre. -->
+      <symbol id="i-bridge" viewBox="0 0 48 48">
+        <path d="M2 36c6 0 6 3 11 3s6-3 11-3 6 3 11 3 6-3 11-3" fill="none" stroke="#6aa3ea" stroke-width="3" stroke-linecap="round" />
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M3 22c8-6 34-6 42 0v10h-9c-1-6-6-9-12-9s-11 3-12 9H3z" fill="url(#g-steel)" />
+          <path d="M3 22c8-6 34-6 42 0" fill="none" />
+          <path d="M8 15v8M16 12v8M24 11v8M32 12v8M40 15v8" stroke-width="2.4" />
+          <path d="M6 15c8-4 28-4 36 0" fill="none" stroke-width="2.4" />
+        </g>
+      </symbol>
+
+      <!-- Une corde nouée entre deux pieux. -->
+      <symbol id="i-rope" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M5 14h6v28H5zM37 14h6v28h-6z" fill="url(#g-wood)" />
+        </g>
+        <path d="M11 20c6 8 10 8 13 4s7-4 13 4" fill="none" style="stroke: var(--k, #3b2a1a)" stroke-width="7" stroke-linecap="round" />
+        <path d="M11 20c6 8 10 8 13 4s7-4 13 4" fill="none" stroke="#e2c27d" stroke-width="3.6" stroke-linecap="round" />
+        <path d="M11 20c6 8 10 8 13 4s7-4 13 4" fill="none" stroke="#a37b3c" stroke-width="1" stroke-dasharray="1.5 2.5" />
+        <circle cx="24" cy="24" r="4" fill="#e2c27d" stroke="var(--k, #3b2a1a)" stroke-width="2.4" />
+      </symbol>
+
+      <!-- ——— Pour « trop cher » ——— -->
+      <symbol id="i-lock" viewBox="0 0 48 48">
+        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M15 21v-6a9 9 0 0 1 18 0v6" fill="none" stroke-width="6" />
+          <path d="M15 21v-6a9 9 0 0 1 18 0v6" fill="none" stroke="#b6c0c6" stroke-width="2.4" />
+          <rect x="9" y="20" width="30" height="23" rx="4" fill="url(#g-gold)" />
+          <path d="M24 28v6" stroke-width="3.4" />
+          <circle cx="24" cy="28" r="2.6" fill="#3b2a1a" />
+        </g>
+      </symbol>
+    </svg>
+
+    <main>
+      <header>
+        <h1>Planche de design</h1>
+        <p>
+          Ce que le SVG et le CSS savent faire, sans une seule image : des pictogrammes retravaillés, des
+          boutons qui s'enfoncent, des médaillons cerclés, des rubans, des badges de vague, et les deux
+          barres montées. Chaque élément est posé dans trois matières, de la plus claire à celle de la
+          maquette, sur un fond de plateau. Rien n'est branché sur le jeu. Survoler et cliquer les boutons :
+          ils réagissent.
+        </p>
+      </header>
+
+      <section>
+        <h2>Retenu : parchemin et laiton — les variantes</h2>
+        <p class="lead">
+          Les choix déjà faits (la pancarte à deux bras pour « Relier », le filet au pied de la carte), puis une
+          famille de crânes pour la vague, chacun seul puis dans son badge.
+        </p>
+        <div class="chosen t-parch" id="chosen"></div>
+      </section>
+
+      <section>
+        <h2>Pictogrammes</h2>
+        <p class="lead">
+          Contour sombre épais, deux ou trois tons, un reflet : le style de la maquette, lisible de 16 à 64
+          pixels. Sous chacun, l'icône d'aujourd'hui (<code>src/ui/icons.ts</code>) quand elle existe.
+        </p>
+        <div class="icons" id="icons"></div>
+      </section>
+
+      <section>
+        <h2>Boutons, médaillons, rubans</h2>
+        <p class="lead">
+          Le même jeu dans les trois matières. Un bouton monte au survol et s'enfonce au clic ; le médaillon
+          actif s'allume. « Lancer la vague » reste le seul gros bouton.
+        </p>
+        <div class="themes" data-fill="buttons"></div>
+      </section>
+
+      <section>
+        <h2>Badges de vague</h2>
+        <p class="lead">
+          Trois formes : le crâne et sa plaque (comme la maquette), une bannière suspendue, un écu rond dont la
+          couronne dit l'avancement. La progression en losanges : faites en or, en cours en rouge.
+        </p>
+        <div class="themes" data-fill="badges"></div>
+      </section>
+
+      <section>
+        <h2>Barre du haut et barre du bas</h2>
+        <p class="lead">
+          Les vraies jauges du jeu dans le style des ressources de la maquette : budget, complexité, trafic et
+          SLA. Pas de revenu par minute : la facture est par vague, sans épargne (E1). La pioche porte le
+          nombre d'indices disponibles.
+        </p>
+        <div class="themes wide" data-fill="bars"></div>
+      </section>
+    </main>
+
+    <script type="module">
+      import { icon } from '/src/ui/icons.ts';
+
+      // ——— Les formes calculées : dents d'engrenage et branches d'étoile. ———
+      const polar = (cx, cy, r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+      function gear(cx, cy, teeth, outer, inner, hole = 0) {
+        const step = (Math.PI * 2) / teeth;
+        let d = '';
+        for (let i = 0; i < teeth; i++) {
+          const a = i * step - Math.PI / 2;
+          const pts = [
+            polar(cx, cy, inner, a - step * 0.32),
+            polar(cx, cy, outer, a - step * 0.18),
+            polar(cx, cy, outer, a + step * 0.18),
+            polar(cx, cy, inner, a + step * 0.32),
+          ];
+          d += `${i === 0 ? 'M' : 'L'}${pts.map((p) => p.map((v) => v.toFixed(2)).join(' ')).join('L')}`;
+        }
+        d += 'Z';
+        if (hole) d += `M${cx + hole} ${cy}a${hole} ${hole} 0 1 0 ${-2 * hole} 0a${hole} ${hole} 0 1 0 ${2 * hole} 0Z`;
+        return d;
+      }
+      function star(cx, cy, outer, inner, points = 5) {
+        const step = Math.PI / points;
+        return (
+          Array.from({ length: points * 2 }, (_, i) => {
+            const [x, y] = polar(cx, cy, i % 2 ? inner : outer, i * step - Math.PI / 2);
+            return `${i ? 'L' : 'M'}${x.toFixed(2)} ${y.toFixed(2)}`;
+          }).join('') + 'Z'
+        );
+      }
+      document.getElementById('gear-path').setAttribute('d', gear(24, 24, 9, 21, 15.5));
+      document.getElementById('cog-big').setAttribute('d', gear(20, 22, 8, 17, 12.5));
+      document.getElementById('cog-small').setAttribute('d', gear(36, 36, 7, 10, 7));
+      document.getElementById('star-path').setAttribute('d', star(24, 25, 21, 9.5));
+
+      const i = (name, extra = '') => `<svg class="i ${extra}" viewBox="0 0 48 48" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+
+      // ——— Pictogrammes ———
+      const ICONS = [
+        ['coin', 'Budget', 'or, prix', 'coin'],
+        ['cog', 'Complexité', 'rouages', 'cog'],
+        ['read', 'Lectures', 'un livre ouvert', 'read'],
+        ['write', 'Écritures', 'plume et feuillet', 'write'],
+        ['async', 'Événements', 'lettre scellée', 'async'],
+        ['sla', 'SLA', 'l’écu de la cité', 'target'],
+        ['hourglass', 'Latence', 'sablier', null],
+        ['skull', 'Vague', 'badge de vague', null],
+        ['gear', 'Réglages', 'menu', 'menu'],
+        ['hammer', 'Bâtir', 'ouvre la main', 'cards'],
+        ['swords', 'Lancer la vague', 'épées croisées', 'swords'],
+        ['select', 'Sélection', 'curseur', 'select'],
+        ['link', 'Relier', 'chaîne', 'link'],
+        ['dynamite', 'Retirer', 'dynamite', 'remove'],
+        ['undo', 'Annuler', 'flèche', 'undo'],
+        ['cards', 'Main de cartes', 'pioche', 'cards'],
+        ['star', 'Étoiles', 'objectifs', 'star'],
+        ['medal', 'Score', 'médaille', 'medal'],
+        ['lantern', 'Indice', 'lanterne', 'bulb'],
+        ['chart', 'Courbes', 'tableau', null],
+        ['hat', 'Chambellan', 'haut-de-forme', 'hat'],
+        ['check', 'Constructible', 'coche', 'check'],
+        ['cross', 'Trop cher', 'croix', 'close'],
+      ];
+      document.getElementById('icons').innerHTML = ICONS.map(([name, label, hint, old]) => {
+        let before = '';
+        try {
+          before = old ? `<div class="old">${icon(old)}<small>aujourd’hui</small></div>` : '';
+        } catch {
+          before = '';
+        }
+        return `<div class="icon-card"><div class="big">${i(name)}</div>
+          <div class="sizes"><span>${i(name)}</span><span>${i(name)}</span><span>${i(name)}</span></div>
+          <b>${label}</b><small>${hint}</small>${before}</div>`;
+      }).join('');
+
+
+      // ——— Variantes, dans la matière retenue ———
+      const variant = (name, label, hint, inUse = '') =>
+        `<div class="variant"><div class="big">${i(name)}</div><b>${label}</b><small>${hint}</small>${inUse}</div>`;
+      const waveIn = (name) => `<div class="inuse"><div class="wave-a"><div class="skull">${i(name)}</div><div class="plate"><b>Vague 2 / 6</b></div></div></div>`;
+      const linkIn = (name) => `<div class="inuse"><button class="medal">${i(name)}</button><button class="medal on">${i(name)}</button></div>`;
+      const card = (cls, inner, costs = `<span class="price">${i('coin')} 20</span><span class="price">${i('cog')} 1</span>`, foot = '') =>
+        `<div class="mcard ${cls}"><span class="t">Serveur</span><div class="art">${i('hammer')}</div><div class="costs">${costs}</div>${foot}${inner}</div>`;
+      const pair = (label, ok, ko) => `<div class="demo"><div class="row" style="gap:14px">${ok}${ko}</div><small>${label}</small></div>`;
+
+      document.getElementById('chosen').innerHTML = `
+        <h3>Retenus</h3>
+        <div class="variants">
+          ${variant('sk-wave', 'La vague : crâne de l’enfer, sans flamme', 'à plat, yeux en colère', waveIn('sk-wave'))}
+          ${variant('sign2', 'Relier : la pancarte à deux bras', 'd’ici, vers là', linkIn('sign2'))}
+          <div class="variant" style="grid-column: span 2">
+            <b>Constructible : le filet au pied de la carte (F)</b>
+            <div class="row" style="gap:14px; justify-content:center">
+              ${card('', '', undefined, `<span class="foot">${i('check')} Constructible</span>`)}
+              ${card('no', '', undefined, `<span class="foot ko">${i('lock')} Il manque 15</span>`)}
+            </div>
+          </div>
+        </div>
+        <h3>La vague : d’autres crânes</h3>
+        <div class="variants">
+          ${variant('sk-hell-sharp', 'Crâne de l’enfer, anguleux', 'à plat, pans coupés, mâchoire carrée', waveIn('sk-hell-sharp'))}
+          ${variant('sk-hell-sharp2', 'Anguleux, ombré', 'le même, dégradés', waveIn('sk-hell-sharp2'))}
+          ${variant('sk-hell-flat', 'Crâne de l’enfer, à plat', 'aplats francs, yeux en colère', waveIn('sk-hell-flat'))}
+          ${variant('sk-hell', 'Crâne de l’enfer', 'le même, dégradés et reflet', waveIn('sk-hell'))}
+          ${variant('skull', 'Crâne', 'le premier', waveIn('skull'))}
+          ${variant('skull2', 'Crâne rond', 'mâchoire à part', waveIn('skull2'))}
+          ${variant('sk-grin', 'Crâne qui sourit', 'la vague, pas la mort', waveIn('sk-grin'))}
+          ${variant('sk-bones', 'Os croisés', 'le pavillon des pillards', waveIn('sk-bones'))}
+          ${variant('sk-warrior', 'Squelette guerrier', 'casque à nasal, comme les pillards du plateau', waveIn('sk-warrior'))}
+          ${variant('sk-viking', 'Casqué de cornes', 'l’envahisseur', waveIn('sk-viking'))}
+          ${variant('sk-crown', 'Couronné', 'le roi des pillards', waveIn('sk-crown'))}
+          ${variant('sk-cursed', 'Fêlé, yeux de braise', 'la menace', waveIn('sk-cursed'))}
+          ${variant('sk-flame', 'En flammes', 'la vague qui déferle', waveIn('sk-flame'))}
+          ${variant('sk-shield', 'Sur un écu', 'le blason des assaillants', waveIn('sk-shield'))}
+        </div>`;
+
+      // ——— Les trois colonnes ———
+      const THEMES = [
+        ['t-parch', 'Parchemin & laiton — clair, l’actuel retravaillé'],
+        ['t-blond', 'Bois blond — clair et chaleureux'],
+        ['t-dark', 'Bois sombre — la maquette'],
+      ];
+
+      const buttons = () => `
+        <div class="row">
+          <button class="btn launch">${i('swords')} Lancer la vague</button>
+        </div>
+        <div class="row">
+          <button class="btn">${i('hammer')} Bâtir</button>
+          <button class="btn is-hover">${i('lantern')} Un indice</button>
+          <button class="btn is-pressed">${i('undo')} Réessayer</button>
+          <button class="btn" disabled>${i('lantern')} Indice</button>
+        </div>
+        <div class="row">
+          <button class="medal on" title="Sélection">${i('select')}</button>
+          <button class="medal" title="Relier">${i('link')}</button>
+          <button class="medal" title="Retirer">${i('dynamite')}</button>
+          <button class="medal sm" title="Annuler">${i('undo')}</button>
+          <button class="medal sm" title="Rétablir" disabled><span style="display:inline-block;transform:scaleX(-1)">${i('undo')}</span></button>
+          <button class="medal" title="Main de cartes">${i('cards')}<span class="badge-count">3</span></button>
+          <button class="medal" title="Réglages">${i('gear')}</button>
+        </div>
+        <div class="row">
+          <span class="ribbon">${i('check')} Constructible</span>
+          <span class="ribbon ko" style="--k:#6e1f10">${i('cross')} Trop cher</span>
+        </div>
+        <div class="row">
+          <span class="price">${i('coin')} 20</span>
+          <span class="price">${i('cog')} 2</span>
+          <button class="btn small">${i('check')} Bâtir ici</button>
+          <button class="btn small ghost">Fermer</button>
+        </div>`;
+
+      const pips = (done, total) =>
+        `<div class="pips">${Array.from({ length: total }, (_, k) => `<i class="${k < done ? 'done' : k === done ? 'now' : ''}"></i>`).join('')}</div>`;
+
+      const badges = () => `
+        <div class="row">
+          <div class="wave-a"><div class="skull">${i('skull')}</div>
+            <div class="plate"><b>Vague 2 / 6</b><small>Les lectures explosent</small>${pips(1, 6)}</div></div>
+        </div>
+        <div class="row" style="gap:20px">
+          <div class="wave-b">${i('skull')}<b>2</b><small>sur 6</small></div>
+          <div class="wave-c" style="--p:33%"><div><small>Vague</small><b>2</b><small>sur 6</small></div></div>
+          <div class="wave-c" style="--p:83%"><div><small>Vague</small><b>5</b><small>sur 6</small></div></div>
+        </div>`;
+
+      const bars = () => `
+        <div class="topbar">
+          <div class="wave-a"><div class="skull">${i('skull')}</div><div class="plate"><b>Vague 1 / 6</b><small>Lancement</small></div></div>
+        </div>
+        <div class="topbar">
+          <div class="plaque">
+            <span class="res">${i('coin')}<b>20 <em>/ 100</em></b><small>budget</small></span>
+            <span class="res">${i('cog')}<b>1 <em>/ 4</em></b><small>complexité</small></span>
+            <span class="res">${i('read')}<b>90</b><small>lectures/s</small></span>
+            <span class="res">${i('write')}<b>10</b><small>écritures/s</small></span>
+            <span class="res warn">${i('sla')}<b>1 % <em>· 60 ms</em></b><small>SLA</small></span>
+          </div>
+        </div>
+        <div class="topbar">
+          <div class="plaque"><span class="res">${i('star')}<b>4 <em>/ 18</em></b><small>étoiles</small></span><span class="res">${i('medal')}<b>212</b><small>score</small></span></div>
+          <button class="medal" title="Réglages">${i('gear')}</button>
+        </div>
+        <div class="bottombar">
+          <button class="medal on" title="Sélection">${i('select')}</button>
+          <button class="medal" title="Relier">${i('link')}</button>
+          <button class="medal" title="Retirer">${i('dynamite')}</button>
+          <span class="sep"></span>
+          <button class="medal sm" title="Annuler">${i('undo')}</button>
+          <span class="sep"></span>
+          <button class="btn">${i('hammer')} Bâtir</button>
+          <button class="btn launch">${i('swords')} Lancer la vague</button>
+          <button class="medal" title="Indices">${i('cards')}<span class="badge-count">3</span></button>
+        </div>`;
+
+      const fills = { buttons, badges, bars };
+      for (const host of document.querySelectorAll('[data-fill]')) {
+        const make = fills[host.dataset.fill];
+        host.innerHTML = THEMES.map(([cls, label]) => `<div class="stage ${cls}"><div class="tag">${label}</div>${make()}</div>`).join('');
+      }
+    </script>
+  </body>
+</html>

@@ -454,3 +454,89 @@ button.pip:active .icon { transform: translateY(1px); box-shadow: var(--pressed)
 .real a { color: inherit; }
 .real-ups summary { cursor: pointer; font-size: 0.85em; }
 .hcard .real { display: block; font-size: 11px; line-height: 1.3; }
+
+/*
+ * Parchemin et laiton (I18) : la matière de I16, avec un relief plus franc. Un reflet en haut,
+ * une ombre en bas et un socle d'un ton plus sombre font monter le bouton au survol et
+ * l'enfoncer au clic ; les médaillons sont cerclés de laiton. Planche : design.html.
+ */
+:root {
+  --brass-rim: linear-gradient(160deg, #fbe7a6, #d9a83d 45%, #a9781f);
+  --brass-edge: #8a6118;
+  --face: radial-gradient(circle at 35% 30%, #fffaf0, #ecd9ad);
+  --hi: rgba(255, 255, 255, .75);
+  --lo: rgba(110, 75, 30, .22);
+  --socle: #6b4a2b;
+  --relief: inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo), 0 2px 0 var(--socle), 0 5px 10px rgba(20, 12, 4, .25);
+  --relief-up: inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo), 0 4px 0 var(--socle), 0 9px 16px rgba(20, 12, 4, .28);
+  --relief-down: inset 0 3px 6px var(--lo), 0 1px 0 var(--socle), 0 2px 4px rgba(20, 12, 4, .2);
+}
+.ico { width: 1.35em; height: 1.35em; vertical-align: -.3em; }
+
+button:where(:not(.hcard, .pip)) { border: 1.5px solid #9c7647; box-shadow: var(--relief); transition: transform .12s ease, box-shadow .12s ease, filter .12s ease; }
+button:where(:not(.hcard, .pip)):hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--relief-up); filter: brightness(1.04); }
+button:where(:not(.hcard, .pip)):active:not(:disabled) { transform: translateY(2px); box-shadow: var(--relief-down); }
+@media (prefers-reduced-motion: reduce) { button:where(:not(.hcard, .pip)) { transition: none; } button:where(:not(.hcard, .pip)):hover:not(:disabled) { transform: none; } }
+
+/* Médaillons : face de parchemin, cercle de laiton. L'anneau est peint dans la bordure : un pseudo-élément derrière recouvrirait la face. */
+button.tool, button.round {
+  border: 3px solid transparent; background: var(--face) padding-box, var(--brass-rim) border-box;
+  box-shadow: 0 0 0 1.5px var(--brass-edge), inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo), 0 3px 0 var(--socle), 0 6px 10px rgba(20, 12, 4, .28);
+}
+button.tool { width: 46px; height: 46px; }
+.tool .ico { width: 26px; height: 26px; }
+button.tool.small { width: 34px; height: 34px; }
+.tool.small .ico { width: 18px; height: 18px; }
+button.round { width: 38px; height: 38px; }
+button.round .ico { width: 22px; height: 22px; }
+button.tool:hover:not(:disabled), button.round:hover:not(:disabled) { transform: translateY(-2px) rotate(-3deg); box-shadow: 0 0 0 1.5px var(--brass-edge), inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo), 0 5px 0 var(--socle), 0 10px 16px rgba(20, 12, 4, .3); }
+button.tool.active { background: var(--face) padding-box, var(--brass-rim) border-box; transform: translateY(1px);
+  box-shadow: 0 0 0 1.5px var(--brass-edge), 0 0 0 4px #ffe58a, 0 0 16px 5px rgba(255, 214, 90, .6), inset 0 3px 6px var(--lo); }
+button.tool:disabled { filter: grayscale(.8); }
+
+/* Bâtir : un bouton de parchemin, son marteau. */
+button.tool.build { width: auto; height: 42px; padding: 0 18px 0 12px; border-radius: 12px; border: 1.5px solid #9c7647; background: var(--grain), linear-gradient(175deg, #fdf6e3, #efdcb2); box-shadow: var(--relief); }
+button.tool.build:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--relief-up); }
+button.tool.build.active { background: var(--m-brass); border-color: var(--brass-edge); box-shadow: var(--relief-down); }
+
+/* Lancer la vague : le seul gros bouton, rouge sang cerclé d'un filet de laiton. */
+button.launch { position: relative; padding: 12px 24px 14px; font-size: 21px; color: #fff6e0; border: 2px solid #5a160d; border-radius: 14px;
+  background: linear-gradient(175deg, #e0573f, #a92e1f 60%, #7c1f14); text-shadow: 0 2px 0 rgba(60, 10, 4, .6);
+  box-shadow: inset 0 2px 0 rgba(255, 210, 190, .55), inset 0 -4px 0 rgba(60, 8, 2, .35), 0 3px 0 #4a1209, 0 8px 14px rgba(20, 12, 4, .3); }
+button.launch::before { content: ''; position: absolute; inset: 3px; border-radius: 10px; border: 1.5px solid rgba(255, 220, 150, .55); pointer-events: none; }
+button.launch:hover:not(:disabled) { box-shadow: inset 0 2px 0 rgba(255, 210, 190, .55), inset 0 -4px 0 rgba(60, 8, 2, .35), 0 5px 0 #4a1209, 0 12px 18px rgba(20, 12, 4, .32); }
+button.launch:active:not(:disabled) { box-shadow: inset 0 3px 6px rgba(60, 8, 2, .45), 0 1px 0 #4a1209; }
+.launch .ico { width: 28px; height: 28px; }
+
+/* Plaques et barre du bas : du parchemin en relief. */
+.plaque, .toolbar { border: 1.5px solid #9c7647; box-shadow: inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo), 0 3px 0 var(--socle), 0 8px 16px rgba(20, 12, 4, .26); }
+.toolbar { padding: 8px 16px; gap: 16px; border-radius: 18px; }
+
+/* Le badge de vague : le crâne en médaillon, la plaque qui s'y accroche, la progression en losanges. */
+.wave-badge { pointer-events: auto; display: flex; align-items: center; }
+.wave-skull { position: relative; z-index: 1; width: 56px; height: 56px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  border: 4px solid transparent; background: var(--face) padding-box, var(--brass-rim) border-box;
+  box-shadow: 0 0 0 1.5px var(--brass-edge), inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo), 0 4px 8px rgba(20, 12, 4, .32); }
+.wave-skull .ico { width: 34px; height: 34px; }
+.wave-badge .hud-title { margin-left: -18px; padding: 5px 16px 6px 26px; border-radius: 0 12px 12px 0; }
+.wave-badge .hud-title b { font-size: 19px; }
+.wave-pips { display: flex; gap: 3px; margin-top: 3px; }
+.wave-pips i { width: 8px; height: 8px; transform: rotate(45deg); border-radius: 2px; background: rgba(0, 0, 0, .15); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .22); }
+.wave-pips i.done { background: linear-gradient(#ffe58a, #d9a83d); box-shadow: inset 0 0 0 1px var(--brass-edge); }
+.wave-pips i.now { background: linear-gradient(#ff8a65, #c0392b); box-shadow: inset 0 0 0 1px #6e1f10, 0 0 6px rgba(255, 120, 80, .8); }
+
+/* Les jauges, au format des ressources : le pictogramme, la valeur, ce qu'elle mesure en petit. */
+.hud-bar .gauge { display: inline-grid; grid-template-columns: auto auto; column-gap: 6px; align-items: center; padding: 0 10px; background: none; box-shadow: none; border-radius: 0; position: relative; }
+.hud-bar .gauge + .gauge::before { content: ''; position: absolute; left: -3px; top: 50%; width: 6px; height: 6px; transform: translateY(-50%) rotate(45deg); background: #9c7647; opacity: .55; }
+.hud-bar .gauge .ico { grid-row: span 2; width: 30px; height: 30px; }
+.hud-bar .gauge b { font: 19px/1 var(--display); color: var(--ink); text-shadow: 0 1px 0 var(--hi); }
+.hud-bar .gauge b em { font-style: normal; font-size: 13px; color: #7a6146; }
+.hud-bar .gauge small { font-size: 11px; line-height: 1.1; color: #7a6146; }
+.hud-bar .gauge.ko { background: none; box-shadow: none; }
+.hud-bar .gauge.ko b, .hud-bar .gauge.ko b em { color: #c0392b; }
+
+/* Le pied des cartes : un filet sobre, qui dit ce qui manque plutôt qu'un ruban (I18). */
+.hcard-ribbon { padding: 6px 6px 3px; margin: 0 8px; font: 13px var(--display); color: #2b6e1f; text-shadow: none; background: none;
+  border-top: 1.5px dashed #9c7647; display: flex; justify-content: center; align-items: center; gap: 5px; }
+.hcard-ribbon.dear { color: #a92e1f; background: none; border-top-color: #9c7647; text-shadow: none; }
+.hcard-ribbon .ico { width: 16px; height: 16px; }

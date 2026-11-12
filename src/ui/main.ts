@@ -23,6 +23,7 @@ import { draftInfo } from './draft.ts';
 import { emptyHistory, historyCounts, remember, travel, type History } from './history.ts';
 import { choices, gameOf, isStore, readStore, withGame } from './session.ts';
 import { load, save } from './storage.ts';
+import { installSprite } from './icons.ts';
 import { renderCard, renderDebug, renderDialog, renderHud, renderToolbar, hintsOf, upgradePips, type Attempt, type ViewState } from './views.ts';
 import './style.css';
 
@@ -55,6 +56,8 @@ function initialState(): ViewState {
   };
 }
 
+// Les pictogrammes renvoient au sprite (I18) : il doit être dans la page avant le premier rendu.
+installSprite();
 const root = document.getElementById('app')!;
 root.innerHTML = `
   <div id="board" class="board"><p class="replay-loading">Chargement de la cité…</p></div>

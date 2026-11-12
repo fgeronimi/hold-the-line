@@ -35,7 +35,7 @@ function historyButtons(s: ViewState): string {
 function buildButton(s: ViewState, blink: Blink): string {
   const on = !!s.showHand || s.tool.kind === 'place';
   return `<button class="tool build${active(on)}${hint(blink?.tool === 'place' && !s.showHand && !s.buildAt)}" data-action="open-hand" data-tip="Choisir un bâtiment, puis cliquer sa case. On peut aussi cliquer une case vide d’abord.">
-        ${icon('cards')}<span>Bâtir</span></button>`;
+        ${icon('hammer')}<span>Bâtir</span></button>`;
 }
 
 /** Le refus du plateau, ou à défaut le départ du lien en cours de tracé. */

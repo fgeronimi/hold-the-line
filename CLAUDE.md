@@ -65,8 +65,12 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   porte la main ou la carte du bâtiment sélectionné, et n'est réécrit que si son HTML change.
 - L'habillage (I16) est dans `src/ui/style.css` : matières (`--m-parchment`, `--m-stone`,
   `--m-brass`), filet (`--line`) et relief (`--raise`, `--raise-low`, `--pressed`) en variables,
-  à réutiliser plutôt que de redéfinir une ombre. `src/ui/icons.ts` : les pictogrammes SVG
-  de l'interface (`icon('coin')`) ; pas d'emoji dans un calque. Titrage : `--display`
+  à réutiliser plutôt que de redéfinir une ombre ; le relief franc de I18 (`--relief`,
+  `--relief-up`, `--relief-down`, `--brass-rim`) est regroupé en fin de fichier.
+  `src/ui/icons.ts` : `icon('coin')` renvoie au sprite de `src/ui/sprite.ts` (I18), posé une
+  fois par `installSprite()` au démarrage ; un nouveau pictogramme s'y dessine en `<symbol>`
+  préfixé `hl-`, un test vérifie que chaque nom a le sien. Pas d'emoji dans un calque.
+  `design.html` (hors build, `/design.html`) est la planche où se choisissent ces dessins. Titrage : `--display`
   (Lilita One, `src/ui/fonts/`, OFL). Une infobulle se pose avec `data-tip` et un `aria-label`.
 - `src/ui/draft.ts` : `draftInfo(arch, catalog)` donne validation, ordre, flux et facture d'un
   brouillon, mémorisés par identité de référence. Vues, guide, aide et plateau le lisent au

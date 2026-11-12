@@ -199,7 +199,9 @@ describe('la main de cartes', () => {
   it('un bâtiment au-delà du budget le dit, et reste jouable', () => {
     const tight = { ...urlShortener, waves: urlShortener.waves.map((w) => ({ ...w, budget: 0 })) };
     const html = renderHand(view({ showHand: true, scenario: tight }));
-    expect(html.match(/Au-delà du budget/g)).toHaveLength(palette.length);
+    // Le filet dit ce qui manque (I18) : à budget nul, tout le prix de la carte.
+    expect(html.match(/Il manque \d+/g)).toHaveLength(palette.length);
+    expect(html).toContain(`Il manque ${catalog.components['app-server']!.cost}<`);
     expect(html).not.toContain('disabled');
     expect(renderHand(view({ showHand: true }))).toContain('</svg> Constructible');
   });

@@ -307,9 +307,12 @@ et déterministe, séparée de l'affichage.
 - **Plateau** (R5, R11, R12) : un grand hexagone de cases KayKit, les clients à sa pointe
   gauche, une rivière qu'on ne franchit que par un pont. Vue isométrique en Three.js, on se
   déplace et on zoome, on ne tourne pas.
-- **Habillage** (I16) : du parchemin, de la pierre et du laiton, des filets fins et des
-  ombres diffuses, des boutons qui s'enfoncent ; barre du haut en trois plaques, barre du bas en médaillons à
-  infobulles, pictogrammes dessinés pour le jeu, titrage en Lilita One.
+- **Habillage** (I16, I18) : parchemin et laiton, en relief franc : un bouton monte au survol
+  et s'enfonce au clic, les médaillons sont cerclés de laiton, « Lancer la vague » est rouge
+  sang. Barre du haut : un badge de vague (crâne, plaque, progression en losanges) et des
+  jauges au format icône, valeur, libellé. Barre du bas en médaillons à infobulles.
+  Pictogrammes en couleur à contour épais, dessinés pour le jeu ; titrage en Lilita One. Au
+  pied d'une carte, un filet dit « Constructible » ou ce qui manque.
 - **Construction** (I4, I10, I15) : outils Sélection, Relier, Retirer, et une **main de cartes**,
   un bâtiment par carte, en éventail au centre de l'écran. Cliquer une case vide l'ouvre pour
   cette case ; « Bâtir » l'ouvre sans case, et la carte choisie se pose ensuite d'un clic. On

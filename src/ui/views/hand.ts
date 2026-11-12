@@ -36,10 +36,12 @@ function handCard(s: ViewState, d: ComponentDef, slot: FanSlot, index: number, h
     .map((u) => `${theme.upgradeIcons[u.id] ?? '✦'} ${esc(u.techName)}`)
     .join(' · ');
   const budget = s.scenario.waves[s.game.waveIndex]?.budget ?? Infinity;
-  const affordable = d.cost <= Math.max(0, budget - draftInfo(s.draft, s.catalog).cost);
+  const left = Math.max(0, budget - draftInfo(s.draft, s.catalog).cost);
+  const affordable = d.cost <= left;
   const lifted = s.liftedCard === d.id;
   const again = s.buildAt ? 'Toucher encore pour bâtir' : 'Toucher encore pour choisir';
-  const ribbon = lifted ? again : affordable ? `${icon('check')} Constructible` : 'Au-delà du budget';
+  // Le filet au pied de la carte (I18) : il dit ce qui manque plutôt qu'un simple refus.
+  const ribbon = lifted ? again : affordable ? `${icon('check')} Constructible` : `${icon('lock')} Il manque ${fmt(d.cost - left)}`;
   const place = `--k:${slot.offset};--tilt:${slot.tilt.toFixed(2)}deg;--drop:${slot.drop.toFixed(3)};--i:${index}`;
   return `<button class="hcard${lifted ? ' lifted' : ''}${blink(hinted)}" data-action="pick-card" data-type="${esc(d.id)}" style="${place}"
         aria-label="${esc(nameOf(d.id, s.catalog))}, prix ${d.cost}, complexité ${d.complexity}${affordable ? '' : ', au-delà du budget restant'}">
