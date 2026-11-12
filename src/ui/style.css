@@ -240,9 +240,8 @@ select, input { font: inherit; color: var(--ink); background: #fffaf0; border: 2
 
 /* Tutoriel : la bulle au-dessus de la barre, le bouton à utiliser qui pulse. */
 .tutorial { max-width: min(640px, 100%); padding: 4px 10px; }
-.hint { animation: hint 1.1s ease-in-out infinite; box-shadow: 0 0 0 3px #e9a23b; }
-@keyframes hint { 50% { box-shadow: 0 0 0 6px rgba(233, 162, 59, 0.35); } }
-@media (prefers-reduced-motion: reduce) { .hint { animation: none; } }
+/* Ce que le guide désigne : un filet doré fixe, et un reflet qui le traverse (en fin de fichier, I18). */
+.hint { outline: 3px solid #e9a23b; outline-offset: 2px; }
 /* Aide : les indices donnés sous la bulle, puis le bouton qui en demande un de plus. */
 .hints { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #cbb98f; }
 .hints ol { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 32vh; overflow-y: auto; }
@@ -251,9 +250,8 @@ select, input { font: inherit; color: var(--ink); background: #fffaf0; border: 2
 .hints li .says small { color: var(--ok); font-weight: bold; }
 .hints li.done { opacity: .6; }
 .hint-ask { display: flex; align-items: center; gap: 8px; margin: 0; flex-wrap: wrap; }
-.pip.hint { animation: none; box-shadow: none; }
-.pip.hint .icon { opacity: 1; animation: hint 1.1s ease-in-out infinite; box-shadow: 0 0 0 3px #e9a23b; }
-@media (prefers-reduced-motion: reduce) { .pip.hint .icon { animation: none; } }
+.pip.hint { outline: none; }
+.pip.hint .icon { opacity: 1; outline: 3px solid #e9a23b; outline-offset: 1px; }
 .speech p.real { background: none; border: none; border-left: 3px solid #b9a77f; border-radius: 0; padding: 0 8px; font-size: 13px; }
 .card .speech .speaker { width: 30px; height: 30px; }
 .card .speech .speaker .ico { width: 21px; height: 21px; }
@@ -410,8 +408,8 @@ button.pip:active .icon { transform: translateY(1px); box-shadow: var(--pressed)
 /* La carte que désigne le guide : l'anneau est sur sa face, la distribution reste sur la carte. */
 .hcard.hint { animation: deal .42s cubic-bezier(.2, .9, .3, 1.15) backwards; animation-delay: calc(var(--i) * 28ms); box-shadow: none; }
 .settled .hcard.hint { animation: none; }
-.hcard.hint .hcard-face { outline: 3px solid #e9a23b; outline-offset: 2px; animation: hint-ring 1.1s ease-in-out infinite; }
-@keyframes hint-ring { 50% { outline-color: rgba(233, 162, 59, .35); outline-offset: 5px; } }
+.hcard.hint { outline: none; }
+.hcard.hint .hcard-face { outline: 3px solid #e9a23b; outline-offset: 2px; }
 
 /*
  * La carte du bâtiment sélectionné : la même carte que dans la main, en grand (bandeau,
@@ -522,7 +520,7 @@ button.launch:active:not(:disabled) { box-shadow: inset 0 3px 6px rgba(60, 8, 2,
   border: 4px solid transparent; background: var(--face) padding-box, var(--brass-rim) border-box;
   box-shadow: 0 0 0 1.5px var(--brass-edge), inset 0 2px 0 var(--hi), inset 0 -3px 0 var(--lo), 0 4px 8px rgba(20, 12, 4, .32); }
 .wave-skull .ico { width: 34px; height: 34px; }
-.wave-badge .hud-title { margin-left: -18px; padding: 5px 16px 6px 26px; border-radius: 0 12px 12px 0; }
+.wave-badge .hud-title { margin-left: -30px; padding: 5px 16px 6px 38px; border-radius: 0 12px 12px 0; }
 .wave-badge .hud-title b { font-size: 19px; }
 .wave-pips { display: flex; gap: 3px; margin-top: 3px; }
 .wave-pips i { width: 8px; height: 8px; transform: rotate(45deg); border-radius: 2px; background: rgba(0, 0, 0, .15); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .22); }
@@ -550,3 +548,33 @@ button.launch:active:not(:disabled) { box-shadow: inset 0 3px 6px rgba(60, 8, 2,
 .city-label .badges { display: inline-flex; gap: 1px; }
 .city-label .badges .ico { width: 14px; height: 14px; vertical-align: middle; }
 .hcard-more .ico { width: 15px; height: 15px; vertical-align: -3px; }
+
+/*
+ * Le reflet de ce que le guide désigne (I18) : une bande claire qui traverse le bouton, au lieu
+ * d'un clignotement. C'est une couche de fond de plus, qui défile : le pseudo-élément ::after
+ * porte déjà l'infobulle, et un overflow: hidden la couperait. --sheen-x est déclarée pour
+ * pouvoir s'animer.
+ */
+@property --sheen-x { syntax: '<percentage>'; inherits: false; initial-value: 160%; }
+@keyframes sheen { 0% { --sheen-x: 160%; } 55%, 100% { --sheen-x: -60%; } }
+:root { --sheen: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, .85) 50%, transparent 62%); }
+button.hint:where(:not(.tool, .round, .launch, .hcard, .pip)) {
+  background: var(--sheen) var(--sheen-x) 0 / 260% 100% no-repeat, linear-gradient(#fbf1d6, #e6d2a2);
+  animation: sheen 2.4s ease-in-out infinite; }
+button.tool.hint:not(.build), button.round.hint {
+  background: var(--sheen) var(--sheen-x) 0 / 260% 100% no-repeat padding-box, var(--face) padding-box, var(--brass-rim) border-box;
+  animation: sheen 2.4s ease-in-out infinite; }
+button.tool.build.hint {
+  background: var(--sheen) var(--sheen-x) 0 / 260% 100% no-repeat, var(--grain), linear-gradient(175deg, #fdf6e3, #efdcb2);
+  animation: sheen 2.4s ease-in-out infinite; }
+button.launch.hint {
+  background: var(--sheen) var(--sheen-x) 0 / 260% 100% no-repeat, linear-gradient(175deg, #e0573f, #a92e1f 60%, #7c1f14);
+  animation: sheen 2.4s ease-in-out infinite; }
+.pip.hint .icon {
+  background: var(--sheen) var(--sheen-x) 0 / 260% 100% no-repeat, var(--m-stone);
+  animation: sheen 2.4s ease-in-out infinite; }
+.hcard.hint .hcard-face::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: var(--sheen) var(--sheen-x) 0 / 260% 100% no-repeat; animation: sheen 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  button.hint, .pip.hint .icon, .hcard.hint .hcard-face::after { animation: none; }
+}
