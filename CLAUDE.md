@@ -19,6 +19,9 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   coûts arrondis à 2 décimales) ; `npm run balance:check` le compare au rapport courant et
   échoue sur un écart ou un KO (tous les scénarios, pas de filtre) ; en CI, il a son propre
   workflow (`.github/workflows/balance.yml`), hors de la publication
+- `npm run captures` : refait les WebP animés du README dans `docs/media/` (Chrome sans
+  fenêtre, sa propre origine, ~10 min) ; `npm run captures -- vitrine` n'en refait qu'un plan.
+  Il faut `img2webp`/`cwebp` (paquet webp) et `sips` (macOS). À relancer quand un effet change.
 - `npm run dev` : interface de jeu et de calibrage ; `npm run build` : site statique
   dans `dist/`, chemins relatifs pour GitHub Pages
 

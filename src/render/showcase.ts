@@ -28,6 +28,8 @@ import { catalog } from '../data/catalog.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { HEX_WIDTH, hexCenter, type Hex } from './hex.ts';
 import { Effects } from './effects.ts';
+import { pict } from './pict.ts';
+import { installSprite } from '../ui/icons.ts';
 import { ModelLibrary, type ModelId } from './models.ts';
 import { BRIDGE_MODEL, bridgeRotation, crossingTile, mask, riverTile, roadTile, type Tile } from './terrain.ts';
 
@@ -509,7 +511,7 @@ const ENTRIES: Entry[] = [
     setup: (v) => {
       v.site(towers(v, 1));
       const line = Array.from({ length: 4 }, () => v.walker('write'));
-      const sand = v.label('hourglass', '⏳ 200 ms <span class="gauge"><i></i></span>', DOOR - 0.2, 1.5, 0);
+      const sand = v.label('hourglass', `${pict('hourglass')} 200 ms <span class="gauge"><i></i></span>`, DOOR - 0.2, 1.5, 0);
       v.label('pop', 'p95 97 ms &gt; 60', -1.4, 1.2, 0);
       const PERIOD = 2.6;
       return (t) => {
@@ -529,7 +531,7 @@ const ENTRIES: Entry[] = [
   },
   {
     title: 'Message livré deux fois',
-    chip: { text: 'à ajouter au moteur', kind: 'new' },
+    chip: { text: 'signal existant', kind: 'ok' },
     text: 'Le mage se dédouble en chemin et les deux copies entrent chez le trésorier : la commande est facturée deux fois. Avec l’idempotence, la copie s’effacerait au seuil.',
     trigger: 'compteur <code>duplicates</code> par nœud',
     setup: (v) => {
@@ -559,7 +561,7 @@ const ENTRIES: Entry[] = [
   },
   {
     title: 'Événement perdu',
-    chip: { text: 'à ajouter au moteur', kind: 'new' },
+    chip: { text: 'signal existant', kind: 'ok' },
     text: 'Le serveur tombe entre l’écriture et la publication : sur le pont, le messager s’évapore et sa lettre part au fil de l’eau. Avec l’outbox, elle resterait au coffre et repartirait.',
     trigger: 'compteur <code>lost</code> par nœud',
     river: true,
@@ -620,7 +622,7 @@ const ENTRIES: Entry[] = [
       const glow = new PointLight('#ff7b00', 0, 4);
       v.scene.add(glow);
       const walkers = Array.from({ length: 4 }, (_, i) => v.walker(i % 2 ? 'write' : 'read'));
-      const pop = v.label('pop', '🔥 1 instance en panne', -1.2, 1.4, 0);
+      const pop = v.label('pop', `${pict('warn')} 1 instance en panne`, -1.2, 1.4, 0);
       const fireColor = (f: number) => new Color('#ffd166').lerp(new Color('#e63900'), f);
       return (t) => {
         const p = phase(t, 6);
@@ -663,7 +665,7 @@ const ENTRIES: Entry[] = [
       v.scene.add(shield);
       const raider = v.walker('hostile');
       const guest = v.walker('read');
-      const pop = v.label('pop shield', '🛡 repoussé', 0.4, 1.5, 0);
+      const pop = v.label('pop shield', `${pict('barrier')} repoussé`, 0.4, 1.5, 0);
       const HIT = SITE.x - 1.15;
       return (t) => {
         const p = phase(t, 3);
@@ -693,8 +695,8 @@ const ENTRIES: Entry[] = [
       const server = caller(v);
       const line = Array.from({ length: 5 }, () => v.walker('async'));
       const pairs = [0, 0.5].map((offset) => ({ offset, ok: v.walker('read'), ko: v.walker('read', true) }));
-      v.label('hourglass', '⏳ 4 000 ms', SITE.x, 1.6, SITE.z);
-      v.label('pop', '🧵 fils occupés 125 %', server.group.position.x, 1.4, server.group.position.z);
+      v.label('hourglass', `${pict('hourglass')} 4 000 ms`, SITE.x, 1.6, SITE.z);
+      v.label('pop', `${pict('cog')} fils occupés 125 %`, server.group.position.x, 1.4, server.group.position.z);
       const start = ROAD_START - 0.3;
       const door = server.group.position.x - 0.35;
       return (t) => {
@@ -726,8 +728,8 @@ const ENTRIES: Entry[] = [
       const fx = new Effects(v.scene);
       const mages = [0, 0.33, 0.66].map((offset) => ({ offset, ok: v.walker('async'), ko: v.walker('async', true) }));
       const cross = v.label('pop', '✕', -0.6, 1.1, 0);
-      v.label('pop shield', '🔌 circuit coupé', -0.2, 1.7, 0);
-      v.label('hourglass', '⏳ 4 000 ms', SITE.x, 1.6, SITE.z);
+      v.label('pop shield', `${pict('switch')} circuit coupé`, -0.2, 1.7, 0);
+      v.label('hourglass', `${pict('hourglass')} 4 000 ms`, SITE.x, 1.6, SITE.z);
       const from = server.group.position.x + 0.4;
       const bar = -0.45;
       return (t) => {
@@ -836,7 +838,7 @@ const ENTRIES: Entry[] = [
       const bad = v.walker('async', true);
       const line = Array.from({ length: 3 }, () => v.walker('async'));
       const crashed = v.label('pop', '☠ rendu à la file', SITE.x, 1.6, SITE.z);
-      const pile = v.label('pop', '📭 lettres mortes', ROAD_START + 0.2, 1.1, 0.6);
+      const pile = v.label('pop', `${pict('mailbox')} lettres mortes`, ROAD_START + 0.2, 1.1, 0.6);
       const ATTEMPTS = 3;
       return (t) => {
         const p = phase(t, 8);
@@ -970,7 +972,7 @@ const ENTRIES: Entry[] = [
       const server = caller(v);
       const hut = guardHut(v, -0.15, -0.7);
       const state = v.label('pop info', '', -0.1, 1.5, -0.5);
-      const slow = v.label('hourglass', '⏳ 4 000 ms', SITE.x, 1.6, SITE.z);
+      const slow = v.label('hourglass', `${pict('hourglass')} 4 000 ms`, SITE.x, 1.6, SITE.z);
       const mages = [0, 0.33, 0.66].map((offset) => ({ offset, ok: v.walker('async'), ko: v.walker('async', true) }));
       const from = server.group.position.x + 0.4;
       const bar = -0.1;
@@ -1020,7 +1022,7 @@ const ENTRIES: Entry[] = [
       keep.position.set(archive.x, 0, archive.z);
       v.scene.add(keep);
       v.label('pip on', '<span class="icon">🔒<b></b></span>', SITE.x + 0.5, 1.5, SITE.z);
-      const wait = v.label('hourglass', '⏳ 4 attendent la même page', SITE.x - 1.2, 1.2, SITE.z + 0.4);
+      const wait = v.label('hourglass', `${pict('hourglass')} 4 attendent la même page`, SITE.x - 1.2, 1.2, SITE.z + 0.4);
       const runner = v.walker('read');
       const queue = Array.from({ length: 4 }, (_, i) => v.walker(i % 2 ? 'read' : 'write'));
       const door = { x: DOOR - 0.2, z: 0 };
@@ -1087,6 +1089,8 @@ const ENTRIES: Entry[] = [
 ];
 
 async function main(): Promise<void> {
+  // Les étiquettes renvoient au sprite du jeu, comme sur le plateau.
+  installSprite();
   const grid = document.getElementById('grid')!;
   const lib = await ModelLibrary.load([...MODELS, ...CHARACTERS], import.meta.env.BASE_URL);
   const cast = new Cast(lib);

@@ -11,12 +11,14 @@
     "typecheck": "tsc --noEmit",
     "balance": "node scripts/balance.ts",
     "balance:snapshot": "node scripts/balance.ts --snapshot",
-    "balance:check": "node scripts/balance.ts --check"
+    "balance:check": "node scripts/balance.ts --check",
+    "captures": "node scripts/captures.mjs"
   },
   "devDependencies": {
     "@gltf-transform/core": "4.5.1",
     "@gltf-transform/functions": "4.5.1",
     "@types/three": "0.186.0",
+    "playwright-core": "1.56.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.6",
     "vitest": "^5.1.0"

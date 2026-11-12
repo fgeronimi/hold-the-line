@@ -260,8 +260,9 @@ body[data-phase='debrief'] .replay-bar, body[data-phase='debrief'] .replay-chart
 .card .speech p { font-size: 13px; }
 
 /* Courbes tick par tick : une figure, un axe des ticks partagé. */
-.chart { position: relative; }
-.chart svg { width: 100%; height: auto; display: block; font: 10px system-ui, sans-serif; }
+.chart { position: relative; overflow-x: auto; }
+/* En dessous de 560 px, le texte des courbes tomberait sous 9 px : on fait défiler plutôt que réduire. */
+.chart svg { width: 100%; min-width: 560px; height: auto; display: block; font: 10px system-ui, sans-serif; }
 .chart-title { font-weight: bold; fill: var(--ink); font-size: 11px; }
 .chart-now { fill: var(--ink); font-weight: bold; }
 .chart-scale { font-size: 9px; }
@@ -576,8 +577,12 @@ button.launch.hint {
 .pip.hint .icon {
   background: var(--sheen) var(--sheen-x) 0 / 260% 100% no-repeat, var(--m-stone);
   animation: sheen 2.4s ease-in-out infinite; }
-.hcard.hint .hcard-face::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  background: var(--sheen) var(--sheen-x) 0 / 260% 100% no-repeat; animation: sheen 2.4s ease-in-out infinite; }
+/* Sur une carte, le reflet glisse par transform : le compositeur le déplace seul, sans repeindre
+   la carte ni ses voisines (un fond qui défile repeignait toute la main à chaque image). La face
+   coupe ce qui déborde. */
+@keyframes sheen-slide { 0% { transform: translateX(-100%); } 55%, 100% { transform: translateX(100%); } }
+.hcard.hint .hcard-face::after { content: ''; position: absolute; inset: 0; pointer-events: none; will-change: transform;
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .7) 50%, transparent 70%); animation: sheen-slide 2.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
   button.hint, .pip.hint .icon, .hcard.hint .hcard-face::after { animation: none; }
 }

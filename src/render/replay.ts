@@ -7,9 +7,7 @@ import { firstSaturations, replayStats } from './hud.ts';
 import type { CityScene } from './scene.ts';
 import type { Theme } from './theme.ts';
 import { minuteSpan } from './time.ts';
-
-/** Un pictogramme du sprite de l'interface (I18), posé une fois dans la page par `installSprite`. */
-const pict = (name: string) => `<svg class="ico" viewBox="0 0 48 48" aria-hidden="true"><use href="#hl-${name}"/></svg>`;
+import { PAUSE, PLAY, pict } from './pict.ts';
 import { JourneyWindow, OutcomeTally, RecentOutcomes, journeyDuration, journeysForTick, outcomeOf, trafficScale, type Outcome } from './traffic.ts';
 
 export interface ReplayOptions {
@@ -50,7 +48,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   bar.className = 'replay-bar';
   bar.innerHTML = `
     <b>${escapeHtml(o.title)}</b>
-    <button data-r="play">⏸</button>
+    <button data-r="play" aria-label="Pause">${PAUSE}</button>
     <select data-r="speed"><option value="1">×1</option><option value="2">×2</option><option value="4">×4</option></select>
     <input data-r="seek" type="range" min="0" max="${o.result.ticks.length}" step="0.01" value="0">
     <span data-r="readout"></span>
@@ -75,7 +73,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     time = tick;
     seek.value = String(time);
     playing = false;
-    play.textContent = '▶';
+    showPlay(true);
   });
 
   const $ = <T extends HTMLElement>(name: string) => bar.querySelector<T>(`[data-r="${name}"]`)!;
@@ -83,6 +81,11 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   const hud = $('hud');
   const seek = $<HTMLInputElement>('seek');
   const play = $<HTMLButtonElement>('play');
+  /** Le bouton montre ce qu'il fera : lecture à l'arrêt, pause en marche. */
+  const showPlay = (paused: boolean) => {
+    play.innerHTML = paused ? PLAY : PAUSE;
+    play.setAttribute('aria-label', paused ? 'Lecture' : 'Pause');
+  };
 
   const scale = trafficScale(o.result.ticks);
   const timed = o.result.ticks.flatMap((t, i) => journeysForTick(t, i, scale)).map((j) => ({ j, end: j.start + journeyDuration(j) }));
@@ -206,7 +209,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
       if (time >= end) {
         time = end;
         playing = false;
-        play.textContent = '▶';
+        showPlay(true);
         finish();
       }
       seek.value = String(time);
@@ -234,7 +237,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   const togglePlay = () => {
     if (!playing && time >= end) time = 0;
     playing = !playing;
-    play.textContent = playing ? '⏸' : '▶';
+    showPlay(!playing);
   };
   const stop = () => {
     scene.onFrame = undefined;
@@ -261,7 +264,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   seek.addEventListener('input', () => {
     time = Number(seek.value);
     playing = false;
-    play.textContent = '▶';
+    showPlay(true);
     // Revenir en arrière réarme les alertes des goulots pas encore atteints.
     for (const a of alerts) if (a.tick > time) shown.delete(a.node);
   });

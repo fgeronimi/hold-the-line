@@ -33,6 +33,7 @@ import { BOARD } from '../data/board.ts';
 import { BRIDGE_MODEL, bridgeRotation, crossingTile, isRiver, riverCells, riverKeys, riverTile, roadSides, roadTile, TERRAIN_MODELS, type Tile } from './terrain.ts';
 import { HEX_SIZE, HEX_WIDTH, hexAt, hexCenter, hexDistance, hexKey, hexNeighbours, type Hex } from './hex.ts';
 import { escapeHtml } from './html.ts';
+import { pict } from './pict.ts';
 import { Effects } from './effects.ts';
 import { Fleet, WALK_FRAMES, type FleetStyle } from './fleet.ts';
 import { layoutArchitecture, pathLength, pointAlong, type Layout, type Road } from './layout.ts';
@@ -56,13 +57,13 @@ const MAX_WAITING = 6;
 const DUPLICATE_TINT = new Color('#9b5de5');
 /** Au-delà, les pastilles les plus anciennes ne sont plus affichées : on garde la scène lisible. */
 const MAX_POPS = 60;
-const POP_TEXT: Record<Outcome['result'], { text: string; className: string }> = {
-  served: { text: '+1 👍', className: 'pop ok' },
-  refused: { text: '✕ −1', className: 'pop ko' },
-  repelled: { text: '🛡', className: 'pop shield' },
-  twice: { text: '×2', className: 'pop ko' },
-  ignored: { text: '🔁 déjà reçu', className: 'pop dedup' },
-  requeued: { text: '↩ en file', className: 'pop dedup' },
+const POP_TEXT: Record<Outcome['result'], { html: string; className: string }> = {
+  served: { html: `${pict('check')} +1`, className: 'pop ok' },
+  refused: { html: '✕ −1', className: 'pop ko' },
+  repelled: { html: pict('barrier'), className: 'pop shield' },
+  twice: { html: '×2', className: 'pop ko' },
+  ignored: { html: `${pict('seal')} déjà reçu`, className: 'pop dedup' },
+  requeued: { html: '↩ en file', className: 'pop dedup' },
 };
 /** Distance d'un panneau de sens au milieu de la route : sur le bas-côté. */
 const SIGN_OFFSET = 0.5;
@@ -490,7 +491,11 @@ export class CityScene {
       // Au-dessus de l'étiquette du bâtiment, pour ne pas la masquer.
       pop.position.set(at.x + jitter * 0.8, (b?.top ?? 1) + 1.3 + age * 1.2, at.z + jitter * 0.4);
       const style = POP_TEXT[o.result];
-      if (pop.element.textContent !== style.text) pop.element.textContent = style.text;
+      // Comparé par la clé : relire `innerHTML` à chaque image coûterait plus que de l'écrire.
+      if (pop.element.dataset.result !== o.result) {
+        pop.element.dataset.result = o.result;
+        pop.element.innerHTML = style.html;
+      }
       pop.element.className = style.className;
       pop.element.style.opacity = String(1 - age);
     });
@@ -1186,29 +1191,29 @@ export class CityScene {
       b.label.innerHTML =
         `<b>${escapeHtml(b.techName)}</b><span>${escapeHtml(b.metaphor)}</span>` +
         (b.badges ? `<span class="badges">${b.badges}</span>` : '') +
-        (starting > 0 ? em(`🏗️ ${starting} instance${starting > 1 ? 's' : ''} en démarrage`, true) : '') +
-        (down > 0 ? em(`🔥 ${down} instance${down > 1 ? 's' : ''} en panne`, true) : '') +
+        (starting > 0 ? em(`${pict('autoscale')} ${starting} instance${starting > 1 ? 's' : ''} en démarrage`, true) : '') +
+        (down > 0 ? em(`${pict('warn')} ${down} instance${down > 1 ? 's' : ''} en panne`, true) : '') +
         // Au rejeu, chaque bâtiment montre ce qu'il reçoit et sa charge : de quoi dimensionner.
         (down > 0 && n?.instances === 0
           ? em('hors service', true)
           : n && n.rps > 0 ? em(`${rounded(n.rps)} req/s${b.source ? ' émises' : ` · charge ${rounded(u * 100)} %`}`, over) : '') +
-        (id === slowest && n ? em(`<span class="hourglass">⏳</span> ${rounded(n.latencyMs)} ms`, true) : '') +
+        (id === slowest && n ? em(`<span class="hourglass">${pict('hourglass')}</span> ${rounded(n.latencyMs)} ms`, true) : '') +
         // La cascade : les fils du serveur attendent une dépendance ; le disjoncteur la coupe.
-        ((n?.threads ?? 0) > 0.8 ? em(`🧵 fils occupés ${rounded((n?.threads ?? 0) * 100)} %`, (n?.threads ?? 0) > 1) : '') +
+        ((n?.threads ?? 0) > 0.8 ? em(`${pict('cog')} fils occupés ${rounded((n?.threads ?? 0) * 100)} %`, (n?.threads ?? 0) > 1) : '') +
         (retries > 0 ? em(`↻ ${rounded(retries)} relances/s`, storming) : '') +
         (n?.partitioned ? em('✂ réplicas coupés du primaire', (n.stale ?? 0) > 0) : '') +
         ((n?.stale ?? 0) > 0 ? em(`≠ ${rounded(n!.stale!)} lectures périmées`, true) : '') +
-        (n?.open ? em(`🔌 circuit coupé : ${n.open.map((t) => escapeHtml(this.buildings.get(t)?.techName ?? t)).join(', ')}`) : '') +
+        (n?.open ? em(`${pict('switch')} circuit coupé : ${n.open.map((t) => escapeHtml(this.buildings.get(t)?.techName ?? t)).join(', ')}`) : '') +
         (backlog > 0 ? em(`arriéré ${rounded(backlog)} <span class="gauge"><i style="width:${Math.min(100, (Math.log10(1 + backlog) / 4) * 100)}%"></i></span>`) : '') +
         // L'âge du plus vieux message, ce qu'on surveille vraiment sur une file (M13).
         ((n?.backlogAge ?? 0) > 0 ? em(`⌛ le plus vieux attend depuis ${n!.backlogAge} min`, (n!.backlogAge ?? 0) >= 10) : '') +
         ((n?.duplicates ?? 0) > 0 ? em(`×2 ${rounded(n!.duplicates!)} req/s traitées deux fois`, true) : '') +
-        ((n?.deduplicated ?? 0) > 0 ? em(`🔁 ${rounded(n!.deduplicated!)} doublons écartés`) : '') +
+        ((n?.deduplicated ?? 0) > 0 ? em(`${pict('seal')} ${rounded(n!.deduplicated!)} doublons écartés`) : '') +
         ((n?.lost ?? 0) > 0 ? em(`✉ ${rounded(n!.lost!)} événements perdus`, true) : '') +
         ((n?.poisoned ?? 0) > 0 ? em(`☠ ${rounded(n!.poisoned!)} messages empoisonnés rendus à la file`, true) : '') +
-        ((n?.deadLetters ?? 0) > 0 ? em(`📭 ${rounded(n!.deadLetters!)} lettres mortes à examiner`, (n?.deadLettered ?? 0) > 0) : '') +
+        ((n?.deadLetters ?? 0) > 0 ? em(`${pict('mailbox')} ${rounded(n!.deadLetters!)} lettres mortes à examiner`, (n?.deadLettered ?? 0) > 0) : '') +
         (failed > 0 ? em(`✕ ${rounded(failed)} req/s en échec`, true) : '') +
-        (shed > 0 ? em(`🛡 ${rounded(shed)} req/s abusives repoussées`) : '');
+        (shed > 0 ? em(`${pict('barrier')} ${rounded(shed)} req/s abusives repoussées`) : '');
     }
   }
 

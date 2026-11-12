@@ -89,18 +89,18 @@ la cloche sonne, la bannière « SLA rompu » tombe.
 Chaque incident a son effet sur le plateau, montré seul sur un îlot de démonstration
 (`npm run dev`, puis `/vitrine.html`).
 
-| <img src="docs/media/vitrine-saturation.webp" width="260" alt="Saturation"> | <img src="docs/media/vitrine-refus.webp" width="260" alt="Requête refusée"> | <img src="docs/media/vitrine-file-arriere.webp" width="260" alt="Arriéré de file"> |
+| <img src="docs/media/vitrine-saturation.webp" width="260" alt="Saturation"> | <img src="docs/media/vitrine-requete-refusee.webp" width="260" alt="Requête refusée"> | <img src="docs/media/vitrine-arriere-de-file.webp" width="260" alt="Arriéré de file"> |
 |---|---|---|
 | **Saturation** · la charge dépasse 100 % | **Requête refusée** · au-delà de la capacité | **Arriéré de file** · la file s'allonge |
-| <img src="docs/media/vitrine-appel-lent.webp" width="260" alt="Appel trop lent"> | <img src="docs/media/vitrine-double-livraison.webp" width="260" alt="Message livré deux fois"> | <img src="docs/media/vitrine-evenement-perdu.webp" width="260" alt="Événement perdu"> |
+| <img src="docs/media/vitrine-appel-trop-lent.webp" width="260" alt="Appel trop lent"> | <img src="docs/media/vitrine-message-livre-deux-fois.webp" width="260" alt="Message livré deux fois"> | <img src="docs/media/vitrine-evenement-perdu.webp" width="260" alt="Événement perdu"> |
 | **Appel trop lent** · p95 au-delà du SLA | **Message livré deux fois** · sans idempotence | **Événement perdu** · sans outbox |
-| <img src="docs/media/vitrine-panne-instance.webp" width="260" alt="Panne d'instance"> | <img src="docs/media/vitrine-pillards.webp" width="260" alt="Pillards repoussés"> | <img src="docs/media/vitrine-cascade.webp" width="260" alt="Cascade de pannes"> |
+| <img src="docs/media/vitrine-panne-d-instance.webp" width="260" alt="Panne d'instance"> | <img src="docs/media/vitrine-pillards-repousses.webp" width="260" alt="Pillards repoussés"> | <img src="docs/media/vitrine-cascade-de-pannes.webp" width="260" alt="Cascade de pannes"> |
 | **Panne d'instance** · un SPOF qui tombe | **Pillards repoussés** · rate limiting | **Cascade de pannes** · fils d'exécution saturés |
-| <img src="docs/media/vitrine-circuit-coupe.webp" width="260" alt="Circuit coupé"> | <img src="docs/media/vitrine-tempete-relances.webp" width="260" alt="Tempête de relances"> | <img src="docs/media/vitrine-partition.webp" width="260" alt="Partition réseau"> |
+| <img src="docs/media/vitrine-circuit-coupe.webp" width="260" alt="Circuit coupé"> | <img src="docs/media/vitrine-tempete-de-relances.webp" width="260" alt="Tempête de relances"> | <img src="docs/media/vitrine-partition-reseau.webp" width="260" alt="Partition réseau"> |
 | **Circuit coupé** · circuit breaker | **Tempête de relances** · retries sans backoff | **Partition réseau** · lectures périmées |
-| <img src="docs/media/vitrine-message-empoisonne.webp" width="260" alt="Message empoisonné"> | <img src="docs/media/vitrine-pastilles.webp" width="260" alt="Pastilles d'évolution"> | <img src="docs/media/vitrine-autoscaling.webp" width="260" alt="Autoscaling"> |
+| <img src="docs/media/vitrine-message-empoisonne.webp" width="260" alt="Message empoisonné"> | <img src="docs/media/vitrine-pastilles-d-evolution.webp" width="260" alt="Pastilles d'évolution"> | <img src="docs/media/vitrine-autoscaling-en-chantier.webp" width="260" alt="Autoscaling"> |
 | **Message empoisonné** · sans file des lettres mortes | **Pastilles d'évolution** · acheter une évolution | **Autoscaling** · le délai de démarrage |
-| <img src="docs/media/vitrine-guerite.webp" width="260" alt="Guérite du disjoncteur"> | <img src="docs/media/vitrine-verrou.webp" width="260" alt="Verrou de recalcul"> | <img src="docs/media/vitrine-sla-franchi.webp" width="260" alt="SLA franchi"> |
+| <img src="docs/media/vitrine-guerite-du-disjoncteur.webp" width="260" alt="Guérite du disjoncteur"> | <img src="docs/media/vitrine-verrou-de-recalcul.webp" width="260" alt="Verrou de recalcul"> | <img src="docs/media/vitrine-sla-franchi.webp" width="260" alt="SLA franchi"> |
 | **Guérite du disjoncteur** · l'état demi-ouvert | **Verrou de recalcul** · request coalescing (maquette) | **SLA franchi** · la vague est perdue |
 
 ### La planche de design
@@ -120,6 +120,7 @@ npm run typecheck  # TypeScript
 npm run balance    # simulation en masse : l'équilibrage des vagues (~6 min)
 npm run balance:check  # compare l'équilibrage à docs/balance-snapshot.txt
 npm run build      # site statique dans dist/
+npm run captures   # refait les images animées de ce README (docs/media/)
 ```
 
 Le moteur de simulation (`src/engine/`) est pur, déterministe et sans DOM : un modèle de
