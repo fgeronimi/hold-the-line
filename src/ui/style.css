@@ -1,85 +1,155 @@
-/* Mode jeu : le plateau occupe tout l'écran, l'interface flotte par-dessus en panneaux. */
+/*
+ * Mode jeu : le plateau occupe tout l'écran, l'interface flotte par-dessus. Du parchemin
+ * partout, la pierre et le laiton pour les médaillons, des filets fins ton sur ton et une
+ * ombre diffuse : le volume vient de l'ombre, pas d'un contour épais, et un bouton s'enfonce
+ * d'un pixel quand on appuie. Le bois sombre et les tranches dures ont été essayés puis
+ * retirés (I16) : trop lourds à côté du plateau.
+ * Les teintes viennent de la texture du plateau KayKit.
+ */
+/* Le titrage : Lilita One (OFL, `fonts/OFL.txt`), servie avec le site, sans appel extérieur. */
+@font-face { font-family: 'Lilita One'; src: url('./fonts/lilita-one.woff2') format('woff2'); font-display: swap; }
 :root {
   --parchment: #f6ecd2;
   --parchment-dark: #e8d7ad;
   --wood: #8b5e34;
   --wood-dark: #5a3a1e;
+  --edge: #6b4a2b;
+  /* Le filet des panneaux, des boutons et des cartes : un ton plus sombre que le parchemin. */
+  --line: #a98455;
   --ink: #3b2a1a;
+  --cream: #f8ecd0;
   --ok: #2b9348;
   --ko: #c0392b;
+  --brass: #c9a35a;
+  --forest: #4f7a35;
+  --clay: #b5652b;
+  --display: 'Lilita One', Georgia, 'Times New Roman', serif;
   --shadow: 0 4px 14px rgba(40, 25, 10, 0.35);
+  /* Un grain de papier discret, posé sur le parchemin. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .24 0 0 0 0 .12 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  --m-parchment: var(--grain), linear-gradient(170deg, #fbf3dc, #ecd9ad);
+  --m-stone: linear-gradient(#e2dfd4, #b4b1a5);
+  --m-brass: linear-gradient(#f6dd92, #d3a63b);
+  --raise: 0 1px 2px rgba(30, 20, 8, .2), 0 6px 14px rgba(30, 20, 8, .16);
+  --raise-low: 0 1px 2px rgba(30, 20, 8, .22);
+  --pressed: inset 0 1px 3px rgba(30, 20, 8, .28);
+  /* L'épaisseur du trait des pictogrammes, et du contour de leurs aplats (`icons.ts`). */
+  --ico-w: 1.7px;
+  --ico-o: 1.4px;
 }
 html, body { height: 100%; margin: 0; overflow: hidden; }
 body { font: 14px/1.4 system-ui, sans-serif; color: var(--ink); background: #6f9b4a; }
-h1, h2, h3, .hud-title b, .tool span, .launch, button.primary { font-family: Georgia, 'Times New Roman', serif; }
-button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--wood); background: var(--parchment-dark); color: var(--ink); padding: 4px 10px; }
-button:hover:not(:disabled) { background: #f0dfb4; }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
-button.primary { background: var(--wood); color: #fff; border-color: var(--wood-dark); font-weight: bold; }
-button.primary:hover { background: var(--wood-dark); }
+h1, h2, h3, .hud-title b, .launch, button.primary, .tool.build, .hcard-title b, .scenario-card b { font-family: var(--display); font-weight: normal; }
 .muted { color: #7a6a55; }
 .ko { color: var(--ko); }
+.ico { width: 1.25em; height: 1.25em; vertical-align: -.25em; flex: none; }
 
-.panel { background: var(--parchment); border: 2px solid var(--wood); border-radius: 10px; box-shadow: var(--shadow); }
+/* Un bouton est un objet : une ombre le décolle, et il la perd quand on l'enfonce. Les cartes et les pastilles ont leur propre geste. */
+button:where(:not(.hcard, .pip)) {
+  font: inherit; cursor: pointer; color: var(--ink); padding: 4px 11px; border-radius: 8px; border: 1px solid var(--line);
+  background: linear-gradient(#fbf1d6, #e6d2a2); box-shadow: var(--raise-low); transition: transform .08s, box-shadow .08s, filter .12s;
+}
+button:where(:not(.hcard, .pip)):hover:not(:disabled) { filter: brightness(1.06); }
+button:where(:not(.hcard, .pip)):active:not(:disabled) { transform: translateY(1px); box-shadow: var(--pressed); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button:focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }
+button.primary { padding: 6px 14px; font-size: 16px; color: #fff; background: linear-gradient(#6a9a44, var(--forest)); border-color: #3c5f27; text-shadow: 0 1px 0 #2c4a1b;
+  box-shadow: 0 1px 2px rgba(30, 60, 20, .35), 0 4px 10px rgba(30, 20, 8, .18); }
+button.round, .close { width: 30px; height: 30px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+.close { width: 24px; height: 24px; }
+.close .ico { width: 14px; height: 14px; }
+
+.panel { background: var(--m-parchment); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 2px 4px rgba(30, 20, 8, .14), 0 12px 26px rgba(30, 20, 8, .18); }
+
+/* Les infobulles : un petit parchemin, au-dessus de ce qu'on survole (en dessous pour la barre du haut). */
+[data-tip] { position: relative; }
+[data-tip]::after {
+  content: attr(data-tip); position: absolute; z-index: 30; left: 50%; bottom: calc(100% + 10px); transform: translate(-50%, 4px);
+  width: max-content; max-width: 240px; padding: 5px 9px; font: 12px/1.35 system-ui, sans-serif; text-align: left; white-space: pre-line; text-shadow: none;
+  color: var(--ink); background: var(--m-parchment); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 12px rgba(30, 20, 8, .2);
+  opacity: 0; pointer-events: none; transition: opacity .12s, transform .12s;
+}
+[data-tip]:hover::after, [data-tip]:focus-visible::after { opacity: 1; transform: translate(-50%, 0); transition-delay: .25s; }
+.layer.top [data-tip]::after { bottom: auto; top: calc(100% + 10px); }
+.hud-actions [data-tip]::after { left: auto; right: 0; transform: translate(0, -4px); }
+.hud-actions [data-tip]:hover::after, .hud-actions [data-tip]:focus-visible::after { transform: none; }
 
 /* Le plateau et les calques. */
 .board { position: fixed; inset: 0; background: #e8eef3; }
 .layer { position: fixed; z-index: 3; pointer-events: none; }
 .layer > * { pointer-events: auto; }
 .layer.top { top: 10px; left: 10px; right: 10px; }
-.layer.right { top: 74px; right: 10px; width: 290px; }
-.layer.bottom { bottom: 10px; left: 10px; right: 10px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.layer.top > .hud-bar { pointer-events: none; }
+.layer.bottom { bottom: 12px; left: 10px; right: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .layer.center { inset: 0; display: grid; place-items: center; }
 .layer.center:empty { display: none; }
 .layer.center > * { max-width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 120px); overflow-y: auto; }
 
-/* Barre du haut. */
-.hud-bar { display: flex; align-items: center; gap: 16px; padding: 6px 12px; }
-.hud-title { display: flex; flex-direction: column; line-height: 1.15; }
-.hud-title b { font-size: 16px; }
+/* Barre du haut : trois plaques de parchemin posées sur le plateau, pas un bandeau. */
+.hud-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.plaque { pointer-events: auto; display: flex; align-items: center; gap: 6px; min-height: 42px; box-sizing: border-box; padding: 4px 10px; color: var(--ink);
+  background: var(--m-parchment); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--raise); }
+.hud-title { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; line-height: 1.15; padding: 4px 14px; }
+.hud-title b { font-size: 16px;  }
 .hud-title span { font-size: 12px; color: #7a6a55; }
-.hud-gauges { flex: 1; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-.hud-actions { display: flex; gap: 6px; align-items: center; }
-.gauge { white-space: nowrap; font-weight: bold; }
-.gauge.ko { color: var(--ko); }
-.menu { position: absolute; right: 0; top: 54px; display: flex; flex-direction: column; gap: 4px; padding: 8px; min-width: 220px; }
+.hud-gauges { flex-wrap: wrap; justify-content: center; }
+.hud-bar .gauge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 5px; border-radius: 999px; font-size: 13px; white-space: nowrap; color: #7a6a55;
+  background: #5a3a1e12; box-shadow: inset 0 0 0 1px #a9845559; cursor: default; }
+.hud-bar .gauge b { font: 15px var(--display); color: var(--ink); }
+.hud-bar .gauge .ico { width: 20px; height: 20px; }
+.hud-bar .gauge.traffic b { margin-right: 5px; }
+.hud-bar .gauge.traffic b:last-child { margin-right: 0; }
+.hud-bar .gauge.ko { color: #8f2a1f; background: #c0392b1f; box-shadow: inset 0 0 0 1.5px #c0392b; }
+.hud-bar .gauge.ko b { color: #8f2a1f; }
+.hud-bar .gauge:focus-visible { outline: 2px solid #ffd166; outline-offset: 1px; }
+.menu { position: absolute; right: 0; top: 52px; display: flex; flex-direction: column; gap: 6px; padding: 10px; min-width: 220px; }
 
-/* Barre d'outils du bas. */
-.toolbar { display: flex; align-items: stretch; gap: 10px; padding: 6px 8px; max-width: 100%; overflow-x: auto; }
-.toolbar .group { display: flex; gap: 4px; }
-.toolbar .group + .group { border-left: 1px solid var(--wood); padding-left: 10px; }
-.tool { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 74px; padding: 4px 6px; font-size: 11px; line-height: 1.15; }
-.tool .icon { font-size: 22px; line-height: 1.1; }
-.tool small { color: #7a6a55; }
-.tool.active { background: var(--wood); color: #fff; border-color: var(--wood-dark); }
-.tool.active small { color: #f0dfb4; }
-.launch { align-self: center; padding: 10px 16px; font-size: 16px; font-weight: bold; background: #c0392b; color: #fff; border-color: #7b241c; }
-.launch:hover:not(:disabled) { background: #a93226; }
-.toast { padding: 4px 12px; }
-.errors { padding: 4px 12px; font-size: 12px; color: var(--ko); }
+/* Barre du bas : une plaque basse, des médaillons d'outils, et le lancement de la vague qui dépasse. */
+.toolbar { display: flex; align-items: center; gap: 14px; padding: 5px 12px; max-width: 100%; box-sizing: border-box;
+  background: var(--m-parchment); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--raise); }
+.toolbar .group { display: flex; align-items: center; gap: 6px; }
+.tool { width: 40px; height: 40px; padding: 0; display: grid; place-items: center; background: var(--m-stone); }
+button.tool { border-radius: 50%; padding: 0; background: var(--m-stone); border-color: #8f8a7c; }
+.tool .ico { width: 24px; height: 24px; }
+button.tool.small { width: 30px; height: 30px; }
+.tool.small .ico { width: 17px; height: 17px; }
+button.tool.active { background: var(--m-brass); transform: translateY(1px); box-shadow: var(--pressed); border-color: #a57f25; }
+button.tool.build { width: auto; display: flex; align-items: center; gap: 6px; padding: 0 16px 0 11px; border-radius: 999px; font-size: 16px; background: linear-gradient(#fbf1d6, #e6d2a2); border-color: var(--line); }
+button.tool.build.active { background: var(--m-brass); border-color: #a57f25; }
+button.launch { display: flex; align-items: center; gap: 8px; margin: -8px 0; padding: 11px 20px; font-size: 19px; color: #fff; text-shadow: 0 1px 0 #5e1a12;
+  background: linear-gradient(#d8574a, #a93226); border-color: #8f2a1f; border-radius: 13px;
+  box-shadow: 0 1px 2px rgba(120, 30, 20, .4), 0 6px 14px rgba(30, 20, 8, .22); }
+button.launch:active:not(:disabled) { transform: translateY(1px); box-shadow: inset 0 1px 3px #0000004d; }
+.launch .ico { width: 24px; height: 24px; }
+.toast { padding: 4px 14px; border-radius: 999px; color: var(--ink); background: var(--m-parchment); border: 1px solid var(--line); box-shadow: var(--raise-low); }
+.toast.ko { color: #fff; background: linear-gradient(#c7773a, var(--clay)); border-color: #8a4a1c; }
+.errors { padding: 5px 12px; font-size: 12px; color: var(--ko); border-radius: 10px; }
 .errors p { margin: 2px 0; }
 
-/* Fiche du bâtiment. */
+/* Carte du bâtiment sélectionné. */
 .card { position: relative; padding: 8px 10px; font-size: 13px; }
-.card h3 { margin: 0 24px 4px 0; }
-.card .close { position: absolute; top: 6px; right: 6px; padding: 0 6px; }
+.card h3 { margin: 0 28px 4px 0; }
+.card .close { position: absolute; top: 8px; right: 8px; }
 .card label { display: block; margin: 3px 0; }
 .card ul { padding-left: 18px; margin: 4px 0; }
+select, input { font: inherit; color: var(--ink); background: #fffaf0; border: 2px solid #b9965a; border-radius: 6px; padding: 1px 4px; }
 
 /* Fenêtres : briefing et debrief. */
-.dialog { padding: 14px 18px; }
-.dialog h2 { margin: 0 0 8px; }
+.dialog { padding: 16px 20px; }
+.dialog h2 { margin: 0 0 8px; font-size: 24px; }
 .dialog.won h2 { color: var(--ok); }
 .dialog.lost h2 { color: var(--ko); }
-.dialog .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-bottom: 0; }
+.dialog .actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-bottom: 4px; }
 .dialog .reasons { color: var(--ko); margin: 4px 0; }
 .dialog .final { font-size: 16px; }
 .briefing { font-size: 14px; }
 
-/* Le narrateur : portrait et bulle. */
+/* Le narrateur : son médaillon et sa bulle. */
 .speech { display: flex; gap: 10px; align-items: flex-start; margin: 6px 0; }
-.speech .speaker { font-size: 30px; line-height: 1; }
-.speech p { margin: 0; padding: 8px 12px; background: #fff8e6; border: 1px solid #e0c48a; border-radius: 10px; font-size: 15px; }
+.speech .speaker { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 50% 35%, #fffaf0, #e6d2a2);
+  border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(30, 20, 8, .2); }
+.speech .speaker .ico { width: 28px; height: 28px; }
+.speech p { margin: 0; padding: 8px 12px; background: #fffaf0; border: 1px solid #d9bb7c; border-radius: 12px; font-size: 15px; box-shadow: inset 0 -2px 0 #ecd9ad; }
 .findings { display: grid; gap: 6px; margin: 8px 0; }
 .finding { padding: 6px 10px; border-left: 4px solid #ccc; background: rgba(255, 255, 255, 0.5); border-radius: 4px; }
 .finding p { margin: 3px 0; }
@@ -90,20 +160,20 @@ button.primary:hover { background: var(--wood-dark); }
 .finding.tip { border-color: #3a86ff; }
 
 /* Barre de la vague (pendant qu'elle se joue), en bas, et alerte de goulot. */
-.replay-bar { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 2; width: min(980px, calc(100vw - 20px)); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; background: var(--parchment); border: 2px solid var(--wood); border-radius: 10px; box-shadow: var(--shadow); font-size: 12px; }
+.replay-bar { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 2; width: min(980px, calc(100vw - 20px)); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; background: var(--m-parchment); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 2px 4px rgba(30, 20, 8, .14), 0 12px 26px rgba(30, 20, 8, .18); font-size: 12px; }
 .replay-bar input[type=range] { flex: 1; min-width: 120px; }
 .replay-bar .hud { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
 .replay-bar .hud .ok { color: var(--ok); font-weight: bold; }
 .replay-bar .hud .ko { color: var(--ko); font-weight: bold; }
 .replay-legend i { display: inline-block; width: 10px; height: 10px; margin: 0 4px 0 8px; border-radius: 2px; }
-.replay-alert { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); z-index: 2; padding: 6px 14px; border-radius: 8px; background: var(--ko); color: #fff; font-weight: bold; box-shadow: var(--shadow); }
-.replay-loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: #555; font-family: Georgia, serif; font-size: 18px; }
+.replay-alert { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); z-index: 2; padding: 6px 14px; border-radius: 999px; background: linear-gradient(#d8574a, #a93226); border: 2px solid #5e1a12; color: #fff; font-weight: bold; box-shadow: 0 3px 0 #5e1a12, 0 7px 12px rgba(30, 20, 8, .35); }
+.replay-loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: #555; font-family: var(--display); font-size: 18px; }
 
 /* Étiquettes et pastilles au-dessus des bâtiments. */
 /* Three.js trie les étiquettes par z-index croissant : z-index 1 les enferme dans leur calque, sous les panneaux. */
 .city-labels { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
-.city-label { display: flex; flex-direction: column; align-items: center; padding: 2px 6px; border-radius: 4px;
-  background: rgba(255, 255, 255, .8); font-size: 10px; line-height: 1.2; text-align: center; white-space: nowrap; }
+.city-label { display: flex; flex-direction: column; align-items: center; padding: 2px 7px; border-radius: 6px; color: var(--ink);
+  background: #fbf3dceb; border: 1px solid var(--line); box-shadow: 0 1px 3px rgba(30, 20, 8, .2); font-size: 10px; line-height: 1.2; text-align: center; white-space: nowrap; }
 .city-label span { color: #555; }
 .city-label em { font-style: normal; color: #333; }
 .city-label em.hot { color: #b00020; font-weight: bold; }
@@ -131,7 +201,7 @@ button.primary:hover { background: var(--wood-dark); }
 .debug-layer { top: 74px; left: 10px; bottom: 130px; width: min(560px, calc(100vw - 20px)); }
 .debug { height: 100%; display: flex; flex-direction: column; font-size: 12px; }
 .debug header { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--wood); }
-.debug header button.active { background: var(--wood); color: #fff; }
+.debug header button.active { background: var(--m-brass); box-shadow: var(--pressed); }
 .debug header button:last-child { margin-left: auto; }
 .debug-body { overflow: auto; padding: 8px; }
 .debug-body section { border-top: 1px solid #d8c69c; padding: 6px 0; }
@@ -145,8 +215,13 @@ button.primary:hover { background: var(--wood-dark); }
 .debug textarea { width: 100%; height: 160px; font-family: monospace; }
 
 @media (max-width: 760px) {
-  .layer.right { top: auto; bottom: 120px; width: auto; left: 10px; }
-  .hud-gauges { display: none; }
+  /* Les jauges passent sous le titre plutôt que de disparaître. */
+  .hud-gauges { order: 3; flex-basis: 100%; }
+  .hud-title b { font-size: 14px; }
+  .toolbar { gap: 8px; padding: 5px 8px; }
+  button.launch { padding: 11px 12px; font-size: 16px; }
+  button.tool.build span { display: none; }
+  button.tool.build { padding: 0; width: 40px; justify-content: center; border-radius: 50%; }
 }
 
 /* Double narration : sous la bulle du chambellan, la même chose en vrai. */
@@ -162,7 +237,6 @@ button.primary:hover { background: var(--wood-dark); }
 .stars-box ul { list-style: none; margin: 0; padding: 0; font-size: 13px; }
 .stars-box li.ok { color: var(--ok); }
 .stars-box li.missed { color: #7a6a55; }
-.gauge.stars { color: #b7791f; }
 
 /* Tutoriel : la bulle au-dessus de la barre, le bouton à utiliser qui pulse. */
 .tutorial { max-width: min(640px, 100%); padding: 4px 10px; }
@@ -181,7 +255,8 @@ button.primary:hover { background: var(--wood-dark); }
 .pip.hint .icon { opacity: 1; animation: hint 1.1s ease-in-out infinite; box-shadow: 0 0 0 3px #e9a23b; }
 @media (prefers-reduced-motion: reduce) { .pip.hint .icon { animation: none; } }
 .speech p.real { background: none; border: none; border-left: 3px solid #b9a77f; border-radius: 0; padding: 0 8px; font-size: 13px; }
-.card .speech .speaker { font-size: 22px; }
+.card .speech .speaker { width: 30px; height: 30px; }
+.card .speech .speaker .ico { width: 21px; height: 21px; }
 .card .speech p { font-size: 13px; }
 
 /* Courbes tick par tick : une figure, un axe des ticks partagé. */
@@ -206,15 +281,18 @@ button.primary:hover { background: var(--wood-dark); }
 .chart-tip strong { color: var(--ink); }
 .chart-tip span { color: #7a6a55; }
 .dialog .tabs { display: flex; gap: 6px; margin: 4px 0 8px; }
-.dialog .tabs button.active { background: var(--wood); color: #fff; }
-.replay-charts { position: absolute; z-index: 2; top: 118px; right: 10px; width: min(600px, calc(100vw - 20px)); max-height: calc(100vh - 270px); overflow-y: auto; padding: 8px; background: var(--parchment); border: 2px solid var(--wood); border-radius: 10px; box-shadow: var(--shadow); }
+.dialog .tabs button.active { background: var(--m-brass); border-color: #a57f25; box-shadow: var(--pressed); transform: translateY(1px); }
+.replay-charts { position: absolute; z-index: 2; top: 118px; right: 10px; width: min(600px, calc(100vw - 20px)); max-height: calc(100vh - 270px); overflow-y: auto; padding: 8px; background: var(--m-parchment); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 2px 4px rgba(30, 20, 8, .14), 0 12px 26px rgba(30, 20, 8, .18); }
 
 /* Écran de choix du scénario. */
 .scenario-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 10px; }
-.scenario-card { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 12px 14px; text-align: left; background: #fff8e6; border: 2px solid var(--wood); border-radius: 10px; }
-.scenario-card:hover:not(:disabled) { background: #f0dfb4; }
+.scenario-card { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 12px 14px; text-align: left; }
+button.scenario-card { background: var(--grain), linear-gradient(170deg, #fffaf0, #f1e1b8); border: 1px solid #8a6238; border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(30, 20, 8, .2), 0 8px 16px rgba(30, 20, 8, .2); transition: transform .14s, box-shadow .14s; }
+button.scenario-card:hover:not(:disabled) { filter: none; transform: translateY(-3px); box-shadow: 0 2px 4px rgba(30, 20, 8, .2), 0 14px 22px rgba(30, 20, 8, .24); }
+button.scenario-card:active:not(:disabled) { transform: translateY(1px); box-shadow: var(--pressed); }
 .scenario-card small { text-transform: uppercase; letter-spacing: .06em; color: #7a6a55; font-size: 11px; }
-.scenario-card b { font-family: Georgia, serif; font-size: 18px; }
+.scenario-card b { font-size: 20px; }
 .scenario-card p { margin: 4px 0; font-size: 13px; }
 .scenario-card em { font-style: normal; font-weight: bold; color: var(--wood-dark); }
 
@@ -225,41 +303,154 @@ button.primary:hover { background: var(--wood-dark); }
 .city-pips { pointer-events: none; }
 .pips { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .pip { pointer-events: auto; position: relative; display: flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; font: inherit; user-select: none; }
-.pip .icon { position: relative; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; background: #fffaf0; border: 2px solid #b9b2a4; box-shadow: 0 2px 4px #0003; opacity: .75; transition: opacity .15s, border-color .15s, background .15s; }
+.pip .icon { position: relative; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; background: var(--m-stone); border: 1px solid #8f8a7c; box-shadow: 0 1px 3px rgba(30, 20, 8, .25); opacity: .85; transition: opacity .15s, border-color .15s, background .15s; }
 button.pip { cursor: pointer; }
 .pip:hover .icon { opacity: 1; }
-.pip.on .icon { opacity: 1; border-color: #2a9d8f; background: #e3f4f1; }
-.pip .step { width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 1px solid #b9b2a4; background: #fff; color: #1c2630; font: 800 12px/1 system-ui; cursor: pointer; box-shadow: 0 1px 2px #0002; opacity: 0; transition: opacity .15s; }
+.pip.on .icon { opacity: 1; border-color: #3c5f27; background: linear-gradient(#dcebc4, #b7d090); }
+.pip .icon .ico { width: 15px; height: 15px; }
+button.pip:active .icon { transform: translateY(1px); box-shadow: var(--pressed); }
+.pip .step { width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: #fbf1d6; color: var(--ink); font: 800 12px/1 system-ui; cursor: pointer; box-shadow: 0 1px 2px #0002; opacity: 0; transition: opacity .15s; }
 .pip:hover .step, .pip.on .step, .pip .step:focus-visible { opacity: 1; }
-.pip .step:hover:not(:disabled) { border-color: #2a9d8f; color: #2a9d8f; }
+.pip .step:hover:not(:disabled) { background: #dcebc4; }
 .pip .step:disabled { opacity: .25 !important; cursor: default; }
-.pip b { position: absolute; right: -9px; bottom: -6px; font: 800 9px system-ui; color: #fff; background: #2a9d8f; border-radius: 7px; padding: 0 3px; white-space: nowrap; }
+.pip b { position: absolute; right: -9px; bottom: -6px; font: 800 9px system-ui; color: #fff; background: var(--forest); border: 1px solid #2c4a1b; border-radius: 7px; padding: 0 3px; white-space: nowrap; }
 .pip b:empty { display: none; }
-.pip i { display: none; position: absolute; right: calc(100% + 8px); top: 50%; transform: translateY(-50%); width: max-content; max-width: 220px; font: 12px/1.35 system-ui; font-style: normal; text-align: left; color: #1c2630; background: #fff; border: 1px solid #d3dbe1; border-radius: 6px; padding: 4px 8px; box-shadow: 0 2px 6px #0002; z-index: 2; }
+.pip i { display: none; position: absolute; right: calc(100% + 8px); top: 50%; transform: translateY(-50%); width: max-content; max-width: 220px; font: 12px/1.35 system-ui; font-style: normal; text-align: left; color: var(--ink); background: var(--m-parchment); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; box-shadow: 0 4px 12px rgba(30, 20, 8, .2); z-index: 2; }
 .pip i em { font-style: normal; font-weight: 700; display: block; }
 .pip:hover i, .pip:focus-within i { display: block; }
 @media (prefers-reduced-motion: reduce) { .pip .icon, .pip .step { transition: none; } }
 .city-label .badges { font-size: 11px; letter-spacing: 1px; color: inherit; }
 .pip-actions { display: flex; gap: 4px; padding-bottom: 4px; margin-bottom: 2px; border-bottom: 1px solid #0002; }
 .pip.act .icon { opacity: .9; }
-.pip.act.ko:hover .icon { border-color: #d62828; background: #fbe4e4; }
-.pip.act:not(.ko):hover .icon { border-color: #9b5de5; background: #f1e8fb; }
+.pip.act.ko:hover .icon { background: linear-gradient(#f6c9bf, #e59a8b); }
+.pip.act:not(.ko):hover .icon { background: var(--m-brass); }
 
-/* Les fiches des bâtiments à construire sur une case vide. */
-.build-menu { max-height: calc(100vh - 220px); overflow-y: auto; }
-.build-cards { display: grid; gap: 8px; margin-top: 6px; }
-.build-card { border: 1px solid #0002; border-radius: 8px; padding: 6px 8px; background: #fffdf7; }
-.build-card header { display: flex; gap: 8px; align-items: center; }
-.build-card header .icon { font-size: 22px; }
-.build-card header b { display: block; }
-.build-card header small { color: #666; }
-.build-card p { margin: 4px 0; font-size: 12px; line-height: 1.4; }
-.build-card .figures { color: #444; }
-.build-card .ups { color: #555; }
-.build-card footer { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-top: 4px; }
-.build-card footer button[title] { opacity: .75; }
+/*
+ * La main de cartes : un bâtiment par carte, en éventail au centre de l'écran. La géométrie
+ * vient de `hand.ts` (--k, --tilt, --drop) ; le pas entre deux cartes se resserre avec la
+ * largeur de l'écran, ici, sans rendu.
+ */
+/* Au-dessus de la barre du bas : une carte soulevée passe devant elle. */
+.hand-layer { inset: 0; z-index: 4; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; }
+.hand-layer:empty { display: none; }
+/* Le plateau reste cliquable entre les cartes et autour d'elles. */
+.hand-layer > .hand { pointer-events: none; }
+.hand {
+  --card-w: 168px; --card-h: 252px;
+  --step: min(calc(var(--card-w) * .8), calc((min(100vw, 1500px) - var(--card-w) - 56px) / max(1, var(--n) - 1)));
+  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 2vh;
+}
+.hand-cards { position: relative; width: 100%; height: calc(var(--card-h) + 28px); }
+.hand-head { pointer-events: auto; display: flex; align-items: center; gap: 8px; margin: 0; padding: 3px 4px 3px 12px; max-width: calc(100vw - 32px);
+  font-size: 13px; color: var(--ink); background: var(--m-parchment); border: 1px solid var(--line); border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(30, 20, 8, .22); }
+.hand-head .close { width: 22px; height: 22px; box-shadow: none; }
+
+.hcard, .hcard:hover:not(:disabled) { background: none; border: 0; }
+.hcard {
+  position: absolute; left: 50%; top: 0; width: var(--card-w); height: var(--card-h); margin-left: calc(var(--card-w) / -2); padding: 0;
+  border-radius: 12px; pointer-events: auto; text-align: left; color: var(--ink); font: 11px/1.3 system-ui, sans-serif;
+  transform: translate(calc(var(--k) * var(--step)), calc(var(--drop) * 26px)) rotate(var(--tilt));
+  z-index: calc(var(--i) + 1); touch-action: pan-x; -webkit-tap-highlight-color: transparent;
+  animation: deal .42s cubic-bezier(.2, .9, .3, 1.15) backwards; animation-delay: calc(var(--i) * 28ms);
+}
+@keyframes deal { from { opacity: 0; transform: translate(0, 70px) rotate(0) scale(.7); } }
+/* Une main déjà ouverte qui change (carte soulevée, autre case) ne se redistribue pas. */
+.settled .hcard { animation: none; }
+.hcard:focus-visible { outline: none; }
+.hcard-face {
+  position: absolute; left: 0; right: 0; bottom: 0; min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid #8a6238; border-radius: 12px;
+  background: var(--grain), linear-gradient(170deg, #fbf3dc, #ecd9ad);
+  box-shadow: 0 1px 2px rgba(30, 20, 8, .2), 0 8px 16px rgba(30, 20, 8, .2);
+  transform-origin: 50% 100%; transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s;
+}
+.hcard-face > span { display: block; }
+.hcard-title { padding: 6px 8px 5px; text-align: center; color: var(--ink); background: linear-gradient(#f3e4bd, #e6d2a2); border-bottom: 1px solid #c9a35a;  }
+.hcard-title b { display: block; font-size: 14px; line-height: 1.15; }
+.hcard-title small { display: block; font-size: 10.5px; color: #7a6a55; }
+.hcard-art { --art-h: 108px; display: grid; place-items: center; height: var(--art-h); overflow: hidden; margin: 6px 7px 0; border-radius: 8px; border: 1px solid #b9965a;
+  background: radial-gradient(120% 90% at 50% 100%, #b7cf8e 0 38%, transparent 39%), linear-gradient(#cfe6ee, #eaf3ea);
+  box-shadow: inset 0 2px 5px rgba(60, 40, 15, .28); }
+.hcard-face > .hcard-art { display: grid; }
+.hcard-art img { height: var(--art-h); width: var(--art-h); object-fit: contain; filter: drop-shadow(0 3px 2px rgba(40, 30, 10, .3)); pointer-events: none; }
+.hcard-art .emoji { font-size: 52px; line-height: 1; }
+.hcard-text { flex: 1; margin: 5px 9px 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+.hcard-face > .hcard-text { display: -webkit-box; }
+.hcard-face > .hcard-more { display: none; margin: 4px 9px 0; padding-top: 4px; border-top: 1px dashed #b9965a; color: #4a3d2c; font-size: 10.5px; }
+.hcard-more span { display: block; }
+.hcard-face > .hcard-cost { display: flex; justify-content: center; gap: 8px; margin: 5px 0; font-weight: bold; font-size: 12px; }
+.hcard-cost span { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px 1px 4px; border-radius: 999px; background: #fff8e6; border: 1px solid #c9a35a; box-shadow: inset 0 -1px 0 #e3cf9b; }
+.hcard-ribbon .ico { width: 13px; height: 13px; }
+.hcard-ribbon { padding: 4px 6px; text-align: center; font-weight: bold; font-size: 11px; color: #fff; background: linear-gradient(#63913f, var(--forest)); border-top: 1px solid #3c5f27; text-shadow: 0 1px 0 #2c4a1b; }
+.hcard-ribbon.dear { background: linear-gradient(#c7773a, var(--clay)); border-top-color: #8a4a1c; text-shadow: 0 1px 0 #6e3a14; }
+
+/* Soulevée : au survol, au clavier, ou par un premier contact du doigt. */
+.hcard.lifted, .hcard:focus-visible { z-index: 100; }
+.hcard.lifted .hcard-face, .hcard:focus-visible .hcard-face {
+  transform: translateY(-14px) rotate(calc(var(--tilt) * -1)) scale(1.2);
+  box-shadow: 0 2px 4px rgba(30, 20, 8, .2), 0 20px 32px rgba(30, 20, 8, .28);
+}
+.hcard.lifted .hcard-more, .hcard:focus-visible .hcard-more { display: block; }
+.hcard.lifted .hcard-text, .hcard:focus-visible .hcard-text { -webkit-line-clamp: unset; line-clamp: unset; }
+@media (hover: hover) {
+  .hcard:hover { z-index: 100; }
+  .hcard:hover .hcard-face {
+    transform: translateY(-14px) rotate(calc(var(--tilt) * -1)) scale(1.2);
+    box-shadow: 0 2px 4px rgba(30, 20, 8, .2), 0 20px 32px rgba(30, 20, 8, .28);
+  }
+  .hcard:hover .hcard-more { display: block; }
+  .hcard:hover .hcard-text { -webkit-line-clamp: unset; line-clamp: unset; }
+}
+.hcard:active .hcard-face { transition-duration: .06s; transform: translateY(-10px) rotate(calc(var(--tilt) * -1)) scale(1.17); }
+/* La carte que désigne le guide : l'anneau est sur sa face, la distribution reste sur la carte. */
+.hcard.hint { animation: deal .42s cubic-bezier(.2, .9, .3, 1.15) backwards; animation-delay: calc(var(--i) * 28ms); box-shadow: none; }
+.settled .hcard.hint { animation: none; }
+.hcard.hint .hcard-face { outline: 3px solid #e9a23b; outline-offset: 2px; animation: hint-ring 1.1s ease-in-out infinite; }
+@keyframes hint-ring { 50% { outline-color: rgba(233, 162, 59, .35); outline-offset: 5px; } }
+
+/*
+ * La carte du bâtiment sélectionné : la même carte que dans la main, en grand (bandeau,
+ * illustration, corps, jetons de prix, ruban d'actions). Posée au bord pour laisser voir le
+ * bâtiment et ses pastilles.
+ */
+.detail-card { justify-self: end; width: 264px; max-height: calc(100vh - 210px); margin-right: 16px; padding: 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid #8a6238; border-radius: 14px; background: var(--m-parchment);
+  box-shadow: 0 1px 2px rgba(30, 20, 8, .2), 0 8px 16px rgba(30, 20, 8, .2); animation: detail-in .26s cubic-bezier(.2, .8, .2, 1); }
+.settled .detail-card { animation: none; }
+@keyframes detail-in { from { opacity: 0; transform: translateX(24px) rotate(2deg); } }
+.detail-card > * { flex: none; }
+.detail-card .hcard-title { position: relative; padding: 8px 34px 7px; }
+.detail-card .hcard-title b { font-size: 18px; }
+.detail-card .hcard-title small { font-size: 12px; }
+.detail-card .hcard-title .close { position: absolute; top: 9px; right: 9px; text-shadow: none; }
+.detail-card .hcard-art { --art-h: 128px; margin: 8px 9px 0; }
+.detail-card .detail-body { flex: 1 1 auto; min-height: 60px; overflow-y: auto; padding: 2px 11px 4px; }
+.detail-card .detail-body p { margin: 6px 0; }
+.detail-card .hcard-cost { display: flex; justify-content: center; gap: 8px; margin: 6px 0; font-weight: bold; font-size: 12px; }
+.detail-card .hcard-ribbon { display: flex; justify-content: center; gap: 8px; padding: 7px 8px; }
+.detail-card .hcard-ribbon button { display: inline-flex; align-items: center; gap: 4px; text-shadow: none; font-weight: normal; font-size: 13px; }
+.detail-card .hcard-ribbon .ico { width: 16px; height: 16px; }
+
+@media (max-width: 760px), (pointer: coarse) and (max-width: 1000px) {
+  /* Petit écran : plus d'éventail, une rangée qui défile ; la carte touchée se soulève sur place. */
+  .hand { --card-w: 150px; --card-h: 236px; margin-bottom: 0; }
+  .hand-cards { height: auto; display: flex; gap: 10px; overflow-x: auto; box-sizing: border-box; padding: 150px 16px 14px; scroll-snap-type: x proximity; scrollbar-width: none; }
+  .hcard { position: relative; left: auto; margin: 0; flex: none; transform: none; scroll-snap-align: center; }
+  /* La rangée qui défile coupe ce qui dépasse : la carte grandit dans la marge du haut, sans en sortir. */
+  .hcard.lifted .hcard-face, .hcard:focus-visible .hcard-face { transform: translateY(-6px) scale(1.04); }
+  .hand-head { white-space: normal; border-radius: 14px; }
+  .detail-card { justify-self: center; align-self: end; width: min(320px, calc(100vw - 20px)); margin: 0 10px 132px; max-height: 52vh; }
+  .detail-card .hcard-art { --art-h: 84px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hcard, .hcard.hint, .detail-card { animation: none; }
+  .hcard-face { transition: none; }
+  .hcard.hint .hcard-face { animation: none; }
+}
 
 /* Les lignes « en vrai » des fiches (D3b) : discrètes, sous les chiffres du jeu. */
 .real { font-size: 0.85em; color: var(--ink); opacity: 0.85; margin: 0.3em 0; }
 .real a { color: inherit; }
 .real-ups summary { cursor: pointer; font-size: 0.85em; }
+.hcard .real { display: block; font-size: 11px; line-height: 1.3; }

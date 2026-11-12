@@ -3,8 +3,10 @@ import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { scoring } from '../src/data/scoring.ts';
 import { newGame, playWave } from '../src/engine/game.ts';
-import { actions, boardClick, keyPressed, type ActionArgs, type Effect, type Outcome } from '../src/ui/actions.ts';
-import { autoPlace } from '../src/ui/board.ts';
+import { actions, boardClick, cardDragged, cardDropped, keyPressed, type ActionArgs, type Effect, type Outcome } from '../src/ui/actions.ts';
+import { autoPlace, insideBoard, nodeAt } from '../src/ui/board.ts';
+import { isRiver } from '../src/render/terrain.ts';
+import type { Architecture, BoardCell } from '../src/engine/types.ts';
 import { draftInfo } from '../src/ui/draft.ts';
 import { findingsOf, type ViewState } from '../src/ui/views.ts';
 import { gameOf, withGame, type Store } from '../src/ui/session.ts';
@@ -41,6 +43,19 @@ function atWave2(extra: Partial<ViewState> = {}): ViewState {
 
 const run = (name: string, s: ViewState, args: Partial<ActionArgs> = {}, store: Store = EMPTY): Outcome =>
   actions[name]!(s, { data: {}, ...args }, { store, nextAttemptId: 7 }) ?? {};
+/** Une case où l'on peut bâtir sans rien déranger : sur le plateau, hors rivière, ni bâtiment ni chemin. */
+function freeCell(arch: Architecture): BoardCell {
+  for (let q = 0; q < 20; q++) {
+    for (let r = -10; r < 10; r++) {
+      const cell = { q, r };
+      const onRoad = arch.links.some((l) => l.path?.some((c) => c.q === q && c.r === r));
+      if (insideBoard(cell) && !isRiver(cell) && !nodeAt(arch, cell) && !onRoad) return cell;
+    }
+  }
+  throw new Error('aucune case libre');
+}
+const FREE = freeCell(autoPlace(A.minimal));
+
 const kinds = (o: Outcome) => (o.effects ?? []).map((e: Effect) => e.kind);
 
 describe('les actions', () => {
@@ -156,6 +171,58 @@ describe('les actions', () => {
     const app = s.draft.nodes.find((n) => n.id === 'app')!;
     expect(boardClick(s, app.cell!)!.patch).toMatchObject({ selectedNode: 'app', buildAt: undefined });
     expect(boardClick({ ...s, phase: 'debrief' }, app.cell!)).toBeUndefined();
+  });
+
+  it('« Bâtir » ouvre la main sans case et la referme ; une case vide cliquée l’ouvre pour cette case', () => {
+    const s = atWave2({ selectedNode: 'app' });
+    expect(run('open-hand', s).patch).toMatchObject({ showHand: true, buildAt: undefined, selectedNode: undefined });
+    expect(run('open-hand', { ...s, showHand: true }).patch).toMatchObject({ showHand: false });
+    expect(run('open-hand', { ...s, buildAt: FREE }).patch).toMatchObject({ showHand: false, buildAt: undefined });
+    expect(boardClick({ ...s, showHand: true, liftedCard: 'cache' }, FREE)!.patch).toMatchObject({
+      buildAt: FREE,
+      showHand: false,
+      liftedCard: undefined,
+    });
+  });
+
+  it('une carte bâtit sur la case désignée, sinon elle arme l’outil qui pose et referme la main', () => {
+    const cell = FREE;
+    const built = run('pick-card', atWave2({ buildAt: cell }), { data: { type: 'cache' } }).patch!;
+    const placed = built.draft!.nodes.find((n) => n.type === 'cache')!;
+    expect(placed.cell).toEqual(cell);
+    expect(built).toMatchObject({ buildAt: undefined, showHand: false, selectedNode: placed.id });
+    expect(run('pick-card', atWave2({ showHand: true }), { data: { type: 'cache' } }).patch).toEqual({
+      tool: { kind: 'place', type: 'cache' },
+      buildAt: undefined,
+      showHand: false,
+      liftedCard: undefined,
+      selectedNode: undefined,
+      boardMessage: undefined,
+    });
+  });
+
+  it('au doigt, le premier contact soulève la carte et le second la joue', () => {
+    const s = atWave2({ buildAt: FREE });
+    const args = { data: { type: 'cache' }, touch: true };
+    expect(run('pick-card', s, args).patch).toEqual({ liftedCard: 'cache' });
+    expect(run('pick-card', { ...s, liftedCard: 'database' }, args).patch).toEqual({ liftedCard: 'cache' });
+    const second = run('pick-card', { ...s, liftedCard: 'cache' }, args).patch!;
+    expect(second.draft!.nodes.some((n) => n.type === 'cache')).toBe(true);
+    expect(second.liftedCard).toBeUndefined();
+  });
+
+  it('une carte glissée referme la main ; lâchée sur une case, elle y est posée', () => {
+    expect(cardDragged('cache').patch).toMatchObject({ tool: { kind: 'place', type: 'cache' }, showHand: false, buildAt: undefined });
+    const dropped = cardDropped(atWave2({ tool: { kind: 'place', type: 'cache' } }), 'cache', FREE).patch!;
+    expect(dropped.draft!.nodes.find((n) => n.type === 'cache')!.cell).toEqual(FREE);
+    expect(dropped.tool).toEqual({ kind: 'select' });
+  });
+
+  it('Échap et la croix referment la main', () => {
+    const s = atWave2({ showHand: true, liftedCard: 'cache' });
+    const none = { buildAt: undefined, showHand: false, liftedCard: undefined };
+    expect(keyPressed(s, 'Escape', { meta: false, ctrl: false, shift: false }).outcome!.patch).toMatchObject(none);
+    expect(run('close-build', s).patch).toEqual(none);
   });
 
   it('les raccourcis : ⇧⌘Z rétablit, ⌘Z annule, Échap revient à la sélection', () => {

@@ -70,7 +70,7 @@ Une partie est une suite de vagues. Chacune passe par quatre phases (I5) :
    briefing de chaque scénario annonce la règle du temps (M7) : une vague montre une heure,
    chaque minute passe en un tick, les débits restent par seconde.
 2. **Construction** : le jeu est en pause. Le joueur pose, déplace, relie et retire des
-   bâtiments sur le plateau, et achète des évolutions par les pastilles au pied du bâtiment sélectionné (I12), ou dans sa fiche ; cliquer une case vide ouvre les fiches des bâtiments à y construire.
+   bâtiments sur le plateau, et achète des évolutions par les pastilles au pied du bâtiment sélectionné (I12), ou dans sa carte ; cliquer une case vide, ou « Bâtir », ouvre la main de cartes des bâtiments à construire (I15).
 3. **Vague** : le trafic est simulé, puis rejoué sur le même plateau. Les jauges et les
    incidents se lisent en direct.
 4. **Debrief** : ce qui a marché, ce qui a failli casser, ce qu'on pourrait alléger, avec
@@ -307,12 +307,18 @@ et déterministe, séparée de l'affichage.
 - **Plateau** (R5, R11, R12) : un grand hexagone de cases KayKit, les clients à sa pointe
   gauche, une rivière qu'on ne franchit que par un pont. Vue isométrique en Three.js, on se
   déplace et on zoome, on ne tourne pas.
-- **Construction** (I4, I10) : palette de bâtiments, outils Sélection, Relier, Retirer.
-  On pose en cliquant ou en glissant depuis la palette ; posé sur un chemin, un bâtiment
+- **Habillage** (I16) : du parchemin, de la pierre et du laiton, des filets fins et des
+  ombres diffuses, des boutons qui s'enfoncent ; barre du haut en trois plaques, barre du bas en médaillons à
+  infobulles, pictogrammes dessinés pour le jeu, titrage en Lilita One.
+- **Construction** (I4, I10, I15) : outils Sélection, Relier, Retirer, et une **main de cartes**,
+  un bâtiment par carte, en éventail au centre de l'écran. Cliquer une case vide l'ouvre pour
+  cette case ; « Bâtir » l'ouvre sans case, et la carte choisie se pose ensuite d'un clic. On
+  peut aussi glisser une carte sur le plateau. Au survol une carte se soulève et montre ses
+  chiffres ; au doigt, un premier contact la soulève, le second la joue. L'illustration est
+  le bâtiment tel que le plateau le rend. Posé sur un chemin, un bâtiment
   s'insère dans le lien quand c'est sensé (I11) ; on déplace un bâtiment en le
   glissant ; on relie en cliquant A puis B, et le plus court chemin de cases se trace seul.
-  Annuler et rétablir (⌘Z, ⇧⌘Z). Cliquer une case vide ouvre les fiches des bâtiments à y
-  construire ; au pied du bâtiment sélectionné, des pastilles pour le déplacer, le retirer et
+  Annuler et rétablir (⌘Z, ⇧⌘Z). Le bâtiment sélectionné a sa carte, au bord droit ; à son pied, des pastilles pour le déplacer, le retirer et
   acheter ses évolutions (I12). Les évolutions se voient : fondations et chantier de
   l'autoscaling sur une case voisine, guérite du disjoncteur, icônes sous le nom. Des
   panneaux au bord des chemins donnent le sens des liens (I13). Les chemins sont de la mise
@@ -327,10 +333,10 @@ et déterministe, séparée de l'affichage.
   circuit coupé, et l'alarme quand le SLA est rompu, sur les échecs ou sur
   la latence. Capacités, coûts et débits restent chiffrés partout (C4). Tableau de bord,
   alertes à la première saturation, ralenti, courbes en direct.
-- **Debrief** (R9, I8, I15) : l'analyse du chambellan en trois temps, et les courbes minute par
+- **Debrief** (R9, I8, I17) : l'analyse du chambellan en trois temps, et les courbes minute par
   minute (R13). Chaque constat dit ce qui l'aurait annoncé ; une ligne dit ce qu'ont coûté les
   parades en place ; le serveur le plus chargé reçoit son calcul de capacité.
-- **Fiches** (I15) : chiffres du jeu, puis une ligne « en vrai » avec l'ordre de grandeur réel
+- **Fiches** (I17) : chiffres du jeu, puis une ligne « en vrai » avec l'ordre de grandeur réel
   et sa source quand un chiffre vient d'un fournisseur.
 - **Aide** : tutoriel de la vague 1 (I7), puis une fenêtre « que faire » à chaque vague,
   qui dit ce qui bloque sans souffler la parade (I9, S9). Un bouton « Un indice », dans cette

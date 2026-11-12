@@ -622,7 +622,7 @@ serve ceux qui attendent le même recalcul, un changement de modèle non fait.
 
 ### Étape 4 — debrief et fiches
 
-**État au 12 novembre 2026 : faite** (branche `passe-debrief`, décision I15). Chaque constat
+**État au 12 novembre 2026 : faite** (branche `passe-debrief`, décision I17 ; numérotée I15 avant la fusion de la main de cartes). Chaque constat
 dit ce qui l'aurait annoncé ; une ligne dit ce qu'ont coûté les parades en place ; le serveur
 le plus chargé reçoit son calcul de capacité ; chaque fiche a sa ligne « en vrai » sourcée
 (`src/data/real-world.ts`) ; au rejeu, un message rendu à sa file y repart (R10). Reste,
