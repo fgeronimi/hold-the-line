@@ -6,7 +6,7 @@ const flat = [{ until: TICKS, factor: 1 }];
 const RAMP = { up: 8, down: 8 };
 /**
  * Les paiements sont jugés à part (M4) : 30 commandes sur 330 requêtes, et un banquier qui
- * traîne quatre minutes, ne pèseraient pas 5 % des réponses de la vague. Le client qui paie,
+ * traîne cinq minutes, ne pèseraient pas 5 % des réponses de la vague. Le client qui paie,
  * lui, attend la banque.
  */
 const SLA = { maxFailureRate: 0.01, maxP95LatencyMs: 60, maxP95LatencyMsByKind: { async: 60 } };
@@ -51,7 +51,7 @@ export const resilience: Scenario = {
       id: 'slow-banker',
       title: 'Le banquier traîne',
       briefing:
-        'Même trafic. Mais pendant quatre minutes, le prestataire mettra 4 secondes à répondre à chaque paiement. Le serveur traite 100 requêtes à la fois par instance.',
+        'Même trafic. Mais pendant cinq minutes, le prestataire mettra 4 secondes à répondre à chaque paiement. Le serveur traite 100 requêtes à la fois par instance.',
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,
@@ -64,17 +64,17 @@ export const resilience: Scenario = {
         { breaker: 1 },
         { queue: 1 },
       ],
-      incidents: [{ id: 'banker-slow', title: 'Le banquier fait attendre chaque paiement', component: 'payment-provider', from: 25, until: 29, effect: { type: 'slow-dependency', latencyMs: 4000 } }],
+      incidents: [{ id: 'banker-slow', title: 'Le banquier fait attendre chaque paiement', component: 'payment-provider', from: 25, until: 30, effect: { type: 'slow-dependency', latencyMs: 4000 } }],
     },
     {
       id: 'midnight-expiry',
       title: 'Minuit, tout expire',
       briefing:
-        'Les clients consultent beaucoup plus leurs commandes : 900 lectures par seconde, pour une base qui en tient 600. Et à minuit, toutes les entrées du cache expirent en même temps.',
+        'Les clients consultent beaucoup plus leurs commandes : 750 lectures par seconde, pour une base qui en tient 600. Et à minuit, toutes les entrées du cache expirent en même temps.',
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,
-      sources: [customers(900, 30)],
+      sources: [customers(750, 30)],
       sla: SLA,
       budget: 125,
       complexityCap: 10,
@@ -83,7 +83,7 @@ export const resilience: Scenario = {
         { cache: 1, coalescing: 1 },
         { replicas: 1 },
       ],
-      incidents: [{ id: 'midnight', title: 'Tout le cache expire à minuit', component: 'cache', from: 30, until: 32, effect: { type: 'cache-stampede', herd: 4 } }],
+      incidents: [{ id: 'midnight', title: 'Tout le cache expire à minuit', component: 'cache', from: 30, until: 35, effect: { type: 'cache-stampede', herd: 4 } }],
     },
     {
       id: 'banker-closed',
@@ -108,22 +108,23 @@ export const resilience: Scenario = {
       id: 'fair',
       title: 'La grande foire',
       briefing:
-        'La foire : 2 400 lectures et 60 commandes par seconde. Le banquier traînera, et le cache expirera d’un coup, comme avant.',
+        'La foire : 2 200 lectures et 60 commandes par seconde. Le banquier traînera, et le cache expirera d’un coup, comme avant.',
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,
-      sources: [customers(2400, 60)],
+      sources: [customers(2200, 60)],
       sla: SLA,
       budget: 250,
       complexityCap: 18,
-      thriftyCost: 230,
+      thriftyCost: 225,
       answers: [
         { scaling: 2, breaker: 1, cache: 1, coalescing: 1, replicas: 2 },
-        { scaling: 2, queue: 1, cache: 1, coalescing: 1, replicas: 2 },
+        // 2 200 lectures depuis SC7 : derrière une file, une instance de plus suffit.
+        { scaling: 1, queue: 1, cache: 1, coalescing: 1, replicas: 2 },
       ],
       incidents: [
-        { id: 'fair-slow', title: 'Le banquier fait attendre chaque paiement', component: 'payment-provider', from: 15, until: 19, effect: { type: 'slow-dependency', latencyMs: 4000 } },
-        { id: 'fair-midnight', title: 'Tout le cache expire d’un coup', component: 'cache', from: 35, until: 37, effect: { type: 'cache-stampede', herd: 4 } },
+        { id: 'fair-slow', title: 'Le banquier fait attendre chaque paiement', component: 'payment-provider', from: 15, until: 20, effect: { type: 'slow-dependency', latencyMs: 4000 } },
+        { id: 'fair-midnight', title: 'Tout le cache expire d’un coup', component: 'cache', from: 35, until: 40, effect: { type: 'cache-stampede', herd: 4 } },
       ],
     },
   ],

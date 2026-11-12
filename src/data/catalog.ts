@@ -324,7 +324,7 @@ export const catalog: Catalog = {
       complexity: { base: 1, perLevel: 0 },
       removalCost: 'on-disable',
       // Des délais qui doublent (1, 2, 4 min de jeu…) tirés au hasard : les relances s'étalent.
-      effect: { type: 'backoff', spreadTicks: 10 },
+      effect: { type: 'backoff', spreadTicks: 15 },
     },
     // L'id garde l'ancien nom, « rétention », lu par les sauvegardes. Le joueur lit
     // « capacité » : en vrai, la rétention d'une file est une durée, pas un nombre de messages.

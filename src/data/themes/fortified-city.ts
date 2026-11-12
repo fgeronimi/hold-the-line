@@ -145,7 +145,7 @@ export const fortifiedCity: Theme = {
   narratives: {
     // La billetterie du tournoi.
     'ticket-rush':
-      'Sire, la billetterie du grand tournoi ouvre ! Les spectateurs se pressent aux guichets, et chaque billet vendu part au colombier. Gare : un mauvais déploiement fera tomber tous les guichetiers pendant trois minutes, et un spectateur refoulé revient aussitôt à la charge, avec ses voisins.',
+      'Sire, la billetterie du grand tournoi ouvre ! Les spectateurs se pressent aux guichets, et chaque billet vendu part au colombier. Gare : un mauvais déploiement fera tomber tous les guichetiers pendant cinq minutes, et un spectateur refoulé revient aussitôt à la charge, avec ses voisins.',
     'pigeons-grounded':
       'Le colombier fermera une demi-heure : plus un pigeon ne part. Les achats, eux, continuent, et chaque billet doit attendre quelque part son pigeon. Mais une file n’est pas un puits sans fond.',
     'split-registry':
@@ -156,7 +156,7 @@ export const fortifiedCity: Theme = {
     checkout:
       'Sire, la boutique encaisse enfin ses ventes. Chaque commande passe par le banquier lombard, de l’autre côté de la rivière : il répond vite, et le chaland attend sa quittance au comptoir.',
     'slow-banker':
-      'Le banquier a ses humeurs : on dit que, quatre minutes durant, il fait attendre chaque paiement de longues secondes. Vos scribes attendront-ils avec lui, au point de ne plus servir personne ?',
+      'Le banquier a ses humeurs : on dit que, cinq minutes durant, il fait attendre chaque paiement de longues secondes. Vos scribes attendront-ils avec lui, au point de ne plus servir personne ?',
     'midnight-expiry':
       'Les voyageurs affluent pour consulter leurs commandes. Mais à minuit, toutes les pages du carnet s’effacent d’un coup, et chacune devra être recopiée des archives.',
     'banker-closed':

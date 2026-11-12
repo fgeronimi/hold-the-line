@@ -9,8 +9,11 @@ const RAMP = { up: 8, down: 8 };
  * 5 % des réponses, et un prestataire d'e-mail appelé en direct met ses 200 ms sur chaque achat.
  */
 const SLA = { maxFailureRate: 0.01, maxP95LatencyMs: 60, maxP95LatencyMsByKind: { async: 60 } };
-/** Comme tous les clients, ceux de la billetterie relancent ce qui échoue (décision S19). */
-const RETRIES = 3;
+/**
+ * Comme tous les clients, ceux de la billetterie relancent ce qui échoue (décision S19) : cinq
+ * fois, de quoi couvrir les cinq minutes d'un déploiement raté (SC7).
+ */
+const RETRIES = 5;
 
 /**
  * Les spectateurs consultent les tournois (lectures), achètent des places (écritures) ; chaque
@@ -45,7 +48,7 @@ export const tournament: Scenario = {
       id: 'ticket-rush',
       title: 'L’ouverture des ventes',
       briefing:
-        'Les ventes ouvrent : 1 600 consultations et 50 achats par seconde, chaque billet envoyé par e-mail au prestataire, qui en accepte 10 000 par seconde. Un déploiement raté arrêtera tous les serveurs trois minutes. Et les clients relancent aussitôt, jusqu’à trois fois, ce qui échoue : ces clients sont votre application, vous en écrivez le code, c’est pourquoi vous pouvez y régler les relances.',
+        'Les ventes ouvrent : 1 600 consultations et 50 achats par seconde, chaque billet envoyé par e-mail au prestataire, qui en accepte 10 000 par seconde. Un déploiement raté arrêtera tous les serveurs cinq minutes. Et les clients relancent aussitôt, jusqu’à cinq fois, ce qui échoue : ces clients sont votre application, vous en écrivez le code, c’est pourquoi vous pouvez y régler les relances.',
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,
@@ -59,12 +62,11 @@ export const tournament: Scenario = {
         // La parade que l'opérateur possède, même quand les clients ne sont pas les siens (M11) :
         // la porte refuse ce que les serveurs ne serviront pas, la tempête se vide en dix minutes.
         { shedding: 1, scaling: 1, cache: 1, queue: 1 },
-        // La panne éteint aussi les instances à la demande (M2) : l'autoscaling ne remplace pas
-        // l'instance fixe, il absorbe après coup le surplus des relances.
-        { scaling: 1, autoscaling: 6, cache: 1, queue: 1 },
+        // Plus d'autoscaling depuis SC7 : après cinq minutes de panne, le surplus des relances
+        // arrive plus vite que les instances ne démarrent, et le plafond coûte plus que le budget.
       ],
       consumers: ['mail'],
-      incidents: [{ id: 'bad-deploy', title: 'Un déploiement raté redémarre tous les guichetiers', component: 'app-server', from: 20, until: 23, effect: { type: 'instance-down', count: 10 } }],
+      incidents: [{ id: 'bad-deploy', title: 'Un déploiement raté redémarre tous les guichetiers', component: 'app-server', from: 20, until: 25, effect: { type: 'instance-down', count: 10 } }],
     },
     {
       id: 'pigeons-grounded',
@@ -133,7 +135,7 @@ export const tournament: Scenario = {
       ],
       consumers: ['mail'],
       incidents: [
-        { id: 'final-crash', title: 'Un déploiement raté redémarre tous les guichetiers', component: 'app-server', from: 12, until: 15, effect: { type: 'instance-down', count: 10 } },
+        { id: 'final-crash', title: 'Un déploiement raté redémarre tous les guichetiers', component: 'app-server', from: 12, until: 17, effect: { type: 'instance-down', count: 10 } },
         { id: 'final-mail-down', title: 'Le colombier est fermé', component: 'mail-provider', from: 20, until: 40, effect: { type: 'dependency-down' } },
         { id: 'final-partition', title: 'Les copistes n’entendent plus le grand registre', component: 'database', from: 42, until: 52, effect: { type: 'partition' } },
       ],

@@ -16,7 +16,7 @@ describe('courbes tick par tick', () => {
   });
 
   it('l’incident est une bande, et la base déborde pendant le cache froid', () => {
-    expect(model.incidents).toEqual([{ from: 30, until: 33, title: 'Le cache redémarre à froid' }]);
+    expect(model.incidents).toEqual([{ from: 30, until: 35, title: 'Le cache redémarre à froid' }]);
     const db = model.panels.find((p) => p.id === 'db')!;
     expect(db.values[30]).toBeGreaterThan(1);
     expect(db.values[10]).toBeLessThan(0.2);

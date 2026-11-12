@@ -26,12 +26,12 @@ describe('le temps compressé (M7)', () => {
 
   it('un incident annoncé se dit en minutes, jamais en ticks', () => {
     const html = renderDialog(briefing(1));
-    expect(html).toContain('de la 31ᵉ à la 33ᵉ minute');
+    expect(html).toContain('de la 31ᵉ à la 35ᵉ minute');
     expect(html).not.toMatch(/ticks? \d/);
   });
 
   it('les pastilles disent les délais en minutes, d’après les données', () => {
     expect(upgradePips({ id: 'app', type: 'app-server' }, catalog)).toContain('une instance démarre en 2 minutes');
-    expect(upgradePips({ id: 'src', type: 'traffic-source' }, catalog)).toContain('relances étalées sur 10 minutes');
+    expect(upgradePips({ id: 'src', type: 'traffic-source' }, catalog)).toContain('relances étalées sur 15 minutes');
   });
 });

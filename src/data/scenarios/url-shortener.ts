@@ -57,7 +57,7 @@ export const urlShortener: Scenario = {
         { cdn: 1 },
       ],
       // Sans danger pour un réplica ; un cache tient, mais on voit la base encaisser la ruée.
-      incidents: [{ id: 'cache-restart', title: 'Le cache redémarre à froid', component: 'cache', from: 30, until: 33, effect: { type: 'cold-cache' } }],
+      incidents: [{ id: 'cache-restart', title: 'Le cache redémarre à froid', component: 'cache', from: 30, until: 35, effect: { type: 'cold-cache' } }],
     },
     {
       id: 'marketing-peak',
@@ -87,7 +87,7 @@ export const urlShortener: Scenario = {
         { lb: 1, scaling: 2, autoscaling: 3, cache: 1 },
       ],
       // Après le pic : une cité à serveur unique perd quelques requêtes, pas la vague.
-      incidents: [{ id: 'server-crash', title: 'Une instance du serveur tombe', component: 'app-server', from: 45, until: 48, effect: { type: 'instance-down', count: 1 } }],
+      incidents: [{ id: 'server-crash', title: 'Une instance du serveur tombe', component: 'app-server', from: 45, until: 50, effect: { type: 'instance-down', count: 1 } }],
     },
     {
       id: 'noisy-client',

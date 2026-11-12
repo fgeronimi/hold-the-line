@@ -123,7 +123,7 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 | Transactional outbox | Base | Événement perdu entre base et bus | Une écriture de plus par commande (S6) | Oui |
 | Circuit breaker | Serveur | Dépendance lente ou en panne qui bloque le serveur | Les appels coupés échouent : réponse dégradée (S15) | Oui |
 | Request coalescing | Cache | Ruée vers le cache | Coût et complexité ; ne sert qu'à l'expiration (S15) | Oui |
-| Backoff exponentiel et jitter | Clients (la source) | Tempête de relances | Coût et complexité ; ne sert qu'après une panne ; suppose d'écrire le client (S19) | Oui |
+| Backoff exponentiel et jitter | Clients (la source) | Tempête de relances | Coût et complexité ; ne sert qu'après une panne ; suppose d'écrire le client ; étale les relances sur 15 minutes (S19, X11) | Oui |
 | Délai d'attente | Serveur | Dépendance lente ou muette qui retient les fils | Le client attend tout le délai, puis l'appel échoue (M12) | Oui |
 | Délestage | Load balancer | Tempête de relances, surcharge | Les refus restent des échecs, relancés ; la porte garde 25 % de marge (M11) | Oui |
 | Capacité de la file | File | Débordement pendant une longue panne de l'aval | Coût par niveau ; n'aide pas si les consommateurs ne suivent pas en moyenne (S20) | Oui |
@@ -135,7 +135,8 @@ gratuit (E2). La migration entre dans la facture de la vague (E3).
 
 ### Incidents
 
-Les incidents sont annoncés au briefing et déterministes (X5) : pas de tirage au sort.
+Les incidents sont annoncés au briefing et déterministes (X5) : pas de tirage au sort. Aucun
+ne dure moins de cinq minutes (X11) : le p95 voit tout ce qui pèse plus de 5 % des réponses.
 
 | Incident | Parade | Où |
 | --- | --- | --- |
@@ -150,7 +151,7 @@ Les incidents sont annoncés au briefing et déterministes (X5) : pas de tirage 
 | Dépendance lente : la cascade de pannes | Circuit breaker, ou file (paiement différé) | Banquier, vagues 2 et 5 |
 | Tout le cache expire d'un coup | Verrou de recalcul, ou réplica | Banquier, vagues 3 et 5 |
 | Dépendance externe en panne | File : paiement différé, livré au retour | Banquier, vague 4 |
-| Panne brève, clients qui relancent aussitôt : tempête de relances | Délestage à la porte, backoff exponentiel et jitter, ou autoscaling | Tournoi, vagues 1 et 4 |
+| Panne brève, clients qui relancent aussitôt : tempête de relances | Délestage à la porte, ou backoff exponentiel et jitter | Tournoi, vagues 1 et 4 |
 | Dépendance externe en panne plus longtemps que la file ne tient | Capacité de la file | Tournoi, vague 2 |
 | Partition réseau entre le primaire et ses réplicas | Lectures critiques sur le primaire (choix CAP) | Tournoi, vagues 3 et 4 |
 | Le worker tombe dix minutes | La file garde les messages, puis se vide au rythme de la base (M8, X6) | Raccourcisseur, vague 5 |
@@ -224,20 +225,20 @@ y est payée.
 | Vague | Information | Réponse attendue |
 | --- | --- | --- |
 | 1. Le paiement en ligne | Le prestataire répond en 30 ms | L'appeler en direct suffit (réponse unique) |
-| 2. Le banquier traîne | Pendant 4 minutes, 4 s par paiement | Circuit breaker, ou une file ; sans eux, la cascade fait tomber tout le serveur |
-| 3. Minuit, tout expire | 900 lectures/s, tout le cache expire d'un coup | Cache + verrou de recalcul, ou un réplica |
+| 2. Le banquier traîne | Pendant 5 minutes, 4 s par paiement | Circuit breaker, ou une file ; sans eux, la cascade fait tomber tout le serveur |
+| 3. Minuit, tout expire | 750 lectures/s, tout le cache expire d'un coup | Cache + verrou de recalcul, ou un réplica |
 | 4. Le banquier ferme | Le prestataire tombe 25 minutes (25 ticks) | Une file : les paiements attendent et partent à la réouverture |
-| 5. La grande foire | 2 400 lectures/s, les deux incidents reviennent | Scaling, réplicas, verrou, et disjoncteur ou file |
+| 5. La grande foire | 2 200 lectures/s, les deux incidents reviennent | Scaling, réplicas, verrou, et disjoncteur ou file |
 
 ### Le grand tournoi : une billetterie prise d'assaut
 
 Le prestataire d'e-mail (le colombier) est déjà sur le plateau, avec son quota (S18). Les
-clients relancent tout de suite ce qui échoue, jusqu'à trois fois (S19) : ces clients sont
+clients relancent tout de suite ce qui échoue, jusqu'à cinq fois (S19, X11) : ces clients sont
 votre application, vous en écrivez le code, c'est pourquoi vous pouvez y régler les relances.
 
 | Vague | Information | Réponse attendue |
 | --- | --- | --- |
-| 1. L'ouverture des ventes | Un déploiement raté arrête tous les serveurs 3 minutes, instances à la demande comprises (M9) | Délestage à la porte, backoff sur les clients, ou autoscaling qui absorbe le surplus après la panne ; sinon la tempête dure jusqu'à la fin |
+| 1. L'ouverture des ventes | Un déploiement raté arrête tous les serveurs 5 minutes, instances à la demande comprises (M9, X11) | Délestage à la porte, ou backoff sur les clients ; sinon la tempête dure jusqu'à la fin |
 | 2. Les pigeons restent au colombier | Le prestataire d'e-mail tombe une demi-heure (30 minutes), 8 000 alertes/s | Une file avec de la capacité en plus |
 | 3. Le registre coupé en deux | Lectures non cachables et vérification de la place avant achat, partition des réplicas (un quart d'heure, S23) | Réplicas, et lectures critiques sur le primaire |
 | 4. La joute finale | Les trois incidents | Backoff, et scaling ou autoscaling ; réplica et lecture sur le primaire |
