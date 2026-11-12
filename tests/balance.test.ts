@@ -91,7 +91,7 @@ describe('runMassSim sur le raccourcisseur', () => {
 
   beforeAll(() => {
     report = runMassSim(urlShortener, catalog, shortener, scoring);
-  }, 30_000);
+  });
 
   it('aucune architecture ne gagne toutes les vagues', () => {
     expect(report.universalWinners).toEqual([]);
