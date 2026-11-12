@@ -218,6 +218,12 @@ describe('les actions', () => {
     expect(dropped.tool).toEqual({ kind: 'select' });
   });
 
+  it('l’outil qui pose rend la main à la sélection une fois le bâtiment posé', () => {
+    const placed = boardClick(atWave2({ tool: { kind: 'place', type: 'cache' } }), FREE)!.patch!;
+    expect(placed.draft!.nodes.find((n) => n.type === 'cache')!.cell).toEqual(FREE);
+    expect(placed.tool).toEqual({ kind: 'select' });
+  });
+
   it('Échap et la croix referment la main', () => {
     const s = atWave2({ showHand: true, liftedCard: 'cache' });
     const none = { buildAt: undefined, showHand: false, liftedCard: undefined };

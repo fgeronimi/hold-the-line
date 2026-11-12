@@ -38,6 +38,8 @@ describe('guideStep', () => {
     expect(step.real).toContain('900 lectures');
     expect(step.real).toContain('Incident annoncé');
     expect(step.real).not.toMatch(/réplica|ajoute[rz] un cache/i);
+    // La cité de la vague 1 est valide mais perdra : le lancement ne doit pas briller.
+    expect(step.highlight).toBeUndefined();
   });
 
   it('dit ce qui bloque : budget, complexité, plan invalide', () => {

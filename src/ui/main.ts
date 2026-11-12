@@ -109,6 +109,7 @@ function render(): void {
   regions.dialog.innerHTML = renderDialog(state);
   regions.debug.innerHTML = renderDebug(state);
   document.body.classList.toggle('debug-open', state.debug);
+  document.body.dataset.phase = state.phase;
   attachDebriefChart();
   syncBoard();
 }

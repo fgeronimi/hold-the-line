@@ -59,16 +59,22 @@ function renderMenu(s: ViewState): string {
 
 /** La barre du haut : la vague, ce que coûte la cité en construction, le score, le menu. */
 export function renderHud(s: ViewState): string {
+  // Avant le choix du scénario, aucune vague n'est encore la nôtre.
+  if (s.phase === 'choose') return '';
   // Pendant la vague et son debrief, on montre la vague jouée : la partie, elle, a déjà avancé.
   const playing = s.phase === 'wave' || s.phase === 'debrief' ? s.attempts.find((x) => x.id === s.current) : undefined;
   const shownIndex = playing?.waveIndex ?? s.game.waveIndex;
   const wave = s.scenario.waves[shownIndex];
   const n = s.scenario.waves.length;
-  const building = s.phase !== 'wave' && s.phase !== 'debrief' && s.phase !== 'choose';
+  const building = s.phase !== 'wave' && s.phase !== 'debrief';
   const gauges = wave && building ? buildGauges(s, wave) : '';
   const menu = s.showMenu ? renderMenu(s) : '';
   const title = wave ? `Vague ${shownIndex + 1} / ${n}` : 'Partie terminée';
   const subtitle = wave ? esc(wave.title) : esc(s.scenario.subtitle);
+  // Pendant le rejeu, le score d'avant la vague : le résultat se découvre au debrief.
+  const before = s.phase === 'wave' && playing ? playing.waveIndex : undefined;
+  const stars = before === undefined ? totalStars(s) : s.game.stars.slice(0, before).reduce((a, x) => a + x, 0);
+  const score = before === undefined ? totalScore(s) : s.game.scores.slice(0, before).reduce((a, x) => a + x, 0);
   const briefing = wave ? `<button class="round" data-action="show-briefing" data-tip="Revoir le briefing" aria-label="Revoir le briefing">${icon('hat')}</button>` : '';
   return `
     <div class="hud-bar">
@@ -78,8 +84,8 @@ export function renderHud(s: ViewState): string {
       </div>
       ${gauges ? `<div class="plaque hud-gauges">${gauges}</div>` : ''}
       <div class="plaque hud-actions">
-        ${gauge('star', 'étoiles', 'Étoiles gagnées', `${totalStars(s)} <em>/ ${n * 3}</em>`, false, ' stars')}
-        ${gauge('medal', 'score', 'Score', fmt(totalScore(s)), false)}
+        ${gauge('star', 'étoiles', 'Étoiles gagnées', `${stars} <em>/ ${n * 3}</em>`, false, ' stars')}
+        ${gauge('medal', 'score', 'Score', fmt(score), false)}
         ${briefing}
         <button class="round" data-action="menu" data-tip="Menu" aria-label="Menu">${icon('menu')}</button>
       </div>

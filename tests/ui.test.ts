@@ -4,7 +4,7 @@ import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { calibrationGroups, changedSettings, getAt, parseField, setAt } from '../src/ui/calibration.ts';
 import { addLink, addNode, nextNodeId, removeLink, removeNode, setUpgrade } from '../src/ui/editor.ts';
-import { renderCard, renderDialog, renderHand, renderToolbar, upgradePips, type ViewState } from '../src/ui/views.ts';
+import { renderCard, renderDialog, renderHand, renderHud, renderToolbar, upgradePips, type ViewState } from '../src/ui/views.ts';
 import { fan } from '../src/ui/hand.ts';
 import { newGame } from '../src/engine/game.ts';
 
@@ -172,7 +172,7 @@ describe('la main de cartes', () => {
     expect(html).not.toContain('data-type="domain-service"');
     expect(html).toContain('Autoscaling');
     // Chaque carte dit l'ordre de grandeur réel et nomme sa source (D3b) ; le lien est sur la fiche.
-    expect(html.match(/class="real"/g)).toHaveLength(palette.length);
+    expect(html.match(/class="real named"/g)).toHaveLength(palette.length);
     expect(html).toContain('(quotas Amazon SQS)');
     expect(html).toContain(`</svg> ${catalog.components['app-server']!.cost}</span>`);
     expect(html).toContain('Choisir un bâtiment pour cette case.');
@@ -273,5 +273,23 @@ describe('le bouton « Un indice »', () => {
     const attempt = { id: 1, label: 'x', waveIndex: 2, result, score: 0, played: true, settings: [], arch: A.withCache, stars: { held: false, firstTry: false, thrifty: false } };
     const html = renderDialog(view(1, { phase: 'debrief', attempts: [attempt], current: 1, debriefTab: 'analysis' } as Partial<ViewState>));
     expect(button(html)).not.toContain('disabled');
+  });
+});
+
+describe('la barre du haut', () => {
+  // La vague 2 vient d'être gagnée : la partie a déjà avancé et compté ses étoiles.
+  const won = { ...newGame(), waveIndex: 2, scores: [50, 80], stars: [3, 2], history: [{ nodes: [], links: [] }, A.minimal, A.withCache] };
+  const view = (extra: Partial<ViewState>): ViewState =>
+    ({ catalog, scenario: urlShortener, game: won, draft: A.withCache, attempts: [{ id: 7, waveIndex: 1 }], current: 7, tool: { kind: 'select' }, history: { undo: 0, redo: 0 }, ...extra }) as unknown as ViewState;
+
+  it('n’existe pas avant le choix du scénario', () => {
+    expect(renderHud(view({ phase: 'choose' }))).toBe('');
+  });
+
+  it('pendant le rejeu, garde le score d’avant la vague ; le debrief le révèle', () => {
+    expect(renderHud(view({ phase: 'wave' }))).toMatch(/<b>3 <em>\/ 18<\/em><\/b>/);
+    expect(renderHud(view({ phase: 'wave' }))).toContain('<b>50</b>');
+    expect(renderHud(view({ phase: 'debrief' }))).toMatch(/<b>5 <em>\/ 18<\/em><\/b>/);
+    expect(renderHud(view({ phase: 'debrief' }))).toContain('<b>130</b>');
   });
 });

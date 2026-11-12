@@ -34,7 +34,7 @@ function historyButtons(s: ViewState): string {
 /** Ouvre la main de cartes ; reste enfoncé tant qu'une carte choisie attend sa case. */
 function buildButton(s: ViewState, blink: Blink): string {
   const on = !!s.showHand || s.tool.kind === 'place';
-  return `<button class="tool build${active(on)}${hint(blink?.tool === 'place' && !s.showHand && !s.buildAt)}" data-action="open-hand" data-tip="Choisir un bâtiment, puis cliquer sa case. On peut aussi cliquer une case vide d’abord.">
+  return `<button class="tool build${active(on)}${hint(blink?.tool === 'place' && !s.showHand && !s.buildAt)}" data-action="open-hand" aria-label="Bâtir" data-tip="Choisir un bâtiment, puis cliquer sa case. On peut aussi cliquer une case vide d’abord.">
         ${icon('hammer')}<span>Bâtir</span></button>`;
 }
 
@@ -68,7 +68,7 @@ export function renderToolbar(s: ViewState): string {
       <div class="group">${toolButtons(tool, blink)}</div>
       <div class="group">${historyButtons(s)}</div>
       ${buildButton(s, blink)}
-      <button class="launch${hint(blink?.tool === 'launch')}" data-action="play" ${validation.ok ? '' : 'disabled'} data-tip="${esc(why)}">${icon('swords')}<span>Lancer la vague</span></button>
+      <button class="launch${hint(blink?.tool === 'launch')}" data-action="play" aria-label="Lancer la vague" ${validation.ok ? '' : 'disabled'} data-tip="${esc(why)}">${icon('swords')}<span>Lancer la vague</span></button>
     </div>
     ${errors}`;
 }

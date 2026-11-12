@@ -341,6 +341,10 @@ et déterministe, séparée de l'affichage.
   parades en place ; le serveur le plus chargé reçoit son calcul de capacité.
 - **Fiches** (I17) : chiffres du jeu, puis une ligne « en vrai » avec l'ordre de grandeur réel
   et sa source quand un chiffre vient d'un fournisseur.
+- **Enchaînement** (I19) : choix → briefing → construction guidée → vague → debrief. Chaque
+  écran ne dit qu'une chose : pas de barre du haut au choix, score caché pendant le rejeu,
+  barre du rejeu retirée au debrief, outil rendu à la sélection après une pose, et pas de
+  reflet sur le lancement après la vague 1.
 - **Aide** : tutoriel de la vague 1 (I7), puis une fenêtre « que faire » à chaque vague,
   qui dit ce qui bloque sans souffler la parade (I9, S9). Un bouton « Un indice », dans cette
   fenêtre et dans le debrief d'une vague perdue, donne le prochain élément manquant (I14) :

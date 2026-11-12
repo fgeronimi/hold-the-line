@@ -301,7 +301,9 @@ export function boardClick(s: ViewState, cell: BoardCell): Outcome | undefined {
         showMenu: false,
       });
     case 'place':
-      return applied(placeNode(s.draft, tool.type, cell, s.catalog));
+      // Posé, on repasse à la sélection : le guide demande déjà autre chose (relier), et un
+      // outil qui pose encore laisserait son invite « cliquer la case où bâtir » à l'écran.
+      return applied(placeNode(s.draft, tool.type, cell, s.catalog), { tool: select });
     case 'move':
       return applied(moveNode(s.draft, tool.id, cell), { tool: select, selectedNode: tool.id });
     case 'link':

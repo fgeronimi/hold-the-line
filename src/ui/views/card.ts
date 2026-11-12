@@ -23,7 +23,7 @@ export function renderCard(s: ViewState): string {
 function realLine(r: RealWorld | undefined, label = 'En vrai'): string {
   if (!r) return '';
   const source = r.source ? ` <a href="${esc(r.source.url)}" target="_blank" rel="noopener">${esc(r.source.label)}</a>` : '';
-  return `<p class="real"><b>${esc(label)} :</b> ${esc(r.text)}${source}</p>`;
+  return `<p class="real named"><b>${esc(label)} :</b> ${esc(r.text)}${source}</p>`;
 }
 
 /** Les lignes « en vrai » des évolutions d'un type de bâtiment, repliées : la fiche reste courte. */

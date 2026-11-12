@@ -162,6 +162,8 @@ select, input { font: inherit; color: var(--ink); background: #fffaf0; border: 2
 /* Barre de la vague (pendant qu'elle se joue), en bas, et alerte de goulot. */
 .replay-bar { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 2; width: min(980px, calc(100vw - 20px)); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; background: var(--m-parchment); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 2px 4px rgba(30, 20, 8, .14), 0 12px 26px rgba(30, 20, 8, .18); font-size: 12px; }
 .replay-bar input[type=range] { flex: 1; min-width: 120px; }
+/* Au debrief, la fenêtre parle : la barre du rejeu revient avec « Revoir la vague ». */
+body[data-phase='debrief'] .replay-bar, body[data-phase='debrief'] .replay-charts { display: none; }
 .replay-bar .hud { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
 .replay-bar .hud .ok { color: var(--ok); font-weight: bold; }
 .replay-bar .hud .ko { color: var(--ko); font-weight: bold; }
@@ -228,6 +230,8 @@ select, input { font: inherit; color: var(--ink); background: #fffaf0; border: 2
 .speech > div { display: flex; flex-direction: column; gap: 4px; }
 .real { margin: 0; padding: 0 4px; font-style: italic; color: #4a3d2c; font-size: 13px; }
 .real::before { content: '⚙ En vrai : '; font-style: normal; font-weight: bold; }
+/* Une ligne qui porte sa propre étiquette (« En vrai », le nom d'une évolution) ne garde que le rouage. */
+.real.named::before { content: '⚙ '; }
 .finding .real { margin: 3px 0; }
 .incident { margin: 4px 0; padding: 4px 8px; border-left: 4px solid #e9a23b; background: rgba(233, 162, 59, 0.15); border-radius: 4px; }
 
@@ -577,3 +581,24 @@ button.launch.hint {
 @media (prefers-reduced-motion: reduce) {
   button.hint, .pip.hint .icon, .hcard.hint .hcard-face::after { animation: none; }
 }
+
+/* Écran étroit (I18) : les règles d'en haut sont écrasées par le relief ci-dessus, elles se
+   redisent ici. Sous 560 px, Bâtir et Lancer ne gardent que leur pictogramme : la barre doit
+   tenir en entier sur un téléphone, le lancement d'abord. */
+@media (max-width: 760px) {
+  .toolbar { gap: 8px; padding: 6px 8px; }
+  .toolbar .group { gap: 4px; }
+  button.launch { padding: 10px 14px 12px; font-size: 16px; }
+}
+@media (max-width: 560px) {
+  button.tool.build span, button.launch span { display: none; }
+  button.tool.build { width: 42px; padding: 0; justify-content: center; }
+  button.launch { padding: 9px 12px 11px; }
+  button.tool { width: 40px; height: 40px; }
+  button.tool.small { width: 30px; height: 30px; }
+}
+
+/* Une fenêtre plus haute que l'écran défile, mais ses boutons restent au pied : sur un
+   téléphone, « Construire » ou « Vague suivante » ne doivent pas se cacher sous le pli. */
+.layer.center > .dialog .actions { position: sticky; bottom: -16px; z-index: 1; margin: 0 -20px -16px; padding: 12px 20px 14px;
+  background: linear-gradient(rgba(236, 217, 173, 0), #eedcb2 14px); }

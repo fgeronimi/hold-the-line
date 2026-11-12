@@ -1,12 +1,15 @@
 import { attachChart, chartModel, renderChart } from './charts.ts';
 import { nodeNames } from './theme.ts';
-import type { Architecture, Catalog, Wave, WaveResult } from '../engine/types.ts';
+import type { Architecture, Catalog, RequestKind, Wave, WaveResult } from '../engine/types.ts';
 import { KIND_NAMES } from '../engine/messages.ts';
 import { escapeHtml } from './html.ts';
 import { firstSaturations, replayStats } from './hud.ts';
 import type { CityScene } from './scene.ts';
 import type { Theme } from './theme.ts';
 import { minuteSpan } from './time.ts';
+
+/** Un pictogramme du sprite de l'interface (I18), posé une fois dans la page par `installSprite`. */
+const pict = (name: string) => `<svg class="ico" viewBox="0 0 48 48" aria-hidden="true"><use href="#hl-${name}"/></svg>`;
 import { JourneyWindow, OutcomeTally, RecentOutcomes, journeyDuration, journeysForTick, outcomeOf, trafficScale, type Outcome } from './traffic.ts';
 
 export interface ReplayOptions {
@@ -32,6 +35,16 @@ const SLOW_MOTION = { seconds: 3, factor: 0.35 };
  * `result.ticks`. Prévient par `onEnd` quand la vague est finie ; renvoie de quoi l'arrêter
  * et rendre le plateau à la construction.
  */
+/** La légende des personnages : seulement ceux que la vague fait marcher, plus les échecs. */
+function legend(o: ReplayOptions): string {
+  const sent = (kind: RequestKind) => o.wave.sources.some((src) => (src.rps[kind] ?? 0) > 0);
+  const walkers = (Object.keys(o.theme.vehicles) as RequestKind[]).filter(sent).map((k) => o.theme.vehicles[k]);
+  const hostile = o.wave.sources.some((src) => src.abusive) ? [o.theme.hostile] : [];
+  return [...walkers, { color: o.theme.alert, metaphor: o.theme.failed }, ...hostile]
+    .map((v) => `<i style="background:${v.color}"></i>${escapeHtml(v.metaphor)}`)
+    .join(' ');
+}
+
 export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOptions): () => void {
   const bar = document.createElement('div');
   bar.className = 'replay-bar';
@@ -43,11 +56,9 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     <span data-r="readout"></span>
     <span class="hud" data-r="hud"></span>
     <button data-r="recenter" title="Revoir tout le plateau">Recentrer</button>
-    <button data-r="charts" title="Courbes minute par minute, bâtiment par bâtiment">📈 Courbes</button>
-    <span class="replay-legend">${Object.values(o.theme.vehicles)
-      .map((v) => `<i style="background:${v.color}"></i>${escapeHtml(v.metaphor)}`)
-      .join(' ')}<i style="background:${o.theme.alert}"></i>${escapeHtml(o.theme.failed)}<i style="background:${o.theme.hostile.color}"></i>${escapeHtml(o.theme.hostile.metaphor)}</span>
-    <button data-r="skip" title="Aller à la fin de la vague">Passer ⏭</button>`;
+    <button data-r="charts" title="Courbes minute par minute, bâtiment par bâtiment">${pict('chart')} Courbes</button>
+    <span class="replay-legend">${legend(o)}</span>
+    <button data-r="skip" title="Aller à la fin de la vague">Passer</button>`;
   barHost.appendChild(bar);
   const alert = document.createElement('div');
   alert.className = 'replay-alert';
@@ -177,7 +188,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
       gauge('échecs', `${(st.failureRate * 100).toFixed(2)} % / ${(sla.maxFailureRate * 100).toFixed(0)} %`, st.failureRate > sla.maxFailureRate),
       gauge('latence', `${Math.round(st.latencyMs)} / ${sla.maxP95LatencyMs} ms`, st.latencyMs > sla.maxP95LatencyMs),
       gauge('coût', `${Math.round(cost)} / ${budget}`, cost > budget),
-      `<span class="ok">+${st.served} 👍</span> <span class="ko">−${st.refused} 👎</span>${st.repelled > 0 ? ` <span>🛡 ${st.repelled}</span>` : ''}`,
+      `<span class="ok">${pict('check')} +${st.served}</span> <span class="ko">${pict('close')} −${st.refused}</span>${st.repelled > 0 ? ` <span>${pict('barrier')} ${st.repelled}</span>` : ''}`,
     ].join(' · ');
     // Le tableau de bord ne change qu'une fois par minute ou par issue : inutile de le réécrire à chaque image.
     if (html !== hudHtml) {

@@ -431,7 +431,7 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     return {
       tone: 'tip',
       says: line('sizing', { name: metaphor(node.id) }),
-      tech: `Au plus fort hors incident (${tick.tick + 1}ᵉ minute), ${name(node.id)} a reçu ${terms} = ${fmtCount(work)} unités de travail par seconde, pour ${fmtCount(def.capacity)} par instance × ${instances} = ${fmtCount(capacity)} (${pct(work / capacity)}). Pour rester sous 70 % de charge, il faut ⌈${fmtCount(work)} / (${fmtCount(def.capacity)} × 0,7)⌉ = ${needed} instance${needed > 1 ? 's' : ''}.`,
+      tech: `Au plus fort${incidents.length > 0 ? ' hors incident' : ''} (${tick.tick + 1}ᵉ minute), ${name(node.id)} a reçu ${terms} = ${fmtCount(work)} unités de travail par seconde, pour ${fmtCount(def.capacity)} par instance × ${instances} = ${fmtCount(capacity)} (${pct(work / capacity)}). Pour rester sous 70 % de charge, il faut ⌈${fmtCount(work)} / (${fmtCount(def.capacity)} × 0,7)⌉ = ${needed} instance${needed > 1 ? 's' : ''}.`,
       concept: 'Calcul de capacité',
       node: node.id,
     };

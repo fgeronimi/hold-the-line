@@ -177,10 +177,11 @@ export function guideStep(
   }
   const incidents = (wave.incidents ?? []).map((i) => ` Incident annoncé : ${i.title.toLowerCase()} (${minuteSpan(i.from, i.until)}).`).join('');
   if (tutorial) return { ...tutorialStep(arch, catalog), real: `${tutorialStep(arch, catalog).real}${incidents}` };
+  // Pas de reflet sur le lancement après la vague 1 : la cité de la vague d'avant est valide
+  // mais ne tiendra pas, et le guide ne doit pas pousser à la lancer telle quelle.
   return {
     id: 'launch',
     says: line('launch', { wave: wave.title }),
     real: `${wave.briefing}${incidents}`,
-    highlight: { tool: 'launch' },
   };
 }

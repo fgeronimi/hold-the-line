@@ -25,7 +25,7 @@ export function cardArt(s: ViewState, type: string): string {
 function realOf(type: string): string {
   const r = realWorldComponents[type];
   if (!r) return '';
-  return `<span class="real"><b>En vrai :</b> ${esc(r.text)}${r.source ? ` (${esc(r.source.label)})` : ''}</span>`;
+  return `<span class="real named"><b>En vrai :</b> ${esc(r.text)}${r.source ? ` (${esc(r.source.label)})` : ''}</span>`;
 }
 
 function handCard(s: ViewState, d: ComponentDef, slot: FanSlot, index: number, hinted: boolean): string {
