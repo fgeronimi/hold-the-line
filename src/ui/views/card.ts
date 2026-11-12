@@ -1,5 +1,6 @@
 import type { ArchNode, BoardCell, Catalog, ComponentDef, UpgradeDef } from '../../engine/types.ts';
 import { resolveUpgrades, withEffect } from '../../engine/upgrades.ts';
+import { realWorldComponents, realWorldUpgrades, type RealWorld } from '../../data/real-world.ts';
 import { nodeNames } from '../../render/theme.ts';
 import { draftInfo } from '../draft.ts';
 import { minutes } from '../time.ts';
@@ -17,6 +18,22 @@ export function renderCard(s: ViewState): string {
 
 // ——— Construire sur une case vide ———
 
+/** La ligne « en vrai » d'un bâtiment ou d'une évolution, et sa source s'il y en a une (D3b). */
+function realLine(r: RealWorld | undefined, label = 'En vrai'): string {
+  if (!r) return '';
+  const source = r.source ? ` <a href="${esc(r.source.url)}" target="_blank" rel="noopener">${esc(r.source.label)}</a>` : '';
+  return `<p class="real"><b>${esc(label)} :</b> ${esc(r.text)}${source}</p>`;
+}
+
+/** Les lignes « en vrai » des évolutions d'un type de bâtiment, repliées : la fiche reste courte. */
+function realUpgrades(type: string, catalog: Catalog): string {
+  const lines = Object.values(catalog.upgrades)
+    .filter((u) => u.appliesTo === type && realWorldUpgrades[u.id])
+    .map((u) => realLine(realWorldUpgrades[u.id], u.techName))
+    .join('');
+  return lines ? `<details class="real-ups"><summary>En vrai, ses évolutions</summary>${lines}</details>` : '';
+}
+
 /** Une fiche du menu de construction : le rôle du bâtiment, ses chiffres, ses évolutions. */
 function buildCard(s: ViewState, d: ComponentDef): string {
   const style = theme.buildings[d.id];
@@ -32,6 +49,7 @@ function buildCard(s: ViewState, d: ComponentDef): string {
         ${style ? `<p>${esc(style.role.real)}</p>` : ''}
         <p class="figures">${fmt(d.capacity)} unités de travail/s · ${d.latencyMs} ms${accepts ? ` · reçoit ${accepts}` : ''}</p>
         ${ups ? `<p class="ups">Évolutions : ${ups}</p>` : ''}
+        ${realLine(realWorldComponents[d.id])}
         <footer><span>💰 ${d.cost} · ⚙ ${d.complexity}</span>
           <button data-action="build-at" data-type="${esc(d.id)}" ${affordable ? '' : 'title="Au-delà du budget restant de la vague"'}>Construire ici</button></footer>
       </article>`;
@@ -125,6 +143,8 @@ function renderNodeCard(s: ViewState): string {
       ${fixedNote}
       ${role ? speech(role.says, role.real) : ''}
       ${def && def.behavior !== 'source' ? `<p class="figures">${capacityText(node, def, s.catalog)}</p>` : ''}
+      ${realLine(realWorldComponents[node.type])}
+      ${realUpgrades(node.type, s.catalog)}
       <p>${upgradeSelects(node, s.catalog) || '<span class="muted">aucune évolution</span>'}</p>
       ${links ? `<ul>${links}</ul>` : '<p class="muted">Aucun chemin.</p>'}
       <p>

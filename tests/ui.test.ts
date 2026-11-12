@@ -141,6 +141,9 @@ describe('construire sur une case vide', () => {
     expect(html.match(/data-action="build-at"/g)).toHaveLength(palette.length);
     expect(html).not.toContain('data-type="domain-service"');
     expect(html).toContain('Autoscaling');
+    // Chaque fiche dit l'ordre de grandeur réel, sources comprises (D3b).
+    expect(html.match(/class="real"/g)).toHaveLength(palette.length);
+    expect(html).toContain('href="https://docs.aws.amazon.com/AWSSimpleQueueService');
   });
 
   it('sur un chemin, dit que le bâtiment s’insère dans le lien', () => {

@@ -609,6 +609,13 @@ punirait sans rien apprendre (M13). Aucune stratégie gagnante n'a bougé.
 
 ### Étape 4 — debrief et fiches
 
+**État au 12 novembre 2026 : faite** (branche `passe-debrief`, décision I15). Chaque constat
+dit ce qui l'aurait annoncé ; une ligne dit ce qu'ont coûté les parades en place ; le serveur
+le plus chargé reçoit son calcul de capacité ; chaque fiche a sa ligne « en vrai » sourcée
+(`src/data/real-world.ts`) ; au rejeu, un message rendu à sa file y repart (R10). Reste,
+à faire après la passe D pour ne pas croiser ses fichiers : renommer l'incident du marché
+en « pic de relivraisons ».
+
 | # | Action | Effort | Risque |
 |---|---|---|---|
 | D1 | Debrief : coût métier de chaque parade ; ligne « ce qui vous aurait prévenu » (métrique, seuil d'alerte) par incident ; calcul de dimensionnement posé avec les chiffres de la vague | M | nul |

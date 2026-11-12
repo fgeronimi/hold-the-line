@@ -111,6 +111,7 @@ export function renderFindings(findings: Finding[]): string {
     (f, i) => `<div class="finding ${f.tone}">
         ${findingLine(f, i === 0)}
         ${f.remedy ? `<p>💡 <b>Parade :</b> ${esc(f.remedy)}</p>` : ''}
+        ${f.signal ? `<p>📈 <b>Ce qui vous aurait prévenu :</b> ${esc(f.signal)}</p>` : ''}
         ${f.concept ? `<p class="muted">À réviser : ${esc(f.concept)}</p>` : ''}
       </div>`,
   );

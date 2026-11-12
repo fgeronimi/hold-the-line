@@ -65,14 +65,15 @@ describe('analyzeWave', () => {
     expect(findings[0]!.says).toMatch(/Votre Carnet du scribe a fait le travail : 9\d voyageurs sur 100/);
     expect(findings.some((f) => f.tone === 'bad')).toBe(false);
     expect(findings.filter((f) => f.tone === 'warn').map((f) => f.concept)).toEqual(['Cache stampede']);
-    expect(findings.some((f) => f.tone === 'tip')).toBe(false);
+    // Rien à alléger : le seul conseil d'over-engineering serait faux ici.
+    expect(findings.some((f) => f.concept === 'Over-engineering')).toBe(false);
   });
 
   it('ne propose de retirer que ce dont la vague se passe vraiment', () => {
-    const tip = analyze(A.withCache, 'launch').find((f) => f.tone === 'tip')!;
+    const tip = analyze(A.withCache, 'launch').find((f) => f.concept === 'Over-engineering' && f.tone === 'tip')!;
     expect(tip.says).toContain('Carnet du scribe');
     expect(tip.says).not.toContain('Archives');
-    expect(analyze(A.minimal, 'launch').some((f) => f.tone === 'tip')).toBe(false);
+    expect(analyze(A.minimal, 'launch').some((f) => f.concept === 'Over-engineering')).toBe(false);
   });
 
   it('raconte l’incident : un serveur unique qui tombe est un SPOF, la redondance l’encaisse', () => {
@@ -118,4 +119,16 @@ describe('le debrief ne connaît la métaphore que par le thème', () => {
     expect(code).not.toMatch(CITY_WORDS);
     expect(code).not.toMatch(/'read-replica'|upgrades\?\.\w|upgrades\?\.\[/);
   });
+
+  it('dit ce qui aurait prévenu, ce qu’ont coûté les parades, et pose le calcul de capacité (D1)', () => {
+    // Une base saturée : la leçon dit quelle métrique l'aurait annoncé.
+    expect(analyze(A.minimal, 'read-surge').some((f) => f.signal?.includes('Charge du primaire'))).toBe(true);
+    const findings = analyze(A.scaled(3, { rateLimitTier: A.TIER_40 }), 'noisy-client');
+    const costs = findings.find((f) => f.concept === 'Compromis des parades');
+    expect(costs?.tech).toContain('limite par client');
+    const sizing = findings.find((f) => f.concept === 'Calcul de capacité');
+    expect(sizing?.tech).toMatch(/unités de travail par seconde/);
+    expect(sizing?.tech).toMatch(/⌈.*⌉ = \d+ instance/);
+  });
 });
+

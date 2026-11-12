@@ -31,6 +31,11 @@ export interface Journey {
    * une seconde fois (`twice`) ou reconnue et écartée par l'idempotence (`ignored`).
    */
   copy?: 'twice' | 'ignored';
+  /**
+   * Message sorti d'une file que l'aval n'a pas pu traiter (M8) : à partir de ce tronçon, il
+   * rebrousse chemin jusqu'à sa file, sans être servi ni en échec.
+   */
+  requeuedFrom?: number;
 }
 
 export interface TrafficScale {
@@ -135,6 +140,7 @@ export function journeysForTick(tick: TickMetrics, t: number, scale: TrafficScal
       for (let i = 0; i < n; i++) {
         const legs: Leg[] = [];
         let failedFrom: number | undefined;
+        let requeuedFrom: number | undefined;
         let lost = false;
         let node = source;
         const seen = new Set([source]);
@@ -159,11 +165,26 @@ export function journeysForTick(tick: TickMetrics, t: number, scale: TrafficScal
             failedFrom = legs.length;
             break;
           }
+          // Derrière une file, ce que l'aval ne traite pas y retourne (M8) : le messager rebrousse
+          // chemin jusqu'à elle, dans la proportion de ce qui a été rendu à ce bâtiment.
+          const deferred = tick.nodes[node]?.deferred ?? 0;
+          if (deferred > 0 && rand(t, i, k, step, 6) < Math.min(1, deferred / Math.max(inbound(tick, node), 1e-9))) {
+            requeuedFrom = legs.length;
+            break;
+          }
         }
         if (legs.length === 0) continue;
         const start = t + i / n;
         if (lost) {
           out.push({ kind, start, legs, lost: true });
+          continue;
+        }
+        if (requeuedFrom !== undefined) {
+          // Retour jusqu'au dernier bâtiment qui garde un arriéré : la file d'où il sortait.
+          let queueAt = legs.length - 1;
+          while (queueAt > 0 && tick.nodes[legs[queueAt]!.link.split('→')[0]!]?.backlog === undefined) queueAt--;
+          const back = legs.slice(Math.max(0, queueAt)).reverse().map((l) => ({ ...l, back: true }));
+          out.push({ kind, start, legs: [...legs, ...back], requeuedFrom });
           continue;
         }
         const journey: Journey = {
@@ -266,7 +287,7 @@ export interface Outcome {
   /** Instant, en ticks, où la requête atteint le bâtiment qui la sert ou la refuse. */
   at: number;
   /** `twice` et `ignored` : la copie d'un doublon, traitée une seconde fois ou écartée. */
-  result: 'served' | 'refused' | 'repelled' | 'twice' | 'ignored';
+  result: 'served' | 'refused' | 'repelled' | 'twice' | 'ignored' | 'requeued';
 }
 
 /**
@@ -285,6 +306,7 @@ export function outcomeOf(j: Journey): Outcome | undefined {
   // Perdu en route : le −1 tombe sur le serveur qui n'a pas publié.
   if (j.lost) return { node: last.link.split('→')[0]!, at: j.start + journeyDuration(j), result: 'refused' };
   if (j.failedFrom !== undefined) return { ...reached, result: 'refused' };
+  if (j.requeuedFrom !== undefined) return { ...reached, result: 'requeued' };
   const returns = j.legs.length > forward.length;
   if (!returns) return { ...reached, result: 'served' };
   return { node: forward[0]!.link.split('→')[0]!, at: j.start + journeyDuration(j), result: 'served' };
@@ -366,7 +388,7 @@ export class RecentOutcomes {
  * parcours des résultats à chaque image. Reçoit les issues dans n'importe quel ordre.
  */
 export class OutcomeTally {
-  private readonly ats: Record<Outcome['result'], number[]> = { served: [], refused: [], repelled: [], twice: [], ignored: [] };
+  private readonly ats: Record<Outcome['result'], number[]> = { served: [], refused: [], repelled: [], twice: [], ignored: [], requeued: [] };
 
   constructor(outcomes: readonly Outcome[]) {
     for (const o of outcomes) this.ats[o.result].push(o.at);

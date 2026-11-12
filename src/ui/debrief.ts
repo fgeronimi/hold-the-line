@@ -1,4 +1,4 @@
-import { incidentLessons, reasonLessons, saturationLessons, type Lesson } from '../data/lessons.ts';
+import { incidentLessons, paradeCosts, reasonLessons, saturationLessons, type Lesson } from '../data/lessons.ts';
 import { bill } from '../engine/budget.ts';
 import { simulateWave } from '../engine/simulate.ts';
 import type { Architecture, Catalog, RequestKind, TickMetrics, UpgradeEffect, Wave, WaveResult } from '../engine/types.ts';
@@ -25,6 +25,8 @@ export interface Finding {
   tech?: string;
   remedy?: string;
   concept?: string;
+  /** Ce qui aurait prévenu : la métrique à surveiller et son seuil (D1). */
+  signal?: string;
   node?: string;
 }
 
@@ -47,6 +49,7 @@ function fromLesson(tone: Finding['tone'], lesson: Lesson, vars: Record<string, 
     remedy: fill(lesson.remedy, vars),
     concept: lesson.concept,
   };
+  if (lesson.signal) f.signal = lesson.signal;
   if (node) f.node = node;
   return f;
 }
@@ -232,6 +235,16 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
 
   const out = [won ? openingWon() : openingLost(), ...story.sort((a, b) => a.tick - b.tick).map((s) => s.finding)];
 
+  // Ce qu'ont coûté les parades en place : une protection a aussi un prix pour le client (D1).
+  const costs = [
+    ...(ofBehavior('queue').length > 0 ? [paradeCosts.queue] : []),
+    ...(Object.keys(paradeCosts) as (keyof typeof paradeCosts)[]).filter((k) => k !== 'queue' && anyHas(k as UpgradeEffect['type'])).map((k) => paradeCosts[k]),
+  ].filter((c): c is string => !!c);
+  if (costs.length > 0) out.push({ tone: 'tip', says: line('paradeCosts'), tech: costs.join(' '), concept: 'Compromis des parades' });
+
+  const sizing = sizingOf();
+  if (sizing) out.push(sizing);
+
   // Ce qu'on pourrait alléger : seulement si la vague a tenu, ou si le trésor ou la
   // complexité débordent (c'est alors la première chose à retirer).
   const overspent = cost.value > cost.limit || complexity.value > complexity.limit;
@@ -346,6 +359,51 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
    * Un bâtiment est superflu si la vague, rejouée sans lui, respecte encore le SLA. On ne
    * juge pas sur sa charge : un cache peu chargé peut servir 95 % des lectures.
    */
+  /**
+   * Le calcul de dimensionnement du serveur le plus chargé hors incident, posé avec les
+   * chiffres de la vague (D1) : ce qu'il reçoit au plus fort, ce que ça pèse en travail, et le
+   * nombre d'instances pour rester sous 70 %. Seulement pour un serveur qui reçoit du trafic
+   * direct : derrière une file, les lots rendent le compte trompeur.
+   */
+  function sizingOf(): Finding | undefined {
+    const servers = arch.nodes.filter((n) => {
+      const def = catalog.components[n.type];
+      const fed = arch.links.filter((l) => l.to === n.id).map((l) => behaviorOf(l.from));
+      return def?.behavior === 'service' && !n.fixed && !def.prePlaced && fed.length > 0 && fed.every((b) => b !== 'queue' && b !== 'pubsub');
+    });
+    const peaks = servers
+      .map((n) => {
+        const tick = calm.reduce<TickMetrics | undefined>((best, t) => ((t.nodes[n.id]?.utilization ?? 0) > (best?.nodes[n.id]?.utilization ?? -1) ? t : best), undefined);
+        return { node: n, tick };
+      })
+      .filter((p): p is { node: Architecture['nodes'][number]; tick: TickMetrics } => !!p.tick)
+      .sort((a, b) => (b.tick.nodes[b.node.id]?.utilization ?? 0) - (a.tick.nodes[a.node.id]?.utilization ?? 0));
+    const top = peaks[0];
+    if (!top) return undefined;
+    const { node, tick } = top;
+    const def = catalog.components[node.type]!;
+    const into = (kind: RequestKind) =>
+      Object.entries(tick.links)
+        .filter(([key]) => key.endsWith(`→${node.id}`))
+        .reduce((a, [, k]) => a + (k[kind] ?? 0), 0);
+    const parts = (['read', 'write', 'async'] as RequestKind[])
+      .map((k) => ({ k, rps: into(k), w: def.workPerRequest[k] ?? 0 }))
+      .filter((p) => p.rps > 0 && p.w > 0);
+    if (parts.length === 0) return undefined;
+    const work = parts.reduce((a, p) => a + p.rps * p.w, 0);
+    const instances = tick.nodes[node.id]?.instances ?? 1;
+    const capacity = def.capacity * instances;
+    const needed = Math.ceil(work / (def.capacity * 0.7));
+    const terms = parts.map((p) => `${fmtCount(p.rps)} ${KIND_NAMES[p.k]}${p.rps >= 2 && p.k !== 'async' ? 's' : ''}/s × ${p.w}`).join(' + ');
+    return {
+      tone: 'tip',
+      says: line('sizing', { name: metaphor(node.id) }),
+      tech: `Au plus fort hors incident (${tick.tick + 1}ᵉ minute), ${name(node.id)} a reçu ${terms} = ${fmtCount(work)} unités de travail par seconde, pour ${fmtCount(def.capacity)} par instance × ${instances} = ${fmtCount(capacity)} (${pct(work / capacity)}). Pour rester sous 70 % de charge, il faut ⌈${fmtCount(work)} / (${fmtCount(def.capacity)} × 0,7)⌉ = ${needed} instance${needed > 1 ? 's' : ''}.`,
+      concept: 'Calcul de capacité',
+      node: node.id,
+    };
+  }
+
   function superfluousNodes(): string[] {
     return arch.nodes
       // La source et les services déjà en place ne se retirent pas.

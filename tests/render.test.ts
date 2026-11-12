@@ -211,3 +211,32 @@ describe('trajets des incidents du grand marché', () => {
     expect(journeyAt(j, 1.5)!.bounce).toBeUndefined();
   });
 });
+
+describe('messages rendus à leur file (M8)', () => {
+  it('rebroussent chemin jusqu’à la file, sans compter ni servis ni refusés', () => {
+    // La file relâche 100 messages, le worker n'en traite que 40 : les 60 autres repartent en file.
+    const tick = {
+      tick: 0,
+      offered: 100,
+      failed: 0,
+      avgLatencyMs: 0,
+      slaLatencyMs: 0,
+      nodes: {
+        s: { rps: 100, utilization: 0, latencyMs: 0, failed: 0 },
+        q: { rps: 100, utilization: 0, latencyMs: 2, failed: 0, backlog: 60, requeued: 60 },
+        w: { rps: 100, utilization: 1, latencyMs: 10, failed: 0, deferred: 60 },
+      },
+      links: { 's→q': { async: 100 }, 'q→w': { async: 100 } },
+    } as unknown as Parameters<typeof journeysForTick>[0];
+    const journeys = journeysForTick(tick, 0, trafficScale([tick], 50));
+    const requeued = journeys.filter((j) => j.requeuedFrom !== undefined);
+    expect(requeued.length).toBeGreaterThan(0);
+    expect(requeued.length).toBeLessThan(journeys.length);
+    for (const j of requeued) {
+      expect(j.legs.at(-1)).toMatchObject({ link: 'q→w', back: true });
+      expect(outcomeOf(j)!.result).toBe('requeued');
+    }
+    const served = journeys.filter((j) => j.requeuedFrom === undefined);
+    expect(served.every((j) => outcomeOf(j)!.result === 'served')).toBe(true);
+  });
+});

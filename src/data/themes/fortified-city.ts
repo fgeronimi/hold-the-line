@@ -133,6 +133,8 @@ export const fortifiedCity: Theme = {
     hot: '{name} : presque plein au plus fort de la vague. À la prochaine affluence, c’est là que ça cédera.',
     superfluous: 'Sans {names}, la cité aurait tenu quand même : il coûte sans rien apporter cette vague.',
     superfluousMany: 'Sans {names}, la cité aurait tenu quand même : ils coûtent sans rien apporter cette vague.',
+    paradeCosts: 'Chaque protection de la cité a son prix, Sire, même quand elle a tenu.',
+    sizing: 'Voici le compte de {name}, Sire, pour le jour où la foule grossira.',
   },
   choose: {
     says: 'Sire, quelle partie de la cité voulez-vous défendre ?',
