@@ -63,8 +63,8 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   une carte par bâtiment constructible ; `CityScene.thumbnails` rend leurs illustrations une
   fois, hors écran, avec le renderer du plateau (`ViewState.thumbnails`). Le calque `#hand`
   porte la main ou la carte du bâtiment sélectionné, et n'est réécrit que si son HTML change.
-- L'habillage (I16) est dans `src/ui/style.css` : matières (`--m-parchment`, `--m-wood`,
-  `--m-stone`, `--m-brass`) et relief (`--raise`, `--raise-low`, `--pressed`) en variables,
+- L'habillage (I16) est dans `src/ui/style.css` : matières (`--m-parchment`, `--m-stone`,
+  `--m-brass`), filet (`--line`) et relief (`--raise`, `--raise-low`, `--pressed`) en variables,
   à réutiliser plutôt que de redéfinir une ombre. `src/ui/icons.ts` : les pictogrammes SVG
   de l'interface (`icon('coin')`) ; pas d'emoji dans un calque. Titrage : `--display`
   (Lilita One, `src/ui/fonts/`, OFL). Une infobulle se pose avec `data-tip` et un `aria-label`.

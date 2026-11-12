@@ -285,8 +285,8 @@ et déterministe, séparée de l'affichage.
 - **Plateau** (R5, R11, R12) : un grand hexagone de cases KayKit, les clients à sa pointe
   gauche, une rivière qu'on ne franchit que par un pont. Vue isométrique en Three.js, on se
   déplace et on zoome, on ne tourne pas.
-- **Habillage** (I16) : trois matières (parchemin, bois, pierre), un relief commun, des
-  boutons qui s'enfoncent ; barre du haut en trois plaques, barre du bas en médaillons à
+- **Habillage** (I16) : du parchemin, de la pierre et du laiton, des filets fins et des
+  ombres diffuses, des boutons qui s'enfoncent ; barre du haut en trois plaques, barre du bas en médaillons à
   infobulles, pictogrammes dessinés pour le jeu, titrage en Lilita One.
 - **Construction** (I4, I10, I15) : outils Sélection, Relier, Retirer, et une **main de cartes**,
   un bâtiment par carte, en éventail au centre de l'écran. Cliquer une case vide l'ouvre pour
