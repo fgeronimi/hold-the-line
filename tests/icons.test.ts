@@ -19,4 +19,11 @@ describe('pictogrammes (I18)', () => {
     expect(icon('redo' as IconName)).toContain('href="#hl-undo"');
     expect(icon('redo' as IconName)).toContain('scale(-1 1)');
   });
+
+  it('chaque évolution du catalogue a son pictogramme dans le sprite', async () => {
+    const { catalog } = await import('../src/data/catalog.ts');
+    const { fortifiedCity } = await import('../src/data/themes/fortified-city.ts');
+    const missing = Object.keys(catalog.upgrades).filter((id) => !(SPRITE_NAMES as readonly string[]).includes(fortifiedCity.upgradeIcons[id] ?? ''));
+    expect(missing).toEqual([]);
+  });
 });

@@ -6,7 +6,7 @@ import { draftInfo } from '../draft.ts';
 import { minutes } from '../time.ts';
 import type { TutorialStep } from '../tutorial.ts';
 import { decimal as fmt, esc, hintClass as blink, hintsOf, speech, theme, type ViewState } from './common.ts';
-import { icon } from '../icons.ts';
+import { icon, upgradeIcon } from '../icons.ts';
 import { cardArt, renderHand } from './hand.ts';
 
 const KIND_NAMES: Record<string, string> = { read: 'une lecture', write: 'une écriture', async: 'un événement' };
@@ -162,7 +162,7 @@ function pipTip(u: UpgradeDef): string {
 
 function pip(node: ArchNode, u: UpgradeDef, hinted: boolean): string {
   const level = node.upgrades?.[u.id] ?? 0;
-  const icon = theme.upgradeIcons[u.id] ?? '✦';
+  const icon = upgradeIcon(theme.upgradeIcons[u.id]);
   const tip = pipTip(u);
   const data = `data-action="upgrade-step" data-node="${esc(node.id)}" data-upgrade="${esc(u.id)}"`;
   const face = `<span class="icon">${icon}<b>${esc(badgeOf(u, level))}</b></span>`;

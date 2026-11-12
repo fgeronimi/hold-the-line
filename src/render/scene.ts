@@ -815,7 +815,9 @@ export class CityScene {
       .filter(([, level]) => level > 0)
       .map(([id]) => this.theme.upgradeIcons[id])
       .filter((icon): icon is string => icon !== undefined)
-      .join(' ');
+      // Un renvoi au sprite de l'interface (I18), posé dans la page au démarrage.
+      .map((icon) => `<svg class="ico" viewBox="0 0 48 48" aria-hidden="true"><use href="#hl-${icon}"/></svg>`)
+      .join('');
 
     b.label.className = 'city-label';
     const label = new CSS2DObject(b.label);

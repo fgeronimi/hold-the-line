@@ -2,7 +2,7 @@ import type { BoardCell, ComponentDef } from '../../engine/types.ts';
 import { realWorldComponents } from '../../data/real-world.ts';
 import { draftInfo } from '../draft.ts';
 import { fan, type FanSlot } from '../hand.ts';
-import { icon } from '../icons.ts';
+import { icon, upgradeIcon } from '../icons.ts';
 import { blinkOf, buildable, decimal as fmt, esc, hintClass as blink, nameOf, theme, type ViewState } from './common.ts';
 
 const KINDS_TEXT: Record<string, string> = { read: 'lectures', write: 'écritures', async: 'événements' };
@@ -33,7 +33,7 @@ function handCard(s: ViewState, d: ComponentDef, slot: FanSlot, index: number, h
   const accepts = d.accepts.map((k) => KINDS_TEXT[k] ?? k).join(', ');
   const ups = Object.values(s.catalog.upgrades)
     .filter((u) => u.appliesTo === d.id)
-    .map((u) => `${theme.upgradeIcons[u.id] ?? '✦'} ${esc(u.techName)}`)
+    .map((u) => `${upgradeIcon(theme.upgradeIcons[u.id])} ${esc(u.techName)}`)
     .join(' · ');
   const budget = s.scenario.waves[s.game.waveIndex]?.budget ?? Infinity;
   const left = Math.max(0, budget - draftInfo(s.draft, s.catalog).cost);

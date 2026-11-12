@@ -17,6 +17,11 @@ export function icon(name: IconName): string {
   return `<svg class="ico ico-${name}" viewBox="0 0 48 48" aria-hidden="true" focusable="false">${use}</svg>`;
 }
 
+/** Le pictogramme d'une évolution, par l'icône que lui donne le thème ; un losange à défaut. */
+export function upgradeIcon(name: string | undefined): string {
+  return name && (SPRITE_NAMES as readonly string[]).includes(name) ? icon(name as IconName) : '✦';
+}
+
 /** Pose le sprite dans la page, une seule fois : sans lui, chaque `<use>` reste vide. */
 export function installSprite(doc: Document = document): void {
   if (doc.getElementById('hl-sprite')) return;

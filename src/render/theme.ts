@@ -45,7 +45,10 @@ export interface Theme {
   narratives: Record<string, string>;
   /** La règle du temps (décision M7), annoncée au premier briefing de chaque scénario : sa réplique, puis « En vrai ». */
   timeRule: { says: string; real: string };
-  /** L'icône de chaque évolution sur sa pastille, au pied du bâtiment (clé : id du catalogue). */
+  /**
+   * Le pictogramme de chaque évolution (clé : id du catalogue ; valeur : nom d'un symbole du
+   * sprite, `src/ui/sprite.ts`), sur sa pastille, sa carte et l'étiquette du bâtiment (I18).
+   */
   upgradeIcons: Record<string, string>;
   /**
    * Les répliques du narrateur pour l'aide (`src/ui/hints.ts`), une par nature d'indice. Elles

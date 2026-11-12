@@ -707,7 +707,7 @@ export function hintText(hint: Hint, catalog: Catalog, theme: Theme, arch: Archi
       if (!up) return { says: line('upgrade', { name: said(n), upgrade: '' }), real: `Une évolution manque sur ${both(n)}.` };
       const level = up.maxLevel > 1 ? levelText(up, hint.level ?? 1) : '';
       const why = lessonWhy(UPGRADE_LESSONS[up.effect.type]) ?? `${up.label}.`;
-      const where = `Sélectionnez le bâtiment : la pastille ${theme.upgradeIcons[up.id] ?? '✦'} est à son pied.`;
+      const where = `Sélectionnez le bâtiment : la pastille ${up.techName} est à son pied.`;
       return {
         says: line(level ? 'level' : 'upgrade', { name: said(n), upgrade: lowerFirst(up.label), level }),
         real: level
