@@ -11,8 +11,8 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 
 - `npm test` : Vitest, tous les tests
 - `npm run typecheck` : `tsc --noEmit` (TypeScript 7)
-- `npm run balance` : simulation en masse des quatre scénarios, ~17 000 architectures
-  canoniques pour le raccourcisseur, ~1 min (Node exécute le TypeScript nativement, sans
+- `npm run balance` : simulation en masse des quatre scénarios, ~52 000 architectures
+  canoniques pour le raccourcisseur, ~6 min (Node exécute le TypeScript nativement, sans
   build) ; `npm run balance -- market` n'en joue qu'un, par son id ; sort en code 1 s'il y a
   un KO
 - `npm run balance:snapshot` : réécrit `docs/balance-snapshot.txt` (rapport sans durées,
@@ -125,7 +125,10 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   y est. Une minorité lente ne se voit qu'au-delà de 5 % des réponses : l'événement de
   commande, plus rare, a son propre objectif en données (`sla.maxP95LatencyMsByKind`).
 - Le rate limiting ne compte que le synchrone (décision C5) ; ses niveaux sont des index
-  de palier, pas des quantités.
+  de palier, pas des quantités. La passerelle d'API (C7) réutilise le comportement du load
+  balancer : une limite avec `class` ne voit que les sources de cette classe
+  (`TrafficSource.class`) ; elle complète la limite unique, ne répartit pas, et le scaling
+  exige toujours un load balancer.
 - Imports relatifs avec l'extension `.ts` obligatoire : c'est ce qui permet à Node
   de lancer `scripts/` sans build.
 - Une réponse attendue doit rester atteignable depuis celles de la vague précédente
@@ -136,7 +139,7 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   Recalibrer le budget d'une vague, c'est le relancer.
 - Un composant ou une évolution ajouté à un scénario doit entrer dans son espace de
   `src/data/balance-space.ts`, sinon `npm run balance` ne voit pas les réponses qui s'en
-  servent. Une dimension avec `requires` vient après celle dont elle dépend.
+  servent. Une dimension avec `requires` ou `excludes` vient après celle qu'elle nomme.
 - `tests/balance.test.ts` énumère un espace réduit qui doit contenir toutes les réponses
   attendues : si un recalibrage déplace une réponse hors de cet espace, l'agrandir.
 - Le MVP de la spec a été élargi au CDN et à l'autoscaling (`docs/decisions.md`, X1–X4).

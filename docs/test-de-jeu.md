@@ -42,7 +42,7 @@ gêné est une donnée.
 | Temps | Quoi |
 |---|---|
 | 0–3 min | Consignes, lancement, choix du scénario : laisser le joueur choisir. |
-| 3–25 min | *Les portes de la cité*, les 5 vagues si possible. |
+| 3–25 min | *Les portes de la cité*, les 6 vagues si possible. |
 | 25–40 min | Un second scénario, au choix du joueur (*Le grand marché*, *Le banquier lombard* ou *Le grand tournoi*), autant de vagues que le temps le permet. |
 | 40–45 min | Questions de fin. |
 

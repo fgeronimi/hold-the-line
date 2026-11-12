@@ -44,6 +44,7 @@ Les quatre scénarios partagent une métaphore, **la cité fortifiée** (R2, S1)
 | --- | --- |
 | Source de trafic | Hameaux hors les murs |
 | Load balancer (rate limiting) | Porte de la cité (caserne de la garde) |
+| Passerelle d'API (limites par classe) | Bureau des laissez-passer |
 | Serveur d'application | Tour des scribes, une tour par instance |
 | Worker | Tour des commis, une tour par worker (modèle de la tour des scribes, autre teinte) |
 | Cache | Carnet du scribe |
@@ -95,7 +96,8 @@ incidents que le scénario envoie. Chaque incident a au moins une parade, et cha
 | Composant | Rôle | Dans le jeu |
 | --- | --- | --- |
 | Source de trafic | Émet les lectures, écritures et événements async de la vague | Oui, déjà posée |
-| Load balancer | Répartit le trafic entre les instances ; porte le rate limiting | Oui |
+| Load balancer | Répartit le trafic entre les instances ; porte le rate limiting, une limite unique pour tous (C1) | Oui |
+| Passerelle d'API | Posée à l'entrée, derrière le CDN et devant le load balancer : reconnaît la classe de chaque client (clé d'API ou anonyme) et lui applique la limite de sa classe ; ne répartit pas. Plus chère, plus complexe, et 5 ms de plus pour chaque requête (C7) | Oui |
 | Serveur d'application | Traite les requêtes, capacité par instance | Oui |
 | Worker | Consomme une file ou un pub/sub, seul autorisé derrière eux avec les services en place ; se dimensionne sur l'arriéré (X8) | Oui |
 | Cache | Sert une part des lectures en cache-aside : le serveur le consulte, puis lit la base en cas d'absence (I3) | Oui |
@@ -119,6 +121,7 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 | Autoscaling | Serveur | Pics de trafic, surplus après une panne | Démarrage en 2 ticks (2 minutes) pendant lesquels des requêtes échouent, +2 de complexité (X2) ; l'instance à la demande coûte 25 % de plus qu'une fixe (X10) ; une panne la touche comme les autres (M9) | Oui |
 | Réplica en lecture | Base | Lectures saturées | Coût | Oui |
 | Rate limiting | Load balancer | Client abusif | Paliers par client (C1) : trop bas, il coupe des clients légitimes, et les événements de leurs requêtes rejetées avec eux (C6) | Oui |
+| Quota par clé d'API, limite par adresse | Passerelle d'API | Partenaires plus gourmands que l'abusif : aucune limite unique ne les sépare | Mêmes paliers que le rate limiting, chacun pour sa classe (`TrafficSource.class`) ; la passerelle coûte 25 et +2, chaque limite 5 et +1, et ajoute un saut de latence (C7) | Oui |
 | Idempotence | Service métier | Message livré deux fois | Coût et complexité, les clés vivent dans le service (S5) | Oui |
 | Transactional outbox | Base | Événement perdu entre base et bus | Une écriture de plus par commande (S6) | Oui |
 | Circuit breaker | Serveur | Dépendance lente ou en panne qui bloque le serveur | Les appels coupés échouent : réponse dégradée (S15) | Oui |
@@ -146,7 +149,8 @@ ne dure moins de cinq minutes (X11) : le p95 voit tout ce qui pèse plus de 5 % 
 | Le cache redémarre à froid | Une base qui tient le temps de le réchauffer | Raccourcisseur, vague 2 |
 | Une instance du serveur tombe | Redondance : plusieurs instances | Raccourcisseur, vague 3 |
 | Client qui spamme | Rate limiting | Raccourcisseur, vague 4 |
-| Traitement lent sur le chemin critique | File de messages | Raccourcisseur vague 5, marché vague 1 |
+| Partenaires plus gourmands que le scraper, une clé qui boucle | Limites par classe sur une passerelle d'API | Raccourcisseur, vague 5 |
+| Traitement lent sur le chemin critique | File de messages | Raccourcisseur vague 6, marché vague 1 |
 | Message livré deux fois | Idempotence | Marché, vagues 3 et 5 |
 | Événement perdu entre base et bus | Transactional outbox | Marché, vagues 4 et 5 |
 | Dépendance lente : la cascade de pannes | Circuit breaker, ou file (paiement différé) | Banquier, vagues 2 et 5 |
@@ -156,7 +160,7 @@ ne dure moins de cinq minutes (X11) : le p95 voit tout ce qui pèse plus de 5 % 
 | Dépendance externe en panne plus longtemps que la file ne tient | Capacité de la file | Tournoi, vague 2 |
 | Partition réseau entre le primaire et ses réplicas | Lectures critiques sur le primaire (choix CAP) | Tournoi, vagues 3 et 4 |
 | Message empoisonné : le consommateur plante à chaque essai, la file reste bloquée derrière lui | File des lettres mortes | Marché, vagues 5 et 6 |
-| Le worker tombe dix minutes | La file garde les messages, puis se vide au rythme de la base (M8, X6) | Raccourcisseur, vague 5 |
+| Le worker tombe dix minutes | La file garde les messages, puis se vide au rythme de la base (M8, X6) | Raccourcisseur, vague 6 |
 
 ## Jauges, victoire et score
 
@@ -204,7 +208,8 @@ une vague à réponse unique le déclare dans ses données.
 | 2. Les lectures explosent | 900 lectures/s ; le cache redémarre à froid | Cache, réplica, ou CDN (X9) |
 | 3. Campagne marketing | Pic à 5 fois le trafic, en rampe ; une instance tombe | CDN + cache, scaling + cache, scaling + autoscaling + cache (sur 3 instances fixes) |
 | 4. Un client trop gourmand | Un scraper, et des partenaires légitimes qui appellent une API non cachable en bordure (X7) | Rate limiting au palier 40, avec scaling ou CDN (une instance de plus derrière lui) ; sur ce trafic qui ne retombe pas, l'autoscaling coûte trop (X10) |
-| 5. Compter les clics | Chaque redirection émet un événement de clic ; le worker tombe dix minutes | File de messages et worker (réponse unique) ; la file garde les clics et se vide au rythme de la base ; le CDN y perd les clics servis en bordure |
+| 5. À chacun sa limite | 12 partenaires à 125 req/s par clé, une clé qui boucle à 2 000 req/s, un scraper sur 20 adresses à 60 req/s : aucune limite unique ne les sépare (C7) | Une passerelle d'API : 160 par clé, 10 par adresse ; derrière un CDN avec deux instances de plus, ou sans CDN avec quatre instances de plus et un réplica (le saut de latence coûte une instance) |
+| 6. Compter les clics | Chaque redirection émet un événement de clic ; le worker tombe dix minutes | File de messages et worker, avec la passerelle (réponse unique) ; la file garde les clics et se vide au rythme de la base ; le CDN y perd les clics servis en bordure |
 
 ### Le grand marché : la prise de commande d'une boutique
 
@@ -268,6 +273,8 @@ et déterministe, séparée de l'affichage.
   assumée : les compteurs cumulés (arriéré d'une file, requêtes en échec) additionnent un
   débit par seconde une fois par tick, donc à l'échelle du jeu, pas en volumes réels. La
   capacité d'une file se lit en minutes de trafic (arrivées par seconde × minutes d'attente).
+- **Classes de clients** (C7) : une source déclare sa classe (clé d'API d'un partenaire, ou
+  anonyme). Une limite de classe ne voit que les siens ; la limite unique voit tout le monde.
 - **Requêtes typées** : lecture, écriture, événement async. Les liens ne sont pas typés
   (I1) : chaque composant déclare ce qu'il accepte, et un type va au voisin le plus
   spécialisé qui l'accepte.
