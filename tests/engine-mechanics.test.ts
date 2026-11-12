@@ -20,6 +20,8 @@ const catalog: Catalog = {
   components: {
     src: { id: 'src', behavior: 'source', label: 'S', techName: 'S', cost: 0, complexity: 0, capacity: 1, latencyMs: 0, workPerRequest: {}, terminalFor: [], accepts: [] },
     lb: { id: 'lb', behavior: 'balancer', label: 'LB', techName: 'LB', cost: 10, complexity: 1, capacity: 10000, latencyMs: 0, workPerRequest: { read: 1, write: 1, async: 1 }, terminalFor: [], accepts: ['read', 'write', 'async'] },
+    // Passerelle d'API (C7) : le comportement du load balancer, des limites par classe, 5 ms.
+    gw: { id: 'gw', behavior: 'balancer', label: 'GW', techName: 'GW', cost: 25, complexity: 2, capacity: 10000, latencyMs: 5, workPerRequest: { read: 1, write: 1, async: 1 }, terminalFor: [], accepts: ['read', 'write', 'async'] },
     edge: { id: 'edge', behavior: 'edge', label: 'CDN', techName: 'CDN', cost: 30, complexity: 2, capacity: 10000, latencyMs: 0, workPerRequest: { read: 1 }, terminalFor: [], accepts: ['read', 'write', 'async'], hitRate: 0.5 },
     app: { id: 'app', behavior: 'service', label: 'App', techName: 'App', cost: 20, complexity: 1, capacity: 100, latencyMs: 10, workPerRequest: { read: 1, write: 1, async: 1 }, terminalFor: [], accepts: ['read', 'write', 'async'], threads: 10 },
     db: { id: 'db', behavior: 'database', label: 'DB', techName: 'DB', cost: 50, complexity: 2, capacity: 100, latencyMs: 10, workPerRequest: { read: 1, write: 2, async: 2 }, terminalFor: ['read', 'write', 'async'], accepts: ['read', 'write', 'async'] },
@@ -45,6 +47,9 @@ const catalog: Catalog = {
     leader: { id: 'leader', label: 'Leader', techName: 'Leader', appliesTo: 'db', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'leaderReads' } },
     idem: { id: 'idem', label: 'Idem', techName: 'Idem', appliesTo: 'svc', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'idempotence' } },
     timeout: { id: 'timeout', label: 'Timeout', techName: 'Timeout', appliesTo: 'app', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'callTimeout', timeoutMs: 100 } },
+    limit: { id: 'limit', label: 'Limit', techName: 'Limit', appliesTo: 'lb', maxLevel: 3, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'rateLimit', tiersPerClientRps: [5, 10, 20] } },
+    pq: { id: 'pq', label: 'PQ', techName: 'PQ', appliesTo: 'gw', maxLevel: 3, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'rateLimit', tiersPerClientRps: [5, 10, 20], class: 'partner' } },
+    aq: { id: 'aq', label: 'AQ', techName: 'AQ', appliesTo: 'gw', maxLevel: 3, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'rateLimit', tiersPerClientRps: [5, 10, 20], class: 'anonymous' } },
     shed: { id: 'shed', label: 'Shed', techName: 'Shed', appliesTo: 'lb', maxLevel: 1, cost: { base: 10, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'loadShedding', targetUtilization: 0.9 } },
     outbox: { id: 'outbox', label: 'Outbox', techName: 'Outbox', appliesTo: 'db', maxLevel: 1, cost: { base: 10, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'outbox' } },
     dlq: { id: 'dlq', label: 'DLQ', techName: 'DLQ', appliesTo: 'bq', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'deadLetter', maxReceives: 3 } },
@@ -479,6 +484,73 @@ describe('relances des clients (S19)', () => {
       const r = simulateWave(split, wave([retrying({ read: 10, async: 750 }), partners(750)]), catalog);
       expect(r.ticks[0]!.nodes.p!.failed).toBeCloseTo(700, 9);
     });
+  });
+});
+
+describe('limites par classe de client : la passerelle d’API (C7)', () => {
+  // Deux partenaires à 8 req/s par clé, un scraper anonyme sur 4 adresses à 10 req/s, des
+  // visiteurs anonymes à 0,1 req/s : le scraper est entre les deux classes légitimes.
+  const partners = users({ read: 16 }, { id: 'partners', clients: 2, class: 'partner' });
+  const scraper = users({ read: 40 }, { id: 'scraper', clients: 4, class: 'anonymous', abusive: true });
+  const visitors = users({ read: 10 }, { class: 'anonymous' });
+  const sources = [partners, scraper, visitors];
+  const single = (tier: number) => arch([n('s', 'src'), n('l', 'lb', { limit: tier }), n('a', 'app'), n('d', 'db')], [['s', 'l'], ['l', 'a'], ['a', 'd']]);
+  const gated = (pq: number, aq: number) =>
+    arch([n('s', 'src'), n('g', 'gw', { pq, aq }), n('l', 'lb'), n('a', 'app'), n('d', 'db')], [['s', 'g'], ['g', 'l'], ['l', 'a'], ['a', 'd']]);
+
+  it('aucune limite unique ne sépare des partenaires plus gourmands que le scraper', () => {
+    // À 5 req/s, elle coupe les partenaires (6 req/s en échec) ; à 10, le scraper passe en entier.
+    const low = simulateWave(single(1), wave(sources), catalog);
+    expect(low.ticks[0]!.nodes.l!.failed).toBeCloseTo(6, 9);
+    expect(low.ticks[0]!.nodes.l!.shed).toBeCloseTo(20, 9);
+    const high = simulateWave(single(2), wave(sources), catalog);
+    expect(high.ticks[0]!.nodes.l!.failed).toBe(0);
+    expect(high.ticks[0]!.nodes.l!.shed ?? 0).toBe(0);
+  });
+
+  it('chaque classe a sa limite : les partenaires passent, le scraper est écarté, hors échecs', () => {
+    const r = simulateWave(gated(2, 1), wave(sources), catalog);
+    const t = r.ticks[0]!;
+    expect(t.nodes.g!.failed).toBe(0);
+    expect(t.nodes.g!.shed).toBeCloseTo(20, 9);
+    expect(t.links['g→l']).toEqual({ read: 16 + 20 + 10 });
+    expect(r.failuresByReason['rate-limited']).toBe(0);
+  });
+
+  it('une limite par classe ne voit que sa classe : une source sans classe passe', () => {
+    const anonymousOnly = simulateWave(gated(0, 1), wave([users({ read: 40 }, { id: 'x', clients: 4 })]), catalog);
+    expect(anonymousOnly.ticks[0]!.nodes.g!.shed ?? 0).toBe(0);
+    expect(anonymousOnly.ticks[0]!.nodes.g!.failed).toBe(0);
+  });
+
+  it('un quota trop bas coupe ses partenaires, et l’événement de chaque requête refusée avec elle (C5, C6)', () => {
+    const p = users({ read: 16, async: 16 }, { id: 'partners', clients: 2, class: 'partner' });
+    const a = arch([n('s', 'src'), n('g', 'gw', { pq: 1 }), n('a', 'app'), n('d', 'db')], [['s', 'g'], ['g', 'a'], ['a', 'd']]);
+    const r = simulateWave(a, wave([p]), catalog);
+    // 16 lectures pour 10 permises : 6 lectures refusées, et leurs 6 événements ; le quota ne
+    // compte que le synchrone.
+    expect(r.ticks[0]!.nodes.g!.failed).toBeCloseTo(12, 9);
+    expect(r.ticks[0]!.links['g→a']).toEqual({ read: 10, async: 10 });
+  });
+
+  it('un saut de plus pour toutes les requêtes : la latence de la passerelle s’ajoute à chaque chemin', () => {
+    const plain = arch([n('s', 'src'), n('l', 'lb'), n('a', 'app'), n('d', 'db')], [['s', 'l'], ['l', 'a'], ['a', 'd']]);
+    const without = simulateWave(plain, wave([visitors]), catalog).ticks[0]!;
+    const withGw = simulateWave(gated(0, 0), wave([visitors]), catalog).ticks[0]!;
+    expect(withGw.slaLatencyMs - without.slaLatencyMs).toBeCloseTo(lat(5, 10 / 10000), 9);
+  });
+
+  it('derrière un CDN, les lectures des partenaires non cachables arrivent toutes à leur quota (SC1)', () => {
+    const p = users({ read: 16 }, { id: 'partners', clients: 2, class: 'partner', noEdgeCache: true });
+    const v = users({ read: 20 }, { class: 'anonymous' });
+    const a = arch(
+      [n('s', 'src'), n('e', 'edge'), n('g', 'gw', { pq: 1 }), n('l', 'lb'), n('a', 'app'), n('d', 'db')],
+      [['s', 'e'], ['e', 'g'], ['g', 'l'], ['l', 'a'], ['a', 'd']],
+    );
+    const t = simulateWave(a, wave([p, v]), catalog).ticks[0]!;
+    // La bordure sert la moitié des visiteurs, aucun partenaire : 16 + 10 lectures à la passerelle.
+    expect(t.links['e→g']).toEqual({ read: 26 });
+    expect(t.nodes.g!.failed).toBeCloseTo(6, 9);
   });
 });
 

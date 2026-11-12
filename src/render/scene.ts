@@ -82,6 +82,7 @@ const SHAPE_MODELS: Record<Shape, ModelId[]> = {
   belfry: ['building_church_blue', 'flag_blue'].map(K),
   'counting-house': ['building_home_B_blue', 'sack', 'crate_A_small', 'flag_blue'].map(K),
   dovecote: ['building_tower_B_blue', 'flag_blue', 'crate_A_small'].map(K),
+  tollhouse: ['building_home_A_blue', 'fence_wood_straight', 'flag_blue', 'crate_A_small'].map(K),
 };
 /** Décor du bord du plateau : reliefs et grands bois, pour fermer le paysage. */
 const EDGE_DECOR = ['mountain_A_grass_trees', 'hills_A_trees', 'trees_A_large', 'trees_B_medium', 'hill_single_A', 'trees_A_medium'];
@@ -935,6 +936,15 @@ export class CityScene {
         this.put(g, K('building_tower_B_blue'), { scale: 0.9 }, b);
         for (const [x, z] of [[0.7, 0.4], [-0.6, 0.6]] as const) this.put(g, K('flag_blue'), { x, z, scale: 0.9 }, b);
         this.put(g, K('crate_A_small'), { x: 0.6, z: -0.6, scale: 2 }, b);
+        break;
+
+      case 'tollhouse':
+        // Le bureau des laissez-passer : sa maison, la barrière en travers de la route, le fanion
+        // qu'on voit de loin, et le registre des laissez-passer délivrés.
+        this.put(g, K('building_home_A_blue'), { x: -0.5, z: -0.3, scale: 0.85 }, b);
+        for (const z of [-0.45, 0.45]) this.put(g, K('fence_wood_straight'), { x: 0.6, z, rotate: Math.PI / 2 }, b);
+        this.put(g, K('flag_blue'), { x: 0.6, z: -0.9, scale: 1.4 }, b);
+        this.put(g, K('crate_A_small'), { x: -0.2, z: 0.8, scale: 2 }, b);
         break;
 
       case 'stables':

@@ -11,7 +11,7 @@ export function processBalancer(node: ArchNode, def: ComponentDef, incoming: Flo
   for (const { effect, level } of withEffect(w.upgrades.get(node.id)!, 'rateLimit')) {
     const limit = effect.tiersPerClientRps[level - 1];
     if (limit === undefined) continue;
-    flow = applyRateLimit(node.id, flow, limit, w, now);
+    flow = applyRateLimit(node.id, flow, limit, effect.class, w, now);
   }
   const shedding = activeEffect(w.upgrades.get(node.id)!, 'loadShedding');
   const capacity = def.capacity * instancesNow(w, now.incidents, node);
@@ -44,7 +44,7 @@ function shedExcess(nodeId: string, flow: Flow, target: number, w: World, now: N
   return scaleFlow(flow, keep);
 }
 
-function applyRateLimit(nodeId: string, flow: Flow, limitPerClient: number, w: World, now: Now): Flow {
+function applyRateLimit(nodeId: string, flow: Flow, limitPerClient: number, cls: string | undefined, w: World, now: Now): Flow {
   const ctx = now.ledger;
   const out: Flow = new Map();
   // L'async est un effet de bord des requêtes (un clic compté par redirection), pas une
@@ -57,6 +57,8 @@ function applyRateLimit(nodeId: string, flow: Flow, limitPerClient: number, w: W
   const keepShare = new Map<string, number>();
   for (const [sourceId, rps] of perSource) {
     const src = w.sourcesById.get(sourceId);
+    // Une limite par classe ne voit que ses clients : les autres passent, ou sont vus par la leur.
+    if (cls !== undefined && src?.class !== cls) continue;
     const allowed = limitPerClient * (src?.clients ?? 1);
     if (rps <= allowed) {
       keepShare.set(sourceId, 1);

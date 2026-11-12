@@ -30,6 +30,10 @@ export const realWorldComponents: Record<string, RealWorld> = {
   'load-balancer': {
     text: 'Un load balancer géré tient des dizaines de milliers de requêtes par seconde et retire en quelques secondes une instance qui ne répond plus à ses vérifications de santé.',
   },
+  'api-gateway': {
+    text: 'Une passerelle gérée identifie chaque partenaire par sa clé d’API et lui applique le débit et le quota de son offre (sur Amazon API Gateway, un « usage plan » par clé) ; elle ajoute quelques millisecondes à chaque requête. Ces quotas sont appliqués au mieux, pas à l’unité près, et une clé d’API n’authentifie personne : elle identifie un client, elle ne remplace ni l’authentification ni un pare-feu applicatif contre le trafic abusif.',
+    source: { label: 'usage plans et clés d’API, Amazon API Gateway', url: 'https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-api-usage-plans.html' },
+  },
   'message-queue': {
     text: 'Sur une file gérée, la limite est une durée plutôt qu’un nombre : Amazon SQS garde un message 4 jours par défaut, 14 au plus, avec environ 120 000 messages en cours de traitement.',
     source: { label: 'quotas Amazon SQS', url: 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html' },
@@ -75,6 +79,12 @@ export const realWorldUpgrades: Record<string, RealWorld> = {
   },
   'rate-limiting': {
     text: 'Une API limite par clé d’API et par classe de client, rarement d’une seule limite pour tous ; un scraper change d’adresses, et une limite par adresse ne le retient pas longtemps.',
+  },
+  'partner-quota': {
+    text: 'Un quota par clé d’API suit le contrat du partenaire, offre par offre : celui qui le dépasse reçoit des refus (429) et doit espacer ses relances. Une clé dont le script boucle est coupée à son quota, sans toucher aux autres partenaires.',
+  },
+  'anonymous-quota': {
+    text: 'Une limite par adresse est la seule prise sur un client sans clé, et elle est fragile : un scraper change d’adresses (proxys, nuages, réseaux de machines), et une limite par adresse ne le retient pas longtemps. En vrai, on l’accompagne d’une limite globale pour toute la classe anonyme, de la détection de robots, ou on exige une clé.',
   },
   'read-replica': {
     text: 'Un réplica a toujours un peu de retard sur le primaire (replica lag) : une lecture qui doit être à jour ne s’y fait pas.',

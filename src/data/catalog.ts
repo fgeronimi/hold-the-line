@@ -49,6 +49,23 @@ export const catalog: Catalog = {
       terminalFor: [],
       accepts: ['read', 'write', 'async'],
     },
+    // Posée à l'entrée, devant le load balancer : elle reconnaît la classe de chaque client (une
+    // clé d'API, ou rien) et applique la limite de sa classe. Elle ne répartit pas entre les
+    // instances : c'est le load balancer qui le fait, derrière elle. Plus chère et plus complexe
+    // que la limite unique du load balancer, et un saut de plus pour chaque requête.
+    'api-gateway': {
+      id: 'api-gateway',
+      behavior: 'balancer',
+      label: 'Passerelle d’API',
+      techName: 'API gateway',
+      cost: 25,
+      complexity: 2,
+      capacity: 20000,
+      latencyMs: 5,
+      workPerRequest: { read: 1, write: 1, async: 1 },
+      terminalFor: [],
+      accepts: ['read', 'write', 'async'],
+    },
     'app-server': {
       id: 'app-server',
       behavior: 'service',
@@ -375,6 +392,30 @@ export const catalog: Catalog = {
       complexity: { base: 1, perLevel: 0 },
       removalCost: 'on-disable',
       effect: { type: 'rateLimit', tiersPerClientRps: [10, 20, 40, 80, 160] },
+    },
+    // Une limite par classe de client, sur la passerelle : mêmes paliers que la limite unique du
+    // load balancer, mais chacune ne voit que les clients de sa classe.
+    'partner-quota': {
+      id: 'partner-quota',
+      label: 'Quota par clé d’API (partenaires)',
+      techName: 'Rate limiting par clé d’API',
+      appliesTo: 'api-gateway',
+      maxLevel: 5,
+      cost: { base: 5, perLevel: 0 },
+      complexity: { base: 1, perLevel: 0 },
+      removalCost: 'on-disable',
+      effect: { type: 'rateLimit', tiersPerClientRps: [10, 20, 40, 80, 160], class: 'partner' },
+    },
+    'anonymous-quota': {
+      id: 'anonymous-quota',
+      label: 'Limite par adresse (anonymes)',
+      techName: 'Rate limiting par adresse',
+      appliesTo: 'api-gateway',
+      maxLevel: 5,
+      cost: { base: 5, perLevel: 0 },
+      complexity: { base: 1, perLevel: 0 },
+      removalCost: 'on-disable',
+      effect: { type: 'rateLimit', tiersPerClientRps: [10, 20, 40, 80, 160], class: 'anonymous' },
     },
     'load-shedding': {
       id: 'load-shedding',

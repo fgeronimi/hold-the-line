@@ -52,6 +52,13 @@ export const saturationLessons: Record<string, Lesson> = {
     concept: 'Load balancing',
     signal: 'Requêtes par seconde à la porte, au regard de sa capacité.',
   },
+  'api-gateway': {
+    says: 'Bouchon à {name} : chaque voyageur y présente son laissez-passer, et le guichet n’y suffit plus.',
+    tech: 'La passerelle d’API sature : tout le trafic passe par elle, et elle fait plus de travail par requête qu’un load balancer (reconnaître la clé, compter le quota).',
+    remedy: 'Servir une partie des lectures en bordure (CDN) devant elle, pour qu’elle ne voie que ce qui doit être compté.',
+    concept: 'Passerelle d’API',
+    signal: 'Requêtes par seconde et latence ajoutée par la passerelle, au regard de sa capacité.',
+  },
   'message-queue': {
     says: 'Débordement à {name} : les colis arrivent plus vite que les coursiers ne les livrent.',
     tech: 'La file grossit : le consommateur ne suit pas le producteur, l’arriéré monte jusqu’à perdre des messages.',
@@ -87,9 +94,9 @@ export const reasonLessons = {
   legitLimited: {
     says: 'La garde refoule aussi d’honnêtes marchands.',
     tech: 'Le rate limiting est trop strict : il rejette du trafic légitime, comptés comme des échecs.',
-    remedy: 'Monter le palier au-dessus du débit du plus gros client légitime, tout en restant sous celui de l’abuseur. En vrai, on ne choisit pas une seule limite pour tous : chaque classe de client a la sienne, une clé d’API pour les partenaires, une limite plus basse pour les anonymes.',
+    remedy: 'Monter le palier au-dessus du débit du plus gros client légitime, tout en restant sous celui de l’abuseur. Quand aucun palier ne les sépare (un partenaire plus gourmand que le scraper), une passerelle d’API donne à chaque classe de client sa limite : un quota par clé d’API pour les partenaires, une limite plus basse par adresse pour les anonymes.',
     concept: 'Rate Limiting',
-    signal: 'Réponses 429 par client : un partenaire légitime refusé est une alerte, pas du bruit.',
+    signal: 'Réponses 429 par client et par classe : un partenaire légitime refusé est une alerte, pas du bruit.',
   },
   lostAtEdge: {
     says: 'Des passages ne sont jamais comptés : l’avant-poste répond seul aux voyageurs.',
@@ -342,7 +349,7 @@ export const incidentLessons: Record<IncidentEffect['type'], { hurt: Lesson; hel
  * complexité dans le jeu, mais aussi une conséquence pour l'utilisateur. Par effet
  * d'évolution, et `queue` pour le travail différé par une file.
  */
-export const paradeCosts: Partial<Record<UpgradeEffect['type'] | 'queue', string>> = {
+export const paradeCosts: Partial<Record<UpgradeEffect['type'] | 'queue' | 'classLimits', string>> = {
   queue: 'La file : le travail est différé. Le client a sa réponse avant que le travail soit fait ; pour un paiement, il ne sait pas encore s’il a payé, et il faut savoir annuler la commande si le paiement échoue plus tard.',
   circuitBreaker: 'Le disjoncteur : les appels coupés échouent ; le client reçoit une réponse dégradée, à refaire plus tard.',
   callTimeout: 'Le délai d’attente : le client attend tout le délai avant d’apprendre l’échec.',
@@ -354,5 +361,6 @@ export const paradeCosts: Partial<Record<UpgradeEffect['type'] | 'queue', string
   autoscaling: 'L’autoscaling : des instances payées plus cher à l’heure, et quelques minutes de démarrage pendant lesquelles le pic n’est pas absorbé.',
   coalescing: 'Le verrou de recalcul : les requêtes qui attendent une entrée en cours de calcul attendent un peu plus.',
   rateLimit: 'La limite par client : un client légitime trop gourmand serait refusé lui aussi.',
+  classLimits: 'Les limites par classe : un saut de plus sur le chemin de chaque requête, et des clés d’API à délivrer, à révoquer et à suivre ; un partenaire qui dépasse son quota reçoit des refus (429), qu’il doit savoir espacer.',
   deadLetter: 'La file des lettres mortes : les messages mis de côté ne sont pas traités. La commande a été confirmée au client, mais rien n’est fait tant que quelqu’un ne les a pas examinés et rejoués.',
 };

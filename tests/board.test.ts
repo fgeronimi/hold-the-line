@@ -169,6 +169,29 @@ describe('poser un bâtiment sur un chemin', () => {
     expect(pairs(next)).toContain('app-server→db');
   });
 
+  it('une passerelle d’API posée devant le serveur s’insère sur la route des clients (C7)', () => {
+    const arch = line();
+    const next = ok(placeNode(arch, 'api-gateway', onPath(arch, 'src', 'app-server'), catalog));
+    expect(pairs(next)).toContain('src→api-gateway');
+    expect(pairs(next)).toContain('api-gateway→app-server');
+    expect(pairs(next)).not.toContain('src→app-server');
+  });
+
+  it('entre le CDN et le load balancer, la passerelle s’intercale ; entre le load balancer et un serveur mis à l’échelle, non (C7)', () => {
+    let arch: Architecture = { nodes: [{ id: 'src', type: 'traffic-source', cell: { q: 0, r: 0 } }], links: [] };
+    arch = ok(placeNode(arch, 'cdn', { q: 2, r: 0 }));
+    arch = ok(placeNode(arch, 'load-balancer', { q: 6, r: 0 }));
+    arch = ok(placeNode(arch, 'app-server', { q: 6, r: 4 }));
+    arch = ok(placeNode(arch, 'database', { q: 3, r: 4 }));
+    for (const [from, to] of [['src', 'cdn'], ['cdn', 'load-balancer'], ['load-balancer', 'app-server'], ['app-server', 'database']] as const) arch = ok(connect(arch, from, to));
+    arch = { ...arch, nodes: arch.nodes.map((n) => (n.id === 'app-server' ? { ...n, upgrades: { 'horizontal-scaling': 2 } } : n)) };
+    const front = ok(placeNode(arch, 'api-gateway', onPath(arch, 'cdn', 'load-balancer'), catalog));
+    expect(pairs(front)).toEqual(['app-server→database', 'cdn→api-gateway', 'api-gateway→load-balancer', 'load-balancer→app-server', 'src→cdn'].sort());
+    // Le scaling exige que tout le trafic du serveur vienne d'un load balancer : le lien reste.
+    const behind = ok(placeNode(arch, 'api-gateway', onPath(arch, 'load-balancer', 'app-server'), catalog));
+    expect(pairs(behind)).toEqual(pairs(arch));
+  });
+
   it('un bâtiment qui ne peut pas s’intercaler laisse le lien et le fait contourner', () => {
     const arch = line();
     const cell = onPath(arch, 'app-server', 'db');

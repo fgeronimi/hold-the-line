@@ -4,7 +4,7 @@ import type { ArchNode, Catalog, RequestKind } from '../engine/types.ts';
  * Formes low-poly que la scène sait construire. Le thème choisit une forme par composant :
  * les formes sont du code, mais leur attribution, les noms et les couleurs sont des données.
  */
-export type Shape = 'hamlet' | 'watchtower' | 'gatehouse' | 'tower' | 'lectern' | 'keep' | 'stables' | 'belfry' | 'counting-house' | 'dovecote';
+export type Shape = 'hamlet' | 'watchtower' | 'gatehouse' | 'tower' | 'lectern' | 'keep' | 'stables' | 'belfry' | 'counting-house' | 'dovecote' | 'tollhouse';
 
 export interface BuildingStyle {
   /** Nom dans la métaphore ; le nom technique du catalogue est toujours affiché à côté. */
@@ -69,7 +69,8 @@ export type HintLine = 'place' | 'placeMore' | 'link' | 'upgrade' | 'level' | 'r
 /**
  * - `won` (`{story}` : ce qui a marché, ou `wonQuiet`), `wonQuiet` (`{title}` : la vague), `lost` ;
  * - ce qui a marché : `edge`, `cache` (`{share}` : sur 100 lectures), `instances`, `workers`, `replicas`
- *   (`{count}`), `replica`, `rateLimit`, `pubsub` (`{count}` : abonnés), `idempotence`,
+ *   (`{count}`), `replica`, `rateLimit`, `classLimits` (des limites par classe de client),
+ *   `pubsub` (`{count}` : abonnés), `idempotence`,
  *   `outbox`, `queue`, `queues` (`{count}`) ;
  * - `hot` : le bâtiment le plus chargé d'une vague tenue ;
  * - `superfluous`, `superfluousMany` (`{names}`) : ce dont la vague se passait ;
@@ -87,6 +88,7 @@ export type DebriefLine =
   | 'replica'
   | 'replicas'
   | 'rateLimit'
+  | 'classLimits'
   | 'pubsub'
   | 'idempotence'
   | 'outbox'

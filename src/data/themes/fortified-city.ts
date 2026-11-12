@@ -29,6 +29,12 @@ export const fortifiedCity: Theme = {
         real: 'Le load balancer répartit les requêtes entre les instances du serveur ; c’est aussi lui qui porte le rate limiting.',
       },
       metaphor: 'Porte de la cité', icon: '🏰', shape: 'gatehouse', color: '#b9b2a4', accent: '#5a4632' },
+    'api-gateway': {
+      role: {
+        says: 'Devant la porte, le bureau des laissez-passer : chaque marchand y montre le sien, et passe autant de fois que son laissez-passer le permet. Qui n’en a pas passe aussi, mais au compte-gouttes. Un guichet de plus à franchir pour chacun, et des laissez-passer à délivrer.',
+        real: 'La passerelle d’API, posée à l’entrée devant le load balancer, reconnaît la classe de chaque client (une clé d’API, ou rien) et lui applique la limite de sa classe : un quota par clé pour les partenaires, une limite par adresse pour les anonymes. Elle coûte plus que la limite unique du load balancer, et ajoute un saut de latence à chaque requête.',
+      },
+      metaphor: 'Bureau des laissez-passer', icon: '🎫', shape: 'tollhouse', color: '#c9b79c', accent: '#2f6f5e' },
     'app-server': {
       role: {
         says: 'Les scribes reçoivent chaque voyageur et vont chercher sa réponse. Plus de tours, plus de voyageurs servis à la fois.',
@@ -91,6 +97,8 @@ export const fortifiedCity: Theme = {
     autoscaling: '🏗️',
     'read-replica': '📚',
     'rate-limiting': '🛡️',
+    'partner-quota': '🔑',
+    'anonymous-quota': '🚶',
     idempotence: '🔏',
     outbox: '📒',
     'circuit-breaker': '🔌',
@@ -126,6 +134,7 @@ export const fortifiedCity: Theme = {
     replica: 'La copie des archives a répondu aux lectures que les archives seules n’auraient pas tenues.',
     replicas: 'Les {count} copies des archives ont répondu aux lectures que les archives seules n’auraient pas tenues.',
     rateLimit: 'La garde de la porte a refoulé les pillards sans gêner un seul marchand honnête.',
+    classLimits: 'Au bureau des laissez-passer, chacun a passé selon son rang : les marchands sur leur laissez-passer, les pillards au compte-gouttes, et pas un honnête homme refoulé.',
     pubsub: 'Votre {name} a annoncé chaque commande à {count} corps de métier à la fois.',
     idempotence: 'Vos ateliers reconnaissent une commande déjà servie : personne n’a été débité deux fois.',
     outbox: 'Chaque commande est consignée au grand livre avec son annonce : aucune ne s’est perdue.',
@@ -188,6 +197,8 @@ export const fortifiedCity: Theme = {
       'Les crieurs annoncent une grande foire : pendant un tiers de l’heure, cinq fois plus de monde, et la foule arrive en quelques minutes. Vos scribes tiendront-ils le choc ?',
     'noisy-client':
       'La foire a réussi : la foule est restée. Cinquante marchands passent la porte sans relâche. Et deux bandes de pillards sont venues recopier tout le registre des raccourcis, page après page, même les pages que personne ne consulte jamais.',
+    'partner-keys':
+      'Les marchands sont devenus de grandes maisons : douze passent la porte sans relâche, bien plus que n’importe quel voyageur. L’un d’eux a lâché un commis qui revient sans fin chercher les mêmes pages. Et les pillards, rusés, se sont dispersés en vingt petites bandes, plus voraces qu’un voyageur, moins qu’un marchand. Saurez-vous ouvrir la porte aux uns sans l’ouvrir aux autres ?',
     'click-tracking':
       'Le trésorier veut compter chaque passage par un raccourci. Mais un voyageur ne doit jamais attendre qu’on ait fini de compter.',
   },

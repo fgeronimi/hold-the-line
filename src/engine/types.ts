@@ -69,8 +69,13 @@ export interface ComponentDef {
 export type UpgradeEffect =
   | { type: 'instances' }
   | { type: 'readReplicas'; capacityPerReplica: number }
-  /** Le niveau de l'évolution est l'index du palier, à partir de 1 ; 0 = désactivé. */
-  | { type: 'rateLimit'; tiersPerClientRps: number[] }
+  /**
+   * Le niveau de l'évolution est l'index du palier, à partir de 1 ; 0 = désactivé. Avec une
+   * `class`, la limite ne vise que les sources de cette classe (`TrafficSource.class`) : c'est
+   * ce que fait une passerelle d'API, une limite par classe de client. Sans, elle vise tout le
+   * monde, comme la limite unique du load balancer (C1).
+   */
+  | { type: 'rateLimit'; tiersPerClientRps: number[]; class?: string }
   /**
    * Le niveau est le nombre maximal d'instances ajoutées à la demande. Une instance
    * demandée ne sert qu'après `startupTicks` ; elle est facturée au prorata des ticks actifs.
@@ -182,6 +187,12 @@ export interface TrafficSource {
   clients: number;
   /** Un client abusif rejeté par le rate limiting ne compte pas comme un échec. */
   abusive?: boolean;
+  /**
+   * Classe de client, telle qu'une passerelle d'API la reconnaît (une clé d'API de partenaire,
+   * ou rien : un anonyme). Seule une limite de la même classe le vise ; la limite unique du load
+   * balancer, sans classe, vise tout le monde. Absent : aucune limite par classe ne le voit.
+   */
+  class?: string;
   /**
    * Parcourt la longue traîne (un crawler qui visite tous les liens) : ses lectures ne
    * tombent jamais dans un cache, CDN compris.
