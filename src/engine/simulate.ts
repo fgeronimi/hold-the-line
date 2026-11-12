@@ -89,6 +89,11 @@ export function simulateWave(
   /** Arrivées cumulées de chaque file, tick par tick : de quoi dater son plus vieux message (M13). */
   const arrivals = new Map<string, number[]>();
   let clientFailedSoFar = 0;
+  /** Échecs comptés par le SLA, en requêtes : une copie d'événement pèse 1 / abonnés (B9). */
+  let slaFailed = 0;
+  // Un événement que k services sur n n'ont pas reçu compte pour k / n d'échec : une commande
+  // à moitié livrée est à moitié en échec, et le taux ne dépasse jamais 100 % (B9).
+  const copyWeight = fanOut > 1 ? 1 / fanOut : 1;
   let active: Incident[] = [];
 
   for (let tick = 0; tick < wave.ticks; tick++) {
@@ -99,6 +104,8 @@ export function simulateWave(
     for (const id of was) if (!active.some((i) => i.id === id)) events.push({ type: 'incident-end', tick, incident: id });
     const ledger: Ledger = { tick, failures, nodeFailed: new Map(), nodeShed: new Map(), nodeTally: new Map(), events, shed, asyncTally, clientFailed: new Map() };
     const failedBefore = sumFailures(failures);
+    const eventsFailedBefore = asyncTally.failed;
+    const undeliveredBefore = failures.undelivered;
 
     const { injected, retried } = inject(wave, retries, tick, factor);
     const delivery: Delivery = {
@@ -171,6 +178,9 @@ export function simulateWave(
     if (retries.retrying.length > 0) planRetries(retries, wave.ticks, tick, factor, ledger.clientFailed);
 
     const failedNow = sumFailures(failures) - failedBefore;
+    const copiesFailedNow = asyncTally.failed - eventsFailedBefore + failures.undelivered - undeliveredBefore;
+    const slaFailedNow = failedNow - copiesFailedNow * (1 - copyWeight);
+    slaFailed += slaFailedNow;
     const shedNow = Object.values(nodeTicks).reduce((a, n) => a + (n.shed ?? 0), 0);
     ticks.push({
       tick,
@@ -178,7 +188,7 @@ export function simulateWave(
       failed: failedNow,
       // Déduites à l'injection, comme le rejeu les a toujours affichées (voir `TickMetrics`).
       countedSoFar: (countedSoFar += offered - shedNow - retried),
-      clientFailedSoFar: (clientFailedSoFar += failedNow - retried),
+      clientFailedSoFar: (clientFailedSoFar += slaFailedNow - retried),
       avgLatencyMs: latency.avg,
       slaLatencyMs: latency.sla,
       nodes: nodeTicks,
@@ -194,7 +204,7 @@ export function simulateWave(
   for (const a of w.autoscalers.values()) billed.autoscaling += (a.instanceTicks * a.instanceCost) / wave.ticks;
 
   // Un échec relancé n'est pas vu du client : sa relance compte à sa place, réussie ou non.
-  const failed = sumFailures(failures) - retries.total;
+  const failed = slaFailed - retries.total;
   const counted = offeredTotal - shed.value - retries.total;
   const failureRate = counted > 0 ? failed / counted : 0;
   const avgLatency = syncOffered > 0 ? syncWeightedLatency / syncOffered : 0;

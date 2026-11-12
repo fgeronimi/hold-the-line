@@ -138,7 +138,7 @@ export const market: Scenario = {
       incidents: [
         // Plus forts qu'aux vagues 3 et 4 : noyés dans 1 500 lectures par seconde, ils doivent encore compter.
         { id: 'sales-redelivery', title: 'Le bus relivre des messages', component: 'pubsub', from: 10, until: 30, effect: { type: 'duplicate-delivery', share: 0.3 } },
-        { id: 'sales-crash', title: 'Le serveur tombe avant de publier', component: 'app-server', from: 35, until: 50, effect: { type: 'publish-loss', share: 0.4 } },
+        { id: 'sales-crash', title: 'Le serveur tombe avant de publier', component: 'app-server', from: 30, until: 50, effect: { type: 'publish-loss', share: 0.8 } },
       ],
     },
   ],

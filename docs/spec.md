@@ -170,8 +170,9 @@ complexité. La latence est un p95 des latences par tick, affiché « p95 (appro
 elle compte lectures, écritures et événements async, sauf l'async qui passe par une file
 (S10). Un événement traité en direct compte entier, pas dilué dans les lectures (S17), et
 les lectures qui doivent être à jour comptent à part dès qu'elles pèsent plus de 5 % (S21).
-Une requête échouée que le client relance n'est pas un échec : sa relance compte à sa
-place (S19). Chaque source ne relance que ses propres échecs, du même type, et une requête
+Un événement que k services attendus sur n n'ont pas reçu compte pour k / n d'échec : le
+taux reste un taux, une commande jamais livrée compte pour une (M14). Une requête échouée
+que le client relance n'est pas un échec : sa relance compte à sa place (S19). Chaque source ne relance que ses propres échecs, du même type, et une requête
 relancée réémet son événement ; un doublon, une copie non livrée ou une lecture périmée ne
 se relancent pas (M10).
 

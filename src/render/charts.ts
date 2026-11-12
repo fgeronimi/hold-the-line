@@ -51,14 +51,8 @@ export function chartModel(
   const n = ticks.length;
 
   const offered = ticks.map((t) => t.offered);
-  let counted = 0;
-  let failedSoFar = 0;
-  const failureRate = ticks.map((t) => {
-    const shed = Object.values(t.nodes).reduce((a, x) => a + (x.shed ?? 0), 0);
-    counted += t.offered - shed;
-    failedSoFar += t.failed;
-    return counted > 0 ? failedSoFar / counted : 0;
-  });
+  // Même unité que la jauge du SLA : relances déduites, copies d'événement au prorata (B9).
+  const failureRate = ticks.map((t) => (t.countedSoFar > 0 ? t.clientFailedSoFar / t.countedSoFar : 0));
   const sla = wave.sla.maxFailureRate;
 
   const panels: ChartPanel[] = [

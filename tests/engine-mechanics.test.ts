@@ -648,14 +648,13 @@ describe('pub/sub et livraison (S4, S8)', () => {
     expect(r.failed).toBe(0);
   });
 
-  it('fige : les copies non livrées se comptent contre des événements offerts, le taux d’échec dépasse 100 %', () => {
-    // Trois services, une file partagée : 900 copies attendues, 300 livrées, 600 « non
-    // livrées » rapportées à 300 événements offerts.
-    // À trancher (hors docs/revue-et-plan.md, à voir avec A1 et M4) : rapporter les copies
-    // à des copies attendues, ou compter un événement non livré une seule fois.
+  it('un événement que k services sur n n’ont pas reçu compte pour k / n d’échec (B9)', () => {
+    // Trois services, une file partagée : chaque événement n'atteint qu'un service sur trois.
+    // 600 copies manquent sur 900 attendues ; le SLA compte 300 × 2/3 = 200 requêtes en échec.
     const r = simulateWave(fan('queue', ['s1', 's2', 's3']), wave([users({ async: 30 })], { consumers: ['s1', 's2', 's3'] }), catalog);
-    expect(r.failuresByReason.undelivered).toBe(600);
-    expect(r.gauges.failureRate.value).toBe(2);
+    expect(r.failuresByReason.undelivered).toBeCloseTo(600, 6);
+    expect(r.failed).toBeCloseTo(200, 6);
+    expect(r.gauges.failureRate.value).toBeCloseTo(2 / 3, 9);
   });
 });
 

@@ -47,15 +47,22 @@ describe('une seule définition du SLA, publiée par le moteur', () => {
   });
 
   it('chaque tick cumule son trafic, écarté et relances injectées déduits', () => {
-    for (const { label, r } of played) {
+    for (const { label, wave, r } of played) {
       let counted = 0;
       let failed = 0;
+      // Avec n services à livrer, une copie d'événement perdue ne pèse que 1 / n (B9) : le
+      // cumul du SLA reste entre les échecs en messages divisés par n et ces échecs entiers.
+      const fanOut = Math.max(1, wave.consumers?.length ?? 0);
       for (const t of r.ticks) {
         const shed = Object.values(t.nodes).reduce((a, n) => a + (n.shed ?? 0), 0);
         counted += t.offered - shed - (t.retries ?? 0);
         failed += t.failed - (t.retries ?? 0);
         expect(t.countedSoFar, label).toBe(counted);
-        expect(t.clientFailedSoFar, label).toBe(failed);
+        if (fanOut === 1) expect(t.clientFailedSoFar, label).toBeCloseTo(failed, 6);
+        else {
+          expect(t.clientFailedSoFar, label).toBeLessThanOrEqual(failed + 1e-6);
+          expect(t.clientFailedSoFar, label).toBeGreaterThanOrEqual(failed / fanOut - 1e-6);
+        }
       }
     }
   });

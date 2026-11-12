@@ -399,7 +399,8 @@ export interface TickMetrics {
    */
   countedSoFar: number;
   /**
-   * Échecs vus du client, cumulés : les échecs, moins les relances injectées. Le verdict,
+   * Échecs vus du client, cumulés, dans l'unité du SLA (une copie d'événement pèse 1 / n
+   * services attendus, B9) : les échecs, moins les relances injectées. Le verdict,
    * lui, déduit les relances au tick où il les planifie : en fin de vague,
    * `clientFailedSoFar / countedSoFar` donne son taux d'échec (une relance qui tomberait
    * après la fin n'est jamais planifiée) ; en cours de vague, le cumul suit le client.
@@ -449,7 +450,12 @@ export interface WaveResult {
     latency: Gauge;
   };
   offered: number;
+  /**
+   * Échecs comptés par le SLA, en requêtes, relances déduites : un événement que k services
+   * attendus sur n n'ont pas reçu compte pour k / n (B9).
+   */
   failed: number;
+  /** Échecs par raison, en messages : chaque copie d'événement perdue y compte pour un. */
   failuresByReason: Record<FailureReason, number>;
   /** Requêtes abusives écartées par le rate limiting : voulu, donc hors échecs. */
   shed: number;

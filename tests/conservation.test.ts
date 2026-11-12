@@ -269,8 +269,18 @@ function conservationViolations(arch: Architecture, wave: Wave, catalog: Catalog
     report('vague', `échecs hors nœud ${undeliveredFromTicks} ≠ non livrés ${result.failuresByReason.undelivered}`);
   }
   if (!close(shedFromNodes, result.shed, result.shed)) report('vague', `Σ écarté des nœuds ${shedFromNodes} ≠ ${result.shed}`);
-  // Un échec relancé sort du total : sa relance compte à sa place (S19).
-  if (!close(result.failed, tickFailed - retriedSoFar, tickFailed)) report('vague', `failed ${result.failed} ≠ Σ échecs ${tickFailed} − relances ${retriedSoFar}`);
+  // Un échec relancé sort du total : sa relance compte à sa place (S19). Une copie d'événement
+  // perdue ne pèse que 1 / n services attendus (B9) : chaque événement compte au plus pour un.
+  const fanOut = Math.max(1, wave.consumers?.length ?? 0);
+  if (fanOut === 1) {
+    if (!close(result.failed, tickFailed - retriedSoFar, tickFailed)) report('vague', `failed ${result.failed} ≠ Σ échecs ${tickFailed} − relances ${retriedSoFar}`);
+  } else if (result.delivery) {
+    // Les copies d'événement en échec sont ce qui manque à la livraison, moins ce qui attend encore en file.
+    const copies = result.delivery.expected - result.delivery.delivered;
+    const weighted = tickFailed - retriedSoFar - copies * (1 - 1 / fanOut);
+    if (result.failed > tickFailed - retriedSoFar + EPS * Math.max(1, tickFailed)) report('vague', `failed ${result.failed} > Σ échecs ${tickFailed} − relances`);
+    if (result.failed < weighted - EPS * Math.max(1, tickFailed)) report('vague', `failed ${result.failed} < échecs pondérés ${weighted}`);
+  }
   for (const [id, f] of nodeFailedTotal) {
     if (!close(result.nodes[id]!.failed, f, f)) report('vague', `${id} : résumé ${result.nodes[id]!.failed} ≠ Σ ticks ${f}`);
   }
@@ -278,11 +288,8 @@ function conservationViolations(arch: Architecture, wave: Wave, catalog: Catalog
   if (counted > 0) {
     const rate = result.gauges.failureRate.value;
     if (rate < -EPS) report('taux', `taux d'échec ${rate} négatif`);
-    // Écart E2 (voir plus bas) : « non livré » se compte par abonné, le dénominateur par
-    // requête. Hors non-livrés, le taux doit rester sous 1 ; au-delà, c'est E2 seul.
-    const withoutCopies = (result.failed - result.failuresByReason.undelivered) / counted;
-    if (withoutCopies > 1 + EPS) report('taux', `taux d'échec hors non-livrés ${withoutCopies} > 1`);
-    else if (rate > 1 + EPS) report('E2-taux-sur-1', `taux d'échec ${rate} > 1 par les non-livrés`);
+    // Corrigé par B9 : une copie d'événement perdue pèse 1 / n, le taux reste un taux.
+    if (rate > 1 + EPS) report('taux', `taux d'échec ${rate} > 1`);
     if (!close(rate * counted, result.failed, counted)) report('taux', `taux ${rate} ≠ échecs ${result.failed} / ${counted}`);
   }
   if (result.delivery) {
@@ -369,7 +376,7 @@ const label = (arch: Architecture) =>
     .join(',');
 
 /** Écarts connus du moteur, isolés plus bas : leur code est exclu de l'invariant général. */
-const KNOWN = ['E2-taux-sur-1'];
+const KNOWN: string[] = [];
 
 describe('conservation du trafic', () => {
   it('chaque scénario a ses architectures types et un échantillon de son espace', () => {
@@ -395,9 +402,8 @@ describe('conservation du trafic', () => {
 });
 
 /**
- * Écarts trouvés par l'invariant. `it.fails` : ces tests disent ce que le moteur devrait
- * faire ; ils passeront au rouge le jour où le moteur sera corrigé, et il faudra alors les
- * passer en `it` et retirer leur code de `KNOWN`.
+ * Écarts trouvés par l'invariant, tous corrigés depuis. Un écart nouveau s'écrit en
+ * `it.fails` (ce que le moteur devrait faire), avec son code dans `KNOWN`, jusqu'à sa correction.
  */
 describe('écarts de conservation connus', () => {
   const play = (scenario: Scenario, waveId: string, arch: Architecture) => {
@@ -418,12 +424,12 @@ describe('écarts de conservation connus', () => {
     expect(result.failuresByReason['rate-limited']).toBeCloseTo(2 * rejectedReads, 6);
   });
 
-  // E2. « Non livré » (simulate.ts:415-423) se compte par abonné attendu, copie par copie
-  // (S8), mais le taux d'échec (l. 465-467) divise par des requêtes. Sans aucune livraison,
-  // trois abonnés font trois échecs par événement : le marché sans file affiche 119 % d'échecs
-  // à la vague 2. Un taux au-delà de 100 % n'a pas de sens pour le joueur.
-  it.fails('E2 — le taux d’échec ne dépasse pas 100 %, même quand rien n’est livré', () => {
+  // E2, corrigé par B9 : « non livré » se compte par copie, mais une copie ne pèse que 1 / n
+  // services attendus dans le taux d'échec. Sans aucune livraison, le marché affichait 119 %
+  // à la vague 2 ; un événement jamais livré compte désormais pour un échec, pas pour trois.
+  it('E2 — le taux d’échec ne dépasse pas 100 %, même quand rien n’est livré', () => {
     const { result } = play(balanceSpaces[1]!.scenario, 'three-trades', M.ordering('none'));
     expect(result.gauges.failureRate.value).toBeLessThanOrEqual(1);
+    expect(result.gauges.failureRate.value).toBeGreaterThan(0.25);
   });
 });
