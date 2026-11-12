@@ -167,7 +167,7 @@ Le joueur est coincé entre « pas assez » et « trop » :
 | Fiabilité | Taux d'échec de la vague et latence p95 de ses réponses face au SLA | Le sous-dimensionnement, le composant manquant |
 
 Une vague est gagnée si le SLA est tenu sans dépasser le budget ni le plafond de
-complexité. La latence est le p95 des réponses de la vague (M15) : à chaque minute, chaque
+complexité. Le SLA demande au plus 1 % d'échecs dans tous les scénarios (B8). La latence est le p95 des réponses de la vague (M15) : à chaque minute, chaque
 chemin servi (une lecture servie par le cache, une autre qui l'a raté et attend la base, un
 événement traité en direct ou déposé dans une file) pèse son débit, et le p95 se prend sur
 toutes ces réponses. Une minorité lente se voit dès qu'elle pèse plus de 5 % des réponses.
