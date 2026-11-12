@@ -128,6 +128,7 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 | Délestage | Load balancer | Tempête de relances, surcharge | Les refus restent des échecs, relancés ; la porte garde 25 % de marge (M11) | Oui |
 | Capacité de la file | File | Débordement pendant une longue panne de l'aval | Coût par niveau ; n'aide pas si les consommateurs ne suivent pas en moyenne (S20) | Oui |
 | Lecture sur le primaire | Base | Lectures périmées pendant une partition | Le primaire porte ces lectures en plus des écritures (S21) | Oui |
+| File des lettres mortes | File | Message empoisonné qui bloque la file | Les messages mis de côté après trois essais ne sont pas traités : ils comptent en échec, et il faut les examiner puis les rejouer (S25) | Oui |
 | Sharding, consistent hashing | — | — | — | Non |
 
 Retirer ou remplacer un composant coûte sa valeur d'achat ; réduire les instances est
@@ -154,6 +155,7 @@ ne dure moins de cinq minutes (X11) : le p95 voit tout ce qui pèse plus de 5 % 
 | Panne brève, clients qui relancent aussitôt : tempête de relances | Délestage à la porte, ou backoff exponentiel et jitter | Tournoi, vagues 1 et 4 |
 | Dépendance externe en panne plus longtemps que la file ne tient | Capacité de la file | Tournoi, vague 2 |
 | Partition réseau entre le primaire et ses réplicas | Lectures critiques sur le primaire (choix CAP) | Tournoi, vagues 3 et 4 |
+| Message empoisonné : le consommateur plante à chaque essai, la file reste bloquée derrière lui | File des lettres mortes | Marché, vagues 5 et 6 |
 | Le worker tombe dix minutes | La file garde les messages, puis se vide au rythme de la base (M8, X6) | Raccourcisseur, vague 5 |
 
 ## Jauges, victoire et score
@@ -215,7 +217,8 @@ l'autre côté de la rivière (S8). Il faut leur faire parvenir chaque commande.
 | 2. Trois services à prévenir | Chacun veut chaque événement | Pub/sub + une file par service ; une file partagée n'en livre qu'un tiers à chacun |
 | 3. Livrés deux fois | Le bus relivre une part des messages | Idempotence sur les services |
 | 4. Commandes perdues | Le serveur tombe entre l'écriture et la publication | Outbox, et de quoi soulager la base qu'elle charge (cache ou réplica) |
-| 5. Les soldes | 1 500 lectures/s, les deux incidents reviennent | Tout, plus une instance derrière un load balancer, et cache et réplica pour la base que l'outbox charge |
+| 5. Une commande empoisonnée | Pendant cinq minutes, 5 % des commandes font planter chaque service qui les lit | Une file des lettres mortes sur chaque file ; sans elle, la file reste bloquée jusqu'à la fin |
+| 6. Les soldes | 1 500 lectures/s, les trois incidents reviennent | Tout, plus une instance derrière un load balancer, et cache et réplica pour la base que l'outbox charge |
 
 ### Le banquier lombard : un paiement chez un prestataire externe
 
@@ -255,7 +258,10 @@ et déterministe, séparée de l'affichage.
   de sa capacité, un nœud fait échouer l'excédent. Seule la file garde un arriéré d'un tick
   à l'autre. **La file impose le rythme de l'aval** (M8) : un message qu'un nœud en aval
   ne peut pas traiter n'est pas acquitté et retourne dans sa file ; il passe après le trafic
-  direct, et compte dans l'arriéré maximal.
+  direct, et compte dans l'arriéré maximal. **Message empoisonné** (S25) : son consommateur
+  plante à chaque essai ; la file sert dans l'ordre et ne relâche plus que lui, tant qu'elle le
+  garde. Sans file des lettres mortes, elle est bloquée pour de bon et ce qui attend derrière
+  compte en non livré ; avec, il est mis de côté après trois essais, compté en échec à part.
 - **Le temps** (M7) : un tick vaut une minute, une vague de 60 ticks montre une heure. Les
   débits restent en requêtes par seconde. Le joueur lit des minutes (« de la 31ᵉ à la 33ᵉ
   minute »), le code et le mode debug des ticks. Aucun chiffre n'a été recalibré ; limite
@@ -286,7 +292,8 @@ et déterministe, séparée de l'affichage.
   d'autre cascade : un aval simplement saturé ne ralentit pas l'amont (M3).
 - **Sorties** : jauges, facture, journal d'événements, et par tick le débit de chaque lien
   et l'état de chaque nœud (charge, fils occupés, circuits coupés, échecs, arriéré,
-  instances en panne, trafic repoussé, doublons, événements perdus). Le rendu ne fait que relire ces ticks.
+  instances en panne, trafic repoussé, doublons, événements perdus, messages empoisonnés,
+  lettres mortes). Le rendu ne fait que relire ces ticks.
 
 ## Rendu et interface
 
@@ -308,7 +315,8 @@ et déterministe, séparée de l'affichage.
   type. Pastilles +1, ✕ −1, 🛡. Les problèmes se voient sur place : bâtiment qui tremble et
   fume, porte qui clignote et requête qui rebondit, coursiers en rang devant une file,
   sablier sur le bâtiment le plus lent, mage qui se dédouble, messager qui s'évapore,
-  tour en feu, dôme de la garde, mages figés devant une dépendance lente, barrière du
+  tour en feu, dôme de la garde, vapeur verte d'un consommateur qui plante sur un message
+  empoisonné et pile des lettres mortes au pied de la file, mages figés devant une dépendance lente, barrière du
   circuit coupé, et l'alarme quand le SLA est rompu, sur les échecs ou sur
   la latence. Capacités, coûts et débits restent chiffrés partout (C4). Tableau de bord,
   alertes à la première saturation, ralenti, courbes en direct.
@@ -356,8 +364,3 @@ Par ordre d'apport pédagogique :
 | Partage d'une architecture par lien | Dimension sociale |
 
 Les thèmes Équipe et Sécurité du calendrier restent hors du jeu.
-
-## Questions ouvertes
-
-- La file n'a ni délai de visibilité ni compte d'essais : un message qui échoue toujours
-  la bloquerait (file des lettres mortes, ticket n° 3).

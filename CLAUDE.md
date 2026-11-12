@@ -168,6 +168,9 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   ce qu'un nœud ne peut pas en servir retourne dans la file (`deferred` / `requeued`, remis par
   `settleQueues` en fin de tick) au lieu d'échouer, après le trafic direct. Un nouveau nœud
   qui fait échouer par capacité doit passer par `serveShared` ou `deferExcess` (`nodes/common.ts`).
+- Un message empoisonné (S25, `Stream.poisoned`) fait planter son consommateur à chaque essai
+  (`rejectPoisoned`) et bloque sa file, qui ne relâche plus que lui ; sans file des lettres
+  mortes, `blockedForGood` fait compter en non livré tout ce qui attend derrière.
 - Le travail d'un flux est divisé par sa taille de lot (`batch`), comme les fils qu'il
   occupe (M6), mais les échecs se comptent toujours en messages.
 - Des clients qui relancent (`retries`, S19) changent deux règles : un échec relancé sort

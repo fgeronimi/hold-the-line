@@ -642,7 +642,7 @@ GitHub par bâtiment.
 | Ticket | Bâtiment | Leçon | Quand |
 |---|---|---|---|
 | [#1](https://github.com/fgeronimi/hold-the-line/issues/1) | **Worker**, à part du serveur d'application | Un worker se dimensionne sur l'arriéré, pas sur le trafic entrant | Avec la passe A : il rend lisible la correction de la file (M1) |
-| [#3](https://github.com/fgeronimi/hold-the-line/issues/3) | **File des lettres mortes** | Un message empoisonné bloque une file ; on le met de côté après quelques essais | Après les quatre passes ; dépend de M1 et M6 |
+| [#3](https://github.com/fgeronimi/hold-the-line/issues/3) | **File des lettres mortes** | Un message empoisonné bloque une file ; on le met de côté après quelques essais | Fait : une évolution de la file, vague 5 du marché (S25) |
 | [#2](https://github.com/fgeronimi/hold-the-line/issues/2) | **Passerelle d'API** | Des limites de débit par classe de client | Après les quatre passes ; à articuler avec SC1 |
 
 Écartés : le stockage objet (il lui faut un scénario), une tour de supervision (du décor
