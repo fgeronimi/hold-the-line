@@ -148,57 +148,80 @@ Tout au maximum, midnight-expiry : perd (ok) — Budget dépassé : 315 / 125 ; 
 Tout au maximum, banker-closed : perd (ok) — Budget dépassé : 315 / 140 ; Trop complexe : 15 / 12 points
 Tout au maximum, fair : perd (ok) — Budget dépassé : 315 / 250
 
-## La billetterie du tournoi — 2100 architectures × 4 vagues
-[ok] ticket-rush — 2 stratégie(s) : backoff + scaling + cache + file | scaling + autoscaling + cache + file
+## La billetterie du tournoi — 4200 architectures × 4 vagues
+[ok] ticket-rush — 3 stratégie(s) : backoff + scaling + cache + file | délestage + scaling + cache + file | scaling + autoscaling + cache + file
      backoff + scaling + cache + file                    1 gagnantes | meilleure : scaling 1 | score 34.8 | coût 145/150 | marges coût 3 %, cx 9 %, échecs 100 %, p95 27 %
-     backoff + scaling + cache + file + rétention        1 gagnantes | meilleure : scaling 1, rétention 1 | score 31.7 | coût 150/150 | marges coût 0 %, cx 0 %, échecs 100 %, p95 27 %
+     délestage + scaling + cache + file                  1 gagnantes | meilleure : scaling 1 | score 34.2 | coût 150/150 | marges coût 0 %, cx 9 %, échecs 100 %, p95 28 %
+     backoff + scaling + cache + file + capacité de file    1 gagnantes | meilleure : scaling 1, capacité de file 1 | score 31.7 | coût 150/150 | marges coût 0 %, cx 0 %, échecs 100 %, p95 27 %
        ↳ dominée par « backoff + scaling + cache + file »
      scaling + autoscaling + cache + file                1 gagnantes | meilleure : scaling 1, autoscaling 6 | score 28.2 | coût 149.58/150 | marges coût 0 %, cx 0 %, échecs 100 %, p95 13 %
-[ok] pigeons-grounded (réponse unique assumée) — 1 stratégie(s) : scaling + cache + file + rétention
-     scaling + cache + file + rétention                  2 gagnantes | meilleure : scaling 1, rétention 1 | score 41.3 | coût 145/150 | marges coût 3 %, cx 9 %, échecs 100 %, p95 53 %
-     backoff + scaling + cache + file + rétention        1 gagnantes | meilleure : scaling 1, rétention 1 | score 38.2 | coût 150/150 | marges coût 0 %, cx 0 %, échecs 100 %, p95 53 %
-       ↳ dominée par « scaling + cache + file + rétention »
+[ok] pigeons-grounded — 2 stratégie(s) : scaling + cache + file + capacité de file | autoscaling + cache + file + capacité de file
+     scaling + cache + file + capacité de file           3 gagnantes | meilleure : scaling 1, capacité de file 1 | score 42.1 | coût 145/155 | marges coût 6 %, cx 9 %, échecs 100 %, p95 53 %
+     backoff + scaling + cache + file + capacité de file    2 gagnantes | meilleure : scaling 1, capacité de file 1 | score 39.0 | coût 150/155 | marges coût 3 %, cx 0 %, échecs 100 %, p95 53 %
+       ↳ dominée par « scaling + cache + file + capacité de file »
+     délestage + scaling + cache + file + capacité de file    1 gagnantes | meilleure : scaling 1, capacité de file 1 | score 38.2 | coût 155/155 | marges coût 0 %, cx 0 %, échecs 100 %, p95 53 %
+       ↳ dominée par « scaling + cache + file + capacité de file »
+     autoscaling + cache + file + capacité de file       2 gagnantes | meilleure : autoscaling 3, capacité de file 1 | score 28.0 | coût 150.42/155 | marges coût 3 %, cx 0 %, échecs 73 %, p95 36 %
 [ok] split-registry — 2 stratégie(s) : scaling + réplica + lecture au primaire + file | autoscaling + réplica + lecture au primaire + file
      scaling + réplica + lecture au primaire + file      2 gagnantes | meilleure : scaling 1, réplica 2 | score 37.9 | coût 210/230 | marges coût 9 %, cx 23 %, échecs 100 %, p95 20 %
-     scaling + réplica + lecture au primaire + file + rétention    3 gagnantes | meilleure : scaling 1, réplica 2, rétention 1 | score 35.4 | coût 215/230 | marges coût 7 %, cx 15 %, échecs 100 %, p95 20 %
+     scaling + réplica + lecture au primaire + file + capacité de file    3 gagnantes | meilleure : scaling 1, réplica 2, capacité de file 1 | score 35.4 | coût 215/230 | marges coût 7 %, cx 15 %, échecs 100 %, p95 20 %
        ↳ dominée par « scaling + réplica + lecture au primaire + file »
      backoff + scaling + réplica + lecture au primaire + file    1 gagnantes | meilleure : scaling 1, réplica 2 | score 35.4 | coût 215/230 | marges coût 7 %, cx 15 %, échecs 100 %, p95 20 %
        ↳ dominée par « scaling + réplica + lecture au primaire + file »
      autoscaling + réplica + lecture au primaire + file    2 gagnantes | meilleure : autoscaling 3, réplica 2 | score 35.3 | coût 215.83/230 | marges coût 6 %, cx 15 %, échecs 100 %, p95 20 %
+     délestage + scaling + réplica + lecture au primaire + file    1 gagnantes | meilleure : scaling 1, réplica 2 | score 34.8 | coût 220/230 | marges coût 4 %, cx 15 %, échecs 100 %, p95 20 %
+       ↳ dominée par « scaling + réplica + lecture au primaire + file »
      scaling + autoscaling + réplica + lecture au primaire + file    2 gagnantes | meilleure : scaling 1, autoscaling 3, réplica 2 | score 33.5 | coût 215/230 | marges coût 7 %, cx 8 %, échecs 100 %, p95 20 %
        ↳ dominée par « autoscaling + réplica + lecture au primaire + file »
-     backoff + scaling + réplica + lecture au primaire + file + rétention    3 gagnantes | meilleure : scaling 1, réplica 2, rétention 1 | score 32.9 | coût 220/230 | marges coût 4 %, cx 8 %, échecs 100 %, p95 20 %
-       ↳ dominée par « scaling + réplica + lecture au primaire + file + rétention »
-     autoscaling + réplica + lecture au primaire + file + rétention    4 gagnantes | meilleure : autoscaling 3, réplica 2, rétention 1 | score 32.8 | coût 220.83/230 | marges coût 4 %, cx 8 %, échecs 100 %, p95 20 %
+     backoff + scaling + réplica + lecture au primaire + file + capacité de file    3 gagnantes | meilleure : scaling 1, réplica 2, capacité de file 1 | score 32.9 | coût 220/230 | marges coût 4 %, cx 8 %, échecs 100 %, p95 20 %
+       ↳ dominée par « scaling + réplica + lecture au primaire + file + capacité de file »
+     autoscaling + réplica + lecture au primaire + file + capacité de file    4 gagnantes | meilleure : autoscaling 3, réplica 2, capacité de file 1 | score 32.8 | coût 220.83/230 | marges coût 4 %, cx 8 %, échecs 100 %, p95 20 %
        ↳ dominée par « autoscaling + réplica + lecture au primaire + file »
      backoff + autoscaling + réplica + lecture au primaire + file    2 gagnantes | meilleure : autoscaling 3, réplica 2 | score 32.8 | coût 220.83/230 | marges coût 4 %, cx 8 %, échecs 100 %, p95 20 %
        ↳ dominée par « autoscaling + réplica + lecture au primaire + file »
      scaling + cache + réplica + lecture au primaire + file    1 gagnantes | meilleure : scaling 1, réplica 2 | score 32.4 | coût 225/230 | marges coût 2 %, cx 8 %, échecs 100 %, p95 20 %
        ↳ dominée par « scaling + réplica + lecture au primaire + file »
-     scaling + autoscaling + réplica + lecture au primaire + file + rétention    6 gagnantes | meilleure : scaling 1, autoscaling 3, réplica 2, rétention 1 | score 31.0 | coût 220/230 | marges coût 4 %, cx 0 %, échecs 100 %, p95 20 %
-       ↳ dominée par « autoscaling + réplica + lecture au primaire + file + rétention »
+     délestage + scaling + réplica + lecture au primaire + file + capacité de file    2 gagnantes | meilleure : scaling 1, réplica 2, capacité de file 1 | score 32.4 | coût 225/230 | marges coût 2 %, cx 8 %, échecs 100 %, p95 20 %
+       ↳ dominée par « scaling + réplica + lecture au primaire + file + capacité de file »
+     backoff + délestage + scaling + réplica + lecture au primaire + file    1 gagnantes | meilleure : scaling 1, réplica 2 | score 32.4 | coût 225/230 | marges coût 2 %, cx 8 %, échecs 100 %, p95 20 %
+       ↳ dominée par « délestage + scaling + réplica + lecture au primaire + file »
+     délestage + autoscaling + réplica + lecture au primaire + file    2 gagnantes | meilleure : autoscaling 3, réplica 2 | score 32.3 | coût 225.83/230 | marges coût 2 %, cx 8 %, échecs 100 %, p95 20 %
+       ↳ dominée par « autoscaling + réplica + lecture au primaire + file »
+     scaling + autoscaling + réplica + lecture au primaire + file + capacité de file    6 gagnantes | meilleure : scaling 1, autoscaling 3, réplica 2, capacité de file 1 | score 31.0 | coût 220/230 | marges coût 4 %, cx 0 %, échecs 100 %, p95 20 %
+       ↳ dominée par « autoscaling + réplica + lecture au primaire + file + capacité de file »
      backoff + scaling + autoscaling + réplica + lecture au primaire + file    2 gagnantes | meilleure : scaling 1, autoscaling 3, réplica 2 | score 31.0 | coût 220/230 | marges coût 4 %, cx 0 %, échecs 100 %, p95 20 %
        ↳ dominée par « scaling + autoscaling + réplica + lecture au primaire + file »
-     backoff + autoscaling + réplica + lecture au primaire + file + rétention    2 gagnantes | meilleure : autoscaling 3, réplica 2, rétention 1 | score 30.4 | coût 225.83/230 | marges coût 2 %, cx 0 %, échecs 100 %, p95 20 %
-       ↳ dominée par « autoscaling + réplica + lecture au primaire + file + rétention »
-     scaling + cache + réplica + lecture au primaire + file + rétention    1 gagnantes | meilleure : scaling 1, réplica 2, rétention 1 | score 29.9 | coût 230/230 | marges coût 0 %, cx 0 %, échecs 100 %, p95 20 %
-       ↳ dominée par « scaling + réplica + lecture au primaire + file + rétention »
+     délestage + scaling + autoscaling + réplica + lecture au primaire + file    2 gagnantes | meilleure : scaling 1, autoscaling 3, réplica 2 | score 30.5 | coût 225/230 | marges coût 2 %, cx 0 %, échecs 100 %, p95 20 %
+       ↳ dominée par « scaling + autoscaling + réplica + lecture au primaire + file »
+     backoff + autoscaling + réplica + lecture au primaire + file + capacité de file    2 gagnantes | meilleure : autoscaling 3, réplica 2, capacité de file 1 | score 30.4 | coût 225.83/230 | marges coût 2 %, cx 0 %, échecs 100 %, p95 20 %
+       ↳ dominée par « autoscaling + réplica + lecture au primaire + file + capacité de file »
+     scaling + cache + réplica + lecture au primaire + file + capacité de file    1 gagnantes | meilleure : scaling 1, réplica 2, capacité de file 1 | score 29.9 | coût 230/230 | marges coût 0 %, cx 0 %, échecs 100 %, p95 20 %
+       ↳ dominée par « scaling + réplica + lecture au primaire + file + capacité de file »
      backoff + scaling + cache + réplica + lecture au primaire + file    1 gagnantes | meilleure : scaling 1, réplica 2 | score 29.9 | coût 230/230 | marges coût 0 %, cx 0 %, échecs 100 %, p95 20 %
        ↳ dominée par « scaling + cache + réplica + lecture au primaire + file »
-[ok] final-joust — 2 stratégie(s) : backoff + scaling + cache + réplica + lecture au primaire + file | backoff + scaling + autoscaling + cache + réplica + lecture au primaire + file
+     backoff + délestage + scaling + réplica + lecture au primaire + file + capacité de file    1 gagnantes | meilleure : scaling 1, réplica 2, capacité de file 1 | score 29.9 | coût 230/230 | marges coût 0 %, cx 0 %, échecs 100 %, p95 20 %
+       ↳ dominée par « délestage + scaling + réplica + lecture au primaire + file + capacité de file »
+[ok] final-joust — 3 stratégie(s) : backoff + scaling + cache + réplica + lecture au primaire + file | backoff + scaling + autoscaling + cache + réplica + lecture au primaire + file | backoff + délestage + autoscaling + cache + réplica + lecture au primaire + file
      backoff + scaling + cache + réplica + lecture au primaire + file    4 gagnantes | meilleure : scaling 3, réplica 1 | score 41.3 | coût 230/255 | marges coût 10 %, cx 14 %, échecs 100 %, p95 41 %
-     backoff + scaling + cache + réplica + lecture au primaire + file + rétention    8 gagnantes | meilleure : scaling 3, réplica 1, rétention 1 | score 39.0 | coût 235/255 | marges coût 8 %, cx 7 %, échecs 100 %, p95 41 %
+     backoff + scaling + cache + réplica + lecture au primaire + file + capacité de file    8 gagnantes | meilleure : scaling 3, réplica 1, capacité de file 1 | score 39.0 | coût 235/255 | marges coût 8 %, cx 7 %, échecs 100 %, p95 41 %
+       ↳ dominée par « backoff + scaling + cache + réplica + lecture au primaire + file »
+     backoff + délestage + scaling + cache + réplica + lecture au primaire + file    2 gagnantes | meilleure : scaling 3, réplica 1 | score 38.5 | coût 240/255 | marges coût 6 %, cx 7 %, échecs 100 %, p95 41 %
        ↳ dominée par « backoff + scaling + cache + réplica + lecture au primaire + file »
      backoff + scaling + autoscaling + cache + réplica + lecture au primaire + file    6 gagnantes | meilleure : scaling 2, autoscaling 3, réplica 1 | score 38.2 | coût 220.83/255 | marges coût 13 %, cx 0 %, échecs 100 %, p95 39 %
-[ok] Enchaînement pigeons-grounded, depuis la réponse 1 de ticket-rush : 2 gagnante(s) | moins chère : scaling 1, rétention 1 | coût 150/150, dont 5 de migration
-[ok] Enchaînement pigeons-grounded, depuis la réponse 2 de ticket-rush : 1 gagnante(s) | moins chère : scaling 1, rétention 1 | coût 150/150, dont 5 de migration
+     backoff + délestage + scaling + cache + réplica + lecture au primaire + file + capacité de file    6 gagnantes | meilleure : scaling 3, réplica 1, capacité de file 1 | score 36.2 | coût 245/255 | marges coût 4 %, cx 0 %, échecs 100 %, p95 41 %
+       ↳ dominée par « backoff + scaling + cache + réplica + lecture au primaire + file + capacité de file »
+     backoff + délestage + autoscaling + cache + réplica + lecture au primaire + file    2 gagnantes | meilleure : autoscaling 3, réplica 1 | score 29.7 | coût 226.67/255 | marges coût 11 %, cx 0 %, échecs 100 %, p95 8 %
+[ok] Enchaînement pigeons-grounded, depuis la réponse 1 de ticket-rush : 4 gagnante(s) | moins chère : scaling 1, capacité de file 1 | coût 150/155, dont 5 de migration
+[ok] Enchaînement pigeons-grounded, depuis la réponse 2 de ticket-rush : 2 gagnante(s) | moins chère : scaling 1, capacité de file 1 | coût 155/155, dont 10 de migration
+[ok] Enchaînement pigeons-grounded, depuis la réponse 3 de ticket-rush : 5 gagnante(s) | moins chère : scaling 1, capacité de file 1 | coût 150/155, dont 5 de migration
 [ok] Enchaînement split-registry, depuis la réponse 1 de pigeons-grounded : 8 gagnante(s) | moins chère : scaling 1, réplica 2 | coût 225/230, dont 15 de migration
+[ok] Enchaînement split-registry, depuis la réponse 2 de pigeons-grounded : 4 gagnante(s) | moins chère : scaling 1, réplica 2 | coût 230/230, dont 20 de migration
 [ok] Enchaînement final-joust, depuis la réponse 1 de split-registry : 4 gagnante(s) | moins chère : scaling 2, réplica 1 | coût 250/255, dont 40 de migration
 [ok] Enchaînement final-joust, depuis la réponse 2 de split-registry : 2 gagnante(s) | moins chère : scaling 2, réplica 1 | coût 255/255, dont 45 de migration
 
 Architecture gagnant toutes les vagues : aucune (ok)
 Deux stratégies sur la majorité des vagues : oui
-Tout au maximum, ticket-rush : perd (ok) — Budget dépassé : 351.7 / 150, dont 1.7 d'autoscaling ; Trop complexe : 17 / 11 points
-Tout au maximum, pigeons-grounded : perd (ok) — Budget dépassé : 350 / 150 ; Trop complexe : 17 / 11 points
-Tout au maximum, split-registry : perd (ok) — Budget dépassé : 350 / 230 ; Trop complexe : 17 / 13 points
-Tout au maximum, final-joust : perd (ok) — Budget dépassé : 352.5 / 255, dont 2.5 d'autoscaling ; Trop complexe : 17 / 14 points
+Tout au maximum, ticket-rush : perd (ok) — Budget dépassé : 360 / 150 ; Trop complexe : 18 / 11 points
+Tout au maximum, pigeons-grounded : perd (ok) — Budget dépassé : 360 / 155 ; Trop complexe : 18 / 11 points
+Tout au maximum, split-registry : perd (ok) — Budget dépassé : 360 / 230 ; Trop complexe : 18 / 13 points
+Tout au maximum, final-joust : perd (ok) — Budget dépassé : 360 / 255 ; Trop complexe : 18 / 14 points

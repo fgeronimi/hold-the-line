@@ -8,6 +8,8 @@ const link = (from: string, to: string): ArchLink => ({ from, to });
 export interface BoxOfficeOptions {
   /** Relances espacées sur les clients. */
   backoff?: boolean;
+  /** Délestage sur la porte (M11). */
+  shedding?: boolean;
   /** Instances en plus, derrière un load balancer. */
   extraInstances?: number;
   /** Plafond d'autoscaling du serveur. */
@@ -18,7 +20,7 @@ export interface BoxOfficeOptions {
   leaderReads?: boolean;
   /** Le billet part par une file ; sinon le serveur appelle le prestataire en direct. */
   queue?: boolean;
-  /** Niveaux de rétention de la file. */
+  /** Niveaux de capacité de la file (l'évolution `queue-retention`). */
   retention?: number;
 }
 
@@ -31,8 +33,9 @@ export function boxOffice(o: BoxOfficeOptions = {}): Architecture {
     ...(tournament.fixtures ?? []),
   ];
   const links: ArchLink[] = [link('app', 'db')];
-  if (o.extraInstances || o.autoscaling) {
-    nodes.push({ id: 'lb', type: 'load-balancer' });
+  // Le délestage vit sur la porte : il en pose une, même devant une seule instance.
+  if (o.extraInstances || o.autoscaling || o.shedding) {
+    nodes.push({ id: 'lb', type: 'load-balancer', upgrades: { 'load-shedding': o.shedding ? 1 : 0 } });
     links.unshift(link('src', 'lb'), link('lb', 'app'));
   } else {
     links.unshift(link('src', 'app'));

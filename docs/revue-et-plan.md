@@ -573,6 +573,15 @@ trop haut ne perd que sans CDN). À ajouter au rendu (R10, nouveau) : les messag
 | SC4 | « Rétention » renommée « Capacité de la file » | S | nul |
 | SC3 | Vague 3 : la source `consistent` devient la vérification de disponibilité au moment d'acheter ; mécanique inchangée | S | nul |
 
+**État au 12 novembre 2026 : passe B faite** (branche `passe-tournoi`), décisions M9,
+M10, M11, X10, S22, S23. Une panne éteint aussi les instances à la demande, qui coûtent 25 %
+de plus que les fixes ; chaque source ne relance que ses échecs, et une requête relancée
+réémet son événement ; le délestage à la porte arrête la tempête (troisième réponse de la
+vague 1, 150) ; « Capacité de la file » remplace « Rétention » ; la vague 3 parle de la
+vérification avant achat. Recalibrage : raccourcisseur vague 4 (l'autoscaling n'y est plus
+une réponse), tournoi vague 2 à 155 (deux stratégies) et vague 4 à 255. Plus aucune impasse
+dans le tournoi. B2, B3, B10, B11, B12 corrigés.
+
 **Passe C — banquier**
 
 | # | Action | Effort | Risque |

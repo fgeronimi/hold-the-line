@@ -123,6 +123,7 @@ export const resilienceSpace: BalanceSpace = {
 export const tournamentSpace: BalanceSpace = {
   dimensions: [
     { id: 'backoff', levels: [0, 1], label: 'backoff' },
+    { id: 'shedding', levels: [0, 1], label: 'délestage' },
     { id: 'scaling', levels: upTo(4), label: 'scaling' },
     { id: 'autoscaling', levels: [0, 3, 6], label: 'autoscaling' },
     { id: 'cache', levels: [0, 1], label: 'cache' },
@@ -130,11 +131,12 @@ export const tournamentSpace: BalanceSpace = {
     { id: 'leaderReads', levels: [0, 1], label: 'lecture au primaire', requires: 'replicas' },
     // Sans file, le serveur envoie les billets en direct au prestataire.
     { id: 'queue', levels: [0, 1], label: 'file' },
-    { id: 'retention', levels: upTo(3), label: 'rétention', requires: 'queue' },
+    { id: 'retention', levels: upTo(3), label: 'capacité de file', requires: 'queue' },
   ],
   build: (c) =>
     boxOffice({
       backoff: on(c, 'backoff'),
+      shedding: on(c, 'shedding'),
       extraInstances: c.scaling ?? 0,
       autoscaling: c.autoscaling ?? 0,
       cache: on(c, 'cache'),

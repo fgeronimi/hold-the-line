@@ -181,7 +181,7 @@ export const catalog: Catalog = {
       accepts: ['async'],
       routingPriority: 1,
       batchSize: 100,
-      // Une file n'est pas infinie : ce qu'elle garde au-delà se paie en rétention (S20).
+      // Une file n'est pas infinie : ce qu'elle garde au-delà se paie en capacité (S20).
       maxBacklog: 200000,
       // Une base qui consomme directement une file n'existe pas, un serveur d'application non
       // plus : il faut un worker (ticket n° 1).
@@ -313,10 +313,12 @@ export const catalog: Catalog = {
       // Des délais qui doublent (1, 2, 4 min de jeu…) tirés au hasard : les relances s'étalent.
       effect: { type: 'backoff', spreadTicks: 10 },
     },
+    // L'id garde l'ancien nom, « rétention », lu par les sauvegardes. Le joueur lit
+    // « capacité » : en vrai, la rétention d'une file est une durée, pas un nombre de messages.
     'queue-retention': {
       id: 'queue-retention',
-      label: 'Rétention',
-      techName: 'Rétention de la file',
+      label: 'Messages en attente en plus',
+      techName: 'Capacité de la file',
       appliesTo: 'message-queue',
       maxLevel: 3,
       cost: { base: 0, perLevel: 5 },
@@ -345,6 +347,19 @@ export const catalog: Catalog = {
       complexity: { base: 1, perLevel: 0 },
       removalCost: 'on-disable',
       effect: { type: 'rateLimit', tiersPerClientRps: [10, 20, 40, 80, 160] },
+    },
+    'load-shedding': {
+      id: 'load-shedding',
+      label: 'Délestage à la porte',
+      techName: 'Load shedding',
+      appliesTo: 'load-balancer',
+      maxLevel: 1,
+      cost: { base: 10, perLevel: 0 },
+      complexity: { base: 1, perLevel: 0 },
+      removalCost: 'on-disable',
+      // La parade côté serveur à la tempête de relances : celle que l'opérateur possède,
+      // même quand les clients ne sont pas son application (M11).
+      effect: { type: 'loadShedding', targetUtilization: 0.75 },
     },
   },
 };

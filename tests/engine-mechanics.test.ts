@@ -44,6 +44,7 @@ const catalog: Catalog = {
     retention: { id: 'retention', label: 'Retention', techName: 'Retention', appliesTo: 'queue', maxLevel: 3, cost: { base: 0, perLevel: 5 }, complexity: { base: 0, perLevel: 1 }, removalCost: 'per-level', effect: { type: 'retention', perLevel: 50 } },
     leader: { id: 'leader', label: 'Leader', techName: 'Leader', appliesTo: 'db', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'leaderReads' } },
     idem: { id: 'idem', label: 'Idem', techName: 'Idem', appliesTo: 'svc', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'idempotence' } },
+    shed: { id: 'shed', label: 'Shed', techName: 'Shed', appliesTo: 'lb', maxLevel: 1, cost: { base: 10, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'loadShedding', targetUtilization: 0.9 } },
     outbox: { id: 'outbox', label: 'Outbox', techName: 'Outbox', appliesTo: 'db', maxLevel: 1, cost: { base: 10, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'outbox' } },
   },
 };
@@ -433,6 +434,45 @@ describe('relances des clients (S19)', () => {
   });
 });
 
+describe('délestage à la porte (M11)', () => {
+  const gate = (shed: number) => arch([n('s', 'src'), n('l', 'lb', { shed }), n('a', 'app'), n('d', 'db')], [['s', 'l'], ['l', 'a'], ['a', 'd']]);
+
+  it('ne laisse entrer que la charge cible des serveurs, le reste échoue vite à la porte', () => {
+    // 150 lectures, un serveur de 100 à 90 % de charge cible : 90 entrent, 60 sont refusées
+    // à la porte. Le serveur tourne à 90 %, sans aucun échec chez lui.
+    const r = simulateWave(gate(1), wave([users({ read: 150 })], { ticks: 1, profile: [{ until: 1, factor: 1 }] }), catalog);
+    expect(r.failuresByReason['load-shed']).toBeCloseTo(60, 9);
+    expect(r.ticks[0]!.nodes.l!.failed).toBeCloseTo(60, 9);
+    expect(r.ticks[0]!.nodes.a!.failed).toBe(0);
+    expect(r.ticks[0]!.nodes.a!.utilization).toBeCloseTo(0.9, 9);
+  });
+
+  it('sous la charge cible, il ne refuse rien', () => {
+    const r = simulateWave(gate(1), wave([users({ read: 40 })]), catalog);
+    expect(r.failuresByReason['load-shed']).toBe(0);
+  });
+
+  it('arrête la tempête de relances : sans lui, le serveur s’effondre jusqu’à la fin', () => {
+    // Panne aux ticks 2 et 3, 80 lectures neuves par tick pour 100 de capacité, trois
+    // relances. Sans délestage, le serveur saturé travaille pour des requêtes abandonnées et
+    // ne s’en remet pas ; avec, la porte laisse entrer 90 par tick, soit 10 de plus que le
+    // trafic neuf : l’arriéré de relances fond de 10 par tick, et le client finit servi.
+    const outage = incident('app', 2, 4, { type: 'instance-down', count: 1 });
+    const storm = (shed: number) => simulateWave(gate(shed), wave([users({ read: 80 }, { retries: 3 })], { ticks: 30, profile: [{ until: 30, factor: 1 }], incidents: [outage] }), catalog);
+    const without = storm(0);
+    const withShed = storm(1);
+    expect(without.ticks[29]!.retries ?? 0).toBeGreaterThan(0);
+    expect(withShed.ticks[29]!.retries ?? 0).toBe(0);
+    expect(withShed.gauges.failureRate.value).toBeLessThan(without.gauges.failureRate.value);
+  });
+
+  it('compte les instances tombées : la porte d’un serveur en panne ne laisse rien entrer', () => {
+    const r = simulateWave(gate(1), wave([users({ read: 40 })], { ticks: 1, profile: [{ until: 1, factor: 1 }], incidents: [incident('app', 0, 1, { type: 'instance-down', count: 1 })] }), catalog);
+    expect(r.failuresByReason['load-shed']).toBeCloseTo(40, 9);
+    expect(r.ticks[0]!.nodes.a!.failed).toBe(0);
+  });
+});
+
 describe('file bornée et quota (S20)', () => {
   const sink = (q: Record<string, number> = {}) => arch([n('s', 'src'), n('q', 'queue', q)], [['s', 'q']]);
 
@@ -444,7 +484,7 @@ describe('file bornée et quota (S20)', () => {
     expect(r.events).toContainEqual({ type: 'queue-overflow', tick: 3, node: 'q', lostRps: 20 });
   });
 
-  it('la rétention ajoute `perLevel` messages par niveau', () => {
+  it('la capacité de la file ajoute `perLevel` messages par niveau', () => {
     const r = simulateWave(sink({ retention: 2 }), wave([users({ async: 30 })]), catalog);
     expect(r.ticks.map((t) => t.nodes.q!.backlog)).toEqual([30, 60, 90, 120, 150, 180, 200, 200, 200, 200]);
     expect(r.failuresByReason['queue-overflow']).toBe(300 - 200);

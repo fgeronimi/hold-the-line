@@ -97,10 +97,12 @@ export type UpgradeEffect =
   /** Base : les lectures qui doivent être à jour vont au primaire, jamais aux réplicas (S21). */
   | { type: 'leaderReads' }
   /**
-   * Load balancer : au-delà de ce que les serveurs derrière lui peuvent servir ce tick, il
-   * rejette tout de suite l'excédent au lieu de le laisser entrer (délestage, S22).
+   * Load balancer : au-delà de `targetUtilization` de ce que les serveurs derrière lui peuvent
+   * servir ce tick, il rejette vite l'excédent au lieu de le laisser entrer (M11). Les serveurs
+   * ne s'effondrent plus sous des requêtes déjà abandonnées (S19) et gardent la marge qui tient
+   * leur latence ; les rejets restent des échecs, que les clients relancent.
    */
-  | { type: 'loadShedding' };
+  | { type: 'loadShedding'; targetUtilization: number };
 
 /**
  * Ce que coûte une baisse de niveau (décision E2) :

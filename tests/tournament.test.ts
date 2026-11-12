@@ -92,7 +92,7 @@ describe('tempête de relances', () => {
 });
 
 describe('file bornée et quota du prestataire', () => {
-  it('la file déborde quand le colombier ferme plus longtemps que sa rétention ne tient', () => {
+  it('la file déborde quand le colombier ferme plus longtemps que sa capacité ne tient', () => {
     const r = play(boxOffice({ extraInstances: 1, cache: true }), 'pigeons-grounded');
     expect(r.failuresByReason['queue-overflow']).toBeGreaterThan(0);
     expect(Math.max(...r.ticks.map((t) => t.nodes.queue!.backlog ?? 0))).toBeCloseTo(catalog.components['message-queue']!.maxBacklog!);

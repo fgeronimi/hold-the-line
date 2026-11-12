@@ -48,7 +48,7 @@ export const saturationLessons: Record<string, Lesson> = {
   'message-queue': {
     says: 'Débordement à {name} : les colis arrivent plus vite que les coursiers ne les livrent.',
     tech: 'La file grossit : le consommateur ne suit pas le producteur, l’arriéré monte jusqu’à perdre des messages.',
-    remedy: 'Plus de workers derrière la file si ce sont eux qui ne suivent pas ; sinon soulager ce qu’ils écrivent (la base), car la file ne se vide qu’au rythme de l’aval. De la rétention pour tenir plus longtemps.',
+    remedy: 'Plus de workers derrière la file si ce sont eux qui ne suivent pas ; sinon soulager ce qu’ils écrivent (la base), car la file ne se vide qu’au rythme de l’aval. Plus de capacité de file pour tenir plus longtemps.',
     concept: 'Backpressure',
   },
   pubsub: {
@@ -88,18 +88,18 @@ export const reasonLessons = {
   queueOverflow: {
     says: 'Débordement à {name} : des colis sont perdus.',
     tech: 'L’arriéré de la file dépasse sa capacité : les messages en trop sont perdus. Une file absorbe un pic, pas un excès qui dure : l’arriéré monte de (arrivées − départs) à chaque minute de jeu. Sa capacité se lit donc en minutes de trafic : arrivées par seconde × minutes d’attente, à l’échelle du jeu et non en volumes réels.',
-    remedy: 'Si les consommateurs suivent en moyenne, une file plus longue (rétention) suffit à passer le pic. Sinon, plus de consommateurs derrière la file.',
+    remedy: 'Si les consommateurs suivent en moyenne, une file plus grande (sa capacité) suffit à passer le pic. Sinon, plus de consommateurs derrière la file. En vrai, la limite d’une file gérée est souvent une durée plutôt qu’un nombre : sur Amazon SQS, un message est gardé 4 jours par défaut, 14 au plus ; Kafka borne un sujet en durée ou en octets, RabbitMQ une file en longueur. On la dimensionne sur la plus longue panne de l’aval qu’on accepte, et on surveille l’âge du plus vieux message.',
     concept: 'Backpressure, dimensionner une file',
   },
   retryStorm: {
     says: 'Chaque voyageur refoulé est revenu aussitôt, et ses voisins avec lui : la foule a quadruplé aux portes, bien après que les tours furent relevées.',
     tech: 'Une panne brève a fait échouer des requêtes ; des clients qui relancent tout de suite ont multiplié la charge ({retries} relances par seconde au pire). Le serveur saturé travaille pour des requêtes déjà abandonnées : la panne s’entretient seule une fois sa cause partie (panne métastable).',
-    remedy: 'Côté client : backoff exponentiel et jitter, avec un budget de relances. Ou assez de marge pour qu’une panne n’amorce jamais la tempête.',
-    concept: 'Tempête de relances, backoff exponentiel',
+    remedy: 'Côté serveur : délester à la porte, rejeter vite ce que les serveurs ne serviront pas, pour qu’ils ne travaillent plus pour des requêtes abandonnées. Côté client, si c’est votre application : backoff exponentiel et jitter, avec un budget de relances (au plus quelques tentatives, et des relances qui ne dépassent pas une petite part du trafic). Ou assez de marge pour qu’une panne n’amorce jamais la tempête.',
+    concept: 'Tempête de relances, délestage, backoff exponentiel',
   },
   staleRead: {
     says: 'Les copistes, coupés du grand registre, ont promis des places déjà vendues : {failed} lectures fausses.',
-    tech: 'Pendant la partition, les réplicas ne reçoivent plus les écritures du primaire : ils servent une donnée périmée. Pour une donnée qui doit être à jour (les places restantes), c’est un échec.',
+    tech: 'Pendant la partition, les réplicas ne reçoivent plus les écritures du primaire : ils servent une donnée périmée. Pour une donnée qui doit être à jour (la place est-elle encore libre ?), c’est un échec : la même place est promise à deux spectateurs. En vrai, la garantie finale contre la double vente est une réservation atomique à l’écriture ; la lecture sur le primaire évite seulement de promettre ce qui n’est plus libre.',
     remedy: 'Envoyer les lectures critiques au primaire (lecture sur le leader), et garder les réplicas pour ce qui tolère un léger retard. Choisir, donnée par donnée, entre cohérence et disponibilité.',
     concept: 'Partition réseau, cohérence (CAP)',
   },

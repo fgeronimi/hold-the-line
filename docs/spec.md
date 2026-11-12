@@ -123,8 +123,9 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 | Transactional outbox | Base | Événement perdu entre base et bus | Une écriture de plus par commande (S6) | Oui |
 | Circuit breaker | Serveur | Dépendance lente ou en panne qui bloque le serveur | Les appels coupés échouent : réponse dégradée (S15) | Oui |
 | Request coalescing | Cache | Ruée vers le cache | Coût et complexité ; ne sert qu'à l'expiration (S15) | Oui |
-| Backoff exponentiel et jitter | Clients (la source) | Tempête de relances | Coût et complexité ; ne sert qu'après une panne (S19) | Oui |
-| Rétention | File | Débordement pendant une longue panne de l'aval | Coût par niveau ; n'aide pas si les consommateurs ne suivent pas en moyenne (S20) | Oui |
+| Backoff exponentiel et jitter | Clients (la source) | Tempête de relances | Coût et complexité ; ne sert qu'après une panne ; suppose d'écrire le client (S19) | Oui |
+| Délestage | Load balancer | Tempête de relances, surcharge | Les refus restent des échecs, relancés ; la porte garde 25 % de marge (M11) | Oui |
+| Capacité de la file | File | Débordement pendant une longue panne de l'aval | Coût par niveau ; n'aide pas si les consommateurs ne suivent pas en moyenne (S20) | Oui |
 | Lecture sur le primaire | Base | Lectures périmées pendant une partition | Le primaire porte ces lectures en plus des écritures (S21) | Oui |
 | Sharding, consistent hashing | — | — | — | Non |
 
@@ -148,8 +149,8 @@ Les incidents sont annoncés au briefing et déterministes (X5) : pas de tirage 
 | Dépendance lente : la cascade de pannes | Circuit breaker, ou file (paiement différé) | Banquier, vagues 2 et 5 |
 | Tout le cache expire d'un coup | Verrou de recalcul, ou réplica | Banquier, vagues 3 et 5 |
 | Dépendance externe en panne | File : paiement différé, livré au retour | Banquier, vague 4 |
-| Panne brève, clients qui relancent aussitôt : tempête de relances | Backoff exponentiel et jitter, ou autoscaling | Tournoi, vagues 1 et 4 |
-| Dépendance externe en panne plus longtemps que la file ne tient | Rétention de la file | Tournoi, vague 2 |
+| Panne brève, clients qui relancent aussitôt : tempête de relances | Délestage à la porte, backoff exponentiel et jitter, ou autoscaling | Tournoi, vagues 1 et 4 |
+| Dépendance externe en panne plus longtemps que la file ne tient | Capacité de la file | Tournoi, vague 2 |
 | Partition réseau entre le primaire et ses réplicas | Lectures critiques sur le primaire (choix CAP) | Tournoi, vagues 3 et 4 |
 | Le worker tombe dix minutes | La file garde les messages, puis se vide au rythme de la base (M8, X6) | Raccourcisseur, vague 5 |
 
@@ -229,9 +230,9 @@ votre application, vous en écrivez le code, c'est pourquoi vous pouvez y régle
 
 | Vague | Information | Réponse attendue |
 | --- | --- | --- |
-| 1. L'ouverture des ventes | Un déploiement raté arrête tous les serveurs 3 minutes, instances à la demande comprises (M9) | Backoff sur les clients, ou autoscaling qui absorbe le surplus après la panne ; sinon la tempête dure jusqu'à la fin |
-| 2. Les pigeons restent au colombier | Le prestataire d'e-mail tombe une demi-heure (30 minutes), 8 000 alertes/s | Une file avec de la rétention |
-| 3. Le registre coupé en deux | Lectures non cachables et places restantes, partition des réplicas (un quart d'heure) | Réplicas, et lectures critiques sur le primaire |
+| 1. L'ouverture des ventes | Un déploiement raté arrête tous les serveurs 3 minutes, instances à la demande comprises (M9) | Délestage à la porte, backoff sur les clients, ou autoscaling qui absorbe le surplus après la panne ; sinon la tempête dure jusqu'à la fin |
+| 2. Les pigeons restent au colombier | Le prestataire d'e-mail tombe une demi-heure (30 minutes), 8 000 alertes/s | Une file avec de la capacité en plus |
+| 3. Le registre coupé en deux | Lectures non cachables et vérification de la place avant achat, partition des réplicas (un quart d'heure, S23) | Réplicas, et lectures critiques sur le primaire |
 | 4. La joute finale | Les trois incidents | Backoff, et scaling ou autoscaling ; réplica et lecture sur le primaire |
 
 Les budgets, plafonds et seuils de chaque vague sont dans `docs/decisions.md` et verrouillés

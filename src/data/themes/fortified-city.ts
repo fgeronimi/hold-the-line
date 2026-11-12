@@ -96,6 +96,7 @@ export const fortifiedCity: Theme = {
     'circuit-breaker': '🔌',
     'request-coalescing': '🔒',
     'client-backoff': '⏳',
+    'load-shedding': '🚧',
     'queue-retention': '📦',
     'leader-reads': '👑',
   },
@@ -147,7 +148,7 @@ export const fortifiedCity: Theme = {
     'pigeons-grounded':
       'Le colombier fermera une demi-heure : plus un pigeon ne part. Les achats, eux, continuent, et chaque billet doit attendre quelque part son pigeon. Mais une file n’est pas un puits sans fond.',
     'split-registry':
-      'Les spectateurs cherchent leurs dates et regardent les places restantes. Les copistes recopient le grand registre pour répondre plus vite… mais un temps, ils ne l’entendront plus. Une place promise et déjà vendue, c’est un spectateur furieux.',
+      'Les spectateurs cherchent leurs dates et, avant de payer, demandent si leur place est encore libre. Les copistes recopient le grand registre pour répondre plus vite… mais un temps, ils ne l’entendront plus. Une place promise et déjà vendue, c’est un spectateur furieux.',
     'final-joust':
       'La joute finale, Sire ! Tout le royaume veut sa place : les guichetiers tomberont, le colombier fermera, et les copistes seront coupés du registre. Tout ce que vous avez appris, il faudra le tenir ensemble.',
     // Le comptoir des paiements.

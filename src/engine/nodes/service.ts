@@ -88,6 +88,20 @@ function pressure(id: string, def: ComponentDef, flow: Flow, instances: number, 
  * Autoscaling réactif : il dimensionne sur la charge du tick courant, mais les instances
  * demandées n'arrivent qu'après leur délai de démarrage. Réduire est immédiat.
  */
+/**
+ * Instances d'un serveur qui serviront à ce tick, lues sans toucher à l'autoscaler : le
+ * délestage du load balancer (M11) passe avant le serveur dans l'ordre du trafic, et doit
+ * compter les instances à la demande prêtes à ce tick comme le serveur les comptera.
+ */
+export function servingInstances(node: ArchNode, w: World, now: Now): number {
+  const base = instancesNow(w, now.incidents, node);
+  const s = w.autoscalers.get(node.id);
+  const tick = now.ledger.tick;
+  const active = s ? s.active + s.pending.filter((p) => p.readyAt <= tick).reduce((a, p) => a + p.count, 0) : 0;
+  const autoDown = Math.max(0, now.incidents.down(node.type) - instancesOf(w.upgrades.get(node.id)!));
+  return base + Math.max(0, active - autoDown);
+}
+
 function autoscale(node: ArchNode, def: ComponentDef, base: number, w: World, tick: number) {
   for (const { effect, level: max } of withEffect(w.upgrades.get(node.id)!, 'autoscaling')) {
     if (max === 0) continue;
