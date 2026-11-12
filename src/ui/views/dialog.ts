@@ -79,7 +79,7 @@ function renderDebriefDialog(s: ViewState, a: Attempt): string {
   const finished = s.game.finished && a.played && r.won;
   const lostHere = a.played && !r.won;
   const final = finished
-    ? `<p class="final">La cité a tenu toutes les vagues. <b>${totalStars(s)} / ${s.scenario.waves.length * 3}</b> ★, score final <b>${fmt(totalScore(s))}</b> ${icon('medal')}</p>`
+    ? `<p class="final">${esc(theme.finale)} <b>${totalStars(s)} / ${s.scenario.waves.length * 3}</b> ★, score final <b>${fmt(totalScore(s))}</b> ${icon('medal')}</p>`
     : '';
   const penalty =
     lostHere && s.game.replays > 0

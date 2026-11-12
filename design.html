@@ -282,72 +282,11 @@
         <linearGradient id="g-glass" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d9f0ff" stop-opacity=".9" /><stop offset="1" stop-color="#9fc8e4" stop-opacity=".9" /></linearGradient>
       </defs>
 
-      <!-- Budget : un écu d'or, la tranche en dessous, une étoile frappée. -->
-      <symbol id="i-coin" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
-          <ellipse cx="24" cy="27" rx="18" ry="17" fill="#a8701a" />
-          <ellipse cx="24" cy="23.5" rx="18" ry="17" fill="url(#g-gold)" />
-          <ellipse cx="24" cy="23.5" rx="12.5" ry="11.8" fill="#eaa92c" stroke-width="1.6" />
-          <path d="M24 15.5l2.4 5 5.4.6-4 3.7 1.1 5.3-4.9-2.7-4.9 2.7 1.1-5.3-4-3.7 5.4-.6z" fill="#ffe486" stroke-width="1.4" />
-        </g>
-        <path d="M11 17a14 14 0 0 1 9-7" fill="none" stroke="#fff6cf" stroke-width="3" stroke-linecap="round" opacity=".9" />
-      </symbol>
 
-      <!-- Complexité : des rouages, l'un dans l'autre. Les dents sont calculées plus bas. -->
-      <symbol id="i-cog" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.4" stroke-linejoin="round">
-          <path id="cog-big" fill="url(#g-steel)" />
-          <circle cx="20" cy="22" r="6" fill="#6b767c" />
-          <path id="cog-small" fill="url(#g-gold)" />
-          <circle cx="36" cy="36" r="3.2" fill="#a8701a" />
-        </g>
-        <path d="M11 15a12 12 0 0 1 6-5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".8" />
-      </symbol>
 
-      <!-- Lectures : un livre ouvert sur sa couverture. -->
-      <symbol id="i-read" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
-          <path d="M3 14v25q11-3 21 2 10-5 21-2V14" fill="url(#g-wood)" />
-          <path d="M6 10q10-3 18 3v25q-8-5-18-2z" fill="url(#g-paper)" />
-          <path d="M42 10q-10-3-18 3v25q8-5 18-2z" fill="url(#g-paper)" />
-        </g>
-        <g stroke="#b59a6a" stroke-width="1.6" stroke-linecap="round" fill="none">
-          <path d="M10 17q5-1 10 1M10 22q5-1 10 1M10 27q5-1 10 1M28 18q5-2 10-1M28 23q5-2 10-1M28 28q5-2 10-1" />
-        </g>
-        <path d="M33 8l-2 12 3.5-2.5L38 20l-1-12z" fill="#c0392b" stroke="var(--k, #3b2a1a)" stroke-width="1.6" stroke-linejoin="round" />
-      </symbol>
 
-      <!-- Écritures : une plume sur un feuillet. -->
-      <symbol id="i-write" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
-          <path d="M6 14h22l6 6v22H6z" fill="url(#g-paper)" />
-          <path d="M42 4c-15 2-24 13-27 29l4 2c4-12 13-22 23-31z" fill="#fbf7ee" />
-          <path d="M15 33l-3 9 7-6z" fill="#3b2a1a" />
-        </g>
-        <path d="M40 6C29 12 22 21 18 32" fill="none" stroke="#b59a6a" stroke-width="1.6" stroke-linecap="round" />
-        <path d="M10 22h10M10 27h7M10 32h5" stroke="#b59a6a" stroke-width="1.8" stroke-linecap="round" />
-      </symbol>
 
-      <!-- Événements : une lettre scellée de cire. -->
-      <symbol id="i-async" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
-          <rect x="5" y="11" width="38" height="27" rx="3" fill="url(#g-paper)" />
-          <path d="M5 13l19 14 19-14" fill="none" />
-          <circle cx="24" cy="28" r="7" fill="url(#g-red)" />
-        </g>
-        <path d="M21 25.5l3 3.5 3-3.5" fill="none" stroke="#ffd3c4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M5 38l-3 4M43 38l3 4" stroke="var(--k, #3b2a1a)" stroke-width="2" stroke-linecap="round" opacity=".5" />
-      </symbol>
 
-      <!-- SLA : l'écu bleu de la cité, une coche dessus. -->
-      <symbol id="i-sla" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
-          <path d="M24 4l17 6v12c0 12-8 19.5-17 22.5C15 41.5 7 34 7 22V10z" fill="url(#g-blue)" />
-          <path d="M24 9l12 4v9c0 9-5.5 14.5-12 17" fill="none" stroke="#a9c9f2" stroke-width="2" />
-        </g>
-        <path d="M15.5 24l6 6 11-12" fill="none" stroke="var(--k, #3b2a1a)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M15.5 24l6 6 11-12" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" />
-      </symbol>
 
       <!-- La vague : un crâne. -->
       <symbol id="i-skull" viewBox="0 0 48 48">
@@ -372,34 +311,8 @@
         <path d="M14 16a12 12 0 0 1 7-6" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".85" />
       </symbol>
 
-      <!-- Bâtir : un marteau, manche de bois, tête d'acier. -->
-      <symbol id="i-hammer" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
-          <path d="M8 37l16-16 4 4-16 16a2.8 2.8 0 0 1-4-4z" fill="url(#g-wood)" />
-          <path d="M19 15l9-9 4 1 10 10 1 4-9 9-4-1-10-10z" fill="url(#g-steel)" />
-          <path d="M28 6l14 14" stroke-width="2" />
-        </g>
-        <path d="M21 16l7-7" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".85" />
-      </symbol>
 
-      <!-- Lancer la vague : deux épées croisées. -->
-      <symbol id="i-swords" viewBox="0 0 48 48">
-        <g id="sword" style="stroke: var(--k, #3b2a1a); stroke-width: 2.4" stroke-linejoin="round" stroke-linecap="round">
-          <path d="M6 4l4 1 22 22-3 3L7 8z" fill="url(#g-steel)" />
-          <path d="M26 34l8-8 3 3-8 8z" fill="url(#g-gold)" />
-          <path d="M33 33l7 7" stroke-width="5.5" />
-          <path d="M33 33l7 7" stroke="#8f5a2a" stroke-width="2.8" />
-          <circle cx="41.5" cy="41.5" r="2.8" fill="url(#g-gold)" />
-        </g>
-        <use href="#sword" transform="translate(48 0) scale(-1 1)" />
-        <path d="M9 7l17 17" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".85" />
-      </symbol>
 
-      <!-- Sélection : un curseur trapu. -->
-      <symbol id="i-select" viewBox="0 0 48 48">
-        <path d="M12 5l25 17-10.5 2 6.5 11.5-5.5 3.2-6.5-11.6-8 7z" fill="url(#g-paper)" style="stroke: var(--k, #3b2a1a); stroke-width: 2.8" stroke-linejoin="round" />
-        <path d="M15 11v15" stroke="#fff" stroke-width="2.4" stroke-linecap="round" />
-      </symbol>
 
       <!-- Relier : deux maillons de chaîne. -->
       <symbol id="i-link" viewBox="0 0 48 48">
@@ -411,103 +324,15 @@
         </g>
       </symbol>
 
-      <!-- Retirer : la dynamite, mèche allumée. -->
-      <symbol id="i-dynamite" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
-          <rect x="7" y="18" width="10" height="25" rx="2.5" fill="url(#g-red)" />
-          <rect x="16" y="16" width="10" height="27" rx="2.5" fill="url(#g-red)" />
-          <rect x="25" y="18" width="10" height="25" rx="2.5" fill="url(#g-red)" />
-          <rect x="5" y="27" width="32" height="6" rx="1.5" fill="#e6c58a" />
-          <path d="M21 16q1-8 9-10" fill="none" />
-        </g>
-        <path d="M33 1l1.6 4.2L39 4l-3 3.4 4 2.4-4.6.3-.5 4.6-2-4.1-4.3 1.6 2.9-3.6L27.6 5.5l4.4-.4z" fill="#ffd23f" stroke="#e8761b" stroke-width="1" stroke-linejoin="round" />
-      </symbol>
 
-      <!-- Annuler, rétablir : une flèche pleine en arc. -->
-      <symbol id="i-undo" viewBox="0 0 48 48">
-        <path d="M20 9L6 21l14 12v-7c9 0 15 2.5 20 10 0-13-8-20-20-20z" fill="url(#g-gold)" style="stroke: var(--k, #3b2a1a); stroke-width: 2.8" stroke-linejoin="round" />
-        <path d="M17 15l-6 5" stroke="#fff6cf" stroke-width="2.4" stroke-linecap="round" />
-      </symbol>
 
-      <!-- La main de cartes. -->
-      <symbol id="i-cards" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round">
-          <rect x="6" y="9" width="21" height="30" rx="3" transform="rotate(-14 16 24)" fill="url(#g-paper)" />
-          <rect x="20" y="8" width="21" height="30" rx="3" transform="rotate(10 30 23)" fill="url(#g-paper)" />
-          <path d="M31 16l2.5 5 5 .5-3.8 3.3 1.2 5-4.9-2.8-4.9 2.8 1.2-5-3.8-3.3 5-.5z" fill="url(#g-gold)" stroke-width="1.6" transform="rotate(10 30 23)" />
-        </g>
-      </symbol>
 
-      <!-- Étoiles : une étoile d'or bombée. -->
-      <symbol id="i-star" viewBox="0 0 48 48">
-        <path id="star-path" fill="url(#g-gold)" style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" />
-        <path d="M17 18l5-1" stroke="#fff6cf" stroke-width="2.6" stroke-linecap="round" />
-      </symbol>
 
-      <!-- Score : une médaille au ruban. -->
-      <symbol id="i-medal" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.4" stroke-linejoin="round">
-          <path d="M14 3h8l5 13h-8z" fill="url(#g-blue)" />
-          <path d="M34 3h-8l-5 13h8z" fill="url(#g-red)" />
-          <circle cx="24" cy="30" r="14" fill="url(#g-gold)" />
-          <circle cx="24" cy="30" r="9" fill="#eaa92c" stroke-width="1.6" />
-        </g>
-        <path d="M14 26a10 10 0 0 1 5-6" fill="none" stroke="#fff6cf" stroke-width="2.6" stroke-linecap="round" />
-      </symbol>
 
-      <!-- Indice : une ampoule… plutôt une lanterne, pour la cité. -->
-      <symbol id="i-lantern" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
-          <path d="M19 6h10M24 3v3" fill="none" />
-          <path d="M15 12l3-6h12l3 6z" fill="#5d6a70" />
-          <path d="M15 12h18l-2 24H17z" fill="#ffd96a" />
-          <path d="M14 36h20v5H14z" fill="#5d6a70" />
-          <path d="M24 12v24" stroke-width="2" />
-        </g>
-        <ellipse cx="24" cy="24" rx="4" ry="6" fill="#fff6cf" />
-        <circle cx="24" cy="24" r="15" fill="#ffd96a" opacity=".18" />
-      </symbol>
 
-      <!-- Courbes : un tableau aux barres de couleur. -->
-      <symbol id="i-chart" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round">
-          <rect x="5" y="6" width="38" height="36" rx="3" fill="url(#g-paper)" />
-          <rect x="11" y="26" width="6" height="11" fill="url(#g-green)" stroke-width="2" />
-          <rect x="21" y="18" width="6" height="19" fill="url(#g-gold)" stroke-width="2" />
-          <rect x="31" y="12" width="6" height="25" fill="url(#g-red)" stroke-width="2" />
-        </g>
-      </symbol>
 
-      <!-- Latence : un sablier. -->
-      <symbol id="i-hourglass" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
-          <path d="M14 7h20c0 9-6 12-10 17 4 5 10 8 10 17H14c0-9 6-12 10-17-4-5-10-8-10-17z" fill="url(#g-glass)" />
-          <path d="M18 39c1-5 4-7 6-8 2 1 5 3 6 8z" fill="#e2b04a" stroke-width="1.6" />
-          <path d="M19 13h10c-1 3-3 5-5 7-2-2-4-4-5-7z" fill="#e2b04a" stroke-width="1.6" />
-          <rect x="10" y="3" width="28" height="5" rx="2" fill="url(#g-wood)" />
-          <rect x="10" y="40" width="28" height="5" rx="2" fill="url(#g-wood)" />
-        </g>
-      </symbol>
 
-      <!-- Le chambellan : un haut-de-forme. -->
-      <symbol id="i-hat" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round">
-          <path d="M14 7h20l-2 27H16z" fill="#3a3f46" />
-          <path d="M15.4 26h17.2l-.5 6H16z" fill="url(#g-red)" />
-          <ellipse cx="24" cy="36" rx="19" ry="6" fill="#2b2f35" />
-        </g>
-        <path d="M18 10l-1 13" stroke="#8b939c" stroke-width="2.4" stroke-linecap="round" />
-      </symbol>
 
-      <!-- Coche et croix, pour les rubans et les verdicts. -->
-      <symbol id="i-check" viewBox="0 0 48 48">
-        <path d="M8 25l11 11L41 12" fill="none" style="stroke: var(--k, #2b5e1c)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M8 25l11 11L41 12" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" />
-      </symbol>
-      <symbol id="i-cross" viewBox="0 0 48 48">
-        <path d="M11 11l26 26M37 11L11 37" fill="none" style="stroke: var(--k, #6e1f10)" stroke-width="11" stroke-linecap="round" />
-        <path d="M11 11l26 26M37 11L11 37" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" />
-      </symbol>
 
       <!-- ——— Variantes de la vague ——— -->
       <!-- Un crâne de dessin animé : grand front, pommettes, mâchoire à part. -->
@@ -561,8 +386,8 @@
 
       <!-- Bouclier rond et deux épées : l'assaut. -->
       <symbol id="i-assault" viewBox="0 0 48 48">
-        <use href="#sword" transform="translate(-2 -2) scale(.9)" />
-        <use href="#sword" transform="translate(50 -2) scale(-.9 .9)" />
+        <use href="#hl-sword" transform="translate(-2 -2) scale(.9)" />
+        <use href="#hl-sword" transform="translate(50 -2) scale(-.9 .9)" />
         <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
           <circle cx="24" cy="27" r="13" fill="url(#g-wood)" />
           <circle cx="24" cy="27" r="8" fill="url(#g-blue)" stroke-width="2" />
@@ -723,17 +548,6 @@
       </symbol>
 
 
-      <!-- Le crâne retenu : celui de l'enfer, à plat, sans sa flamme. Le cadrage serre le crâne
-           (viewBox de 26), d'où un trait plus fin en unités pour le même rendu que les autres. -->
-      <symbol id="i-sk-wave" viewBox="11 17.2 26 26">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 1.45" stroke-linejoin="round" stroke-linecap="round">
-          <path d="M24 19c-6.6 0-11 4.3-11 10.2 0 3.6 1.7 6 4 7.4V39a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2.4c2.3-1.4 4-3.8 4-7.4C35 23.3 30.6 19 24 19z" fill="#ffffff" />
-          <path d="M21 41v-4M24 41v-4M27 41v-4" stroke-width="1.1" />
-          <path d="M16.5 26.5l6 2.6c0 2.4-1.4 4-3.3 4s-3.2-1.7-2.7-6.6zM31.5 26.5l-6 2.6c0 2.4 1.4 4 3.3 4s3.2-1.7 2.7-6.6z" fill="#e8432a" stroke-width="1.2" />
-          <path d="M24 32.4l-1.5 2.4h3z" fill="#3b2a1a" stroke-width=".9" />
-        </g>
-        <path d="M18 23c2-1.6 4.5-2.3 6-2.3" fill="none" stroke="#d9d9d9" stroke-width="1" stroke-linecap="round" />
-      </symbol>
 
       <!-- ——— Variantes de « Relier » ——— -->
       <!-- Une pancarte : poteau et planche en flèche, comme celles du plateau. -->
@@ -747,17 +561,6 @@
         <path d="M10 11.5h22" stroke="#f3cf98" stroke-width="1.8" stroke-linecap="round" opacity=".9" />
       </symbol>
 
-      <!-- Une pancarte à deux bras : d'ici, vers là. -->
-      <symbol id="i-sign2" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
-          <path d="M22 6h4v38h-4z" fill="url(#g-wood)" />
-          <path d="M10 8h24l7 6-7 6H10z" fill="url(#g-paper)" />
-          <path d="M38 23H14l-7 6 7 6h24z" fill="url(#g-wood)" />
-          <path d="M16 44h16" stroke-width="3" />
-        </g>
-        <path d="M14 14h16" stroke="#b59a6a" stroke-width="2" stroke-linecap="round" />
-        <path d="M17 29h16" stroke="#6b4421" stroke-width="2" stroke-linecap="round" />
-      </symbol>
 
       <!-- Une route qui serpente d'un bâtiment à l'autre. -->
       <symbol id="i-road" viewBox="0 0 48 48">
@@ -793,16 +596,6 @@
         <circle cx="24" cy="24" r="4" fill="#e2c27d" stroke="var(--k, #3b2a1a)" stroke-width="2.4" />
       </symbol>
 
-      <!-- ——— Pour « trop cher » ——— -->
-      <symbol id="i-lock" viewBox="0 0 48 48">
-        <g style="stroke: var(--k, #3b2a1a); stroke-width: 2.6" stroke-linejoin="round" stroke-linecap="round">
-          <path d="M15 21v-6a9 9 0 0 1 18 0v6" fill="none" stroke-width="6" />
-          <path d="M15 21v-6a9 9 0 0 1 18 0v6" fill="none" stroke="#b6c0c6" stroke-width="2.4" />
-          <rect x="9" y="20" width="30" height="23" rx="4" fill="url(#g-gold)" />
-          <path d="M24 28v6" stroke-width="3.4" />
-          <circle cx="24" cy="28" r="2.6" fill="#3b2a1a" />
-        </g>
-      </symbol>
     </svg>
 
     <main>
@@ -865,9 +658,18 @@
     </main>
 
     <script type="module">
-      import { icon } from '/src/ui/icons.ts';
+      import { icon, installSprite } from '/src/ui/icons.ts';
+      import { SPRITE_NAMES } from '/src/ui/sprite.ts';
 
-      // ——— Les formes calculées : dents d'engrenage et branches d'étoile. ———
+      // Ce qui a été retenu se dessine depuis le sprite du jeu (I18), jamais d'une copie : la
+      // planche montre ce que le joueur voit. Seules les variantes écartées restent ici.
+      installSprite();
+      const RETAINED = { sla: 'target', cross: 'close', sign2: 'link', dynamite: 'remove', lantern: 'bulb', 'sk-wave': 'skull' };
+      // Les premières propositions du crâne et du lien portent le nom que le jeu a donné aux retenues.
+      const PROPOSALS = new Set(['skull', 'link']);
+      const ref = (name) => RETAINED[name] ? `hl-${RETAINED[name]}` : !PROPOSALS.has(name) && SPRITE_NAMES.includes(name) ? `hl-${name}` : `i-${name}`;
+
+      // ——— La forme calculée : les dents d'engrenage. ———
       const polar = (cx, cy, r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
       function gear(cx, cy, teeth, outer, inner, hole = 0) {
         const step = (Math.PI * 2) / teeth;
@@ -886,21 +688,9 @@
         if (hole) d += `M${cx + hole} ${cy}a${hole} ${hole} 0 1 0 ${-2 * hole} 0a${hole} ${hole} 0 1 0 ${2 * hole} 0Z`;
         return d;
       }
-      function star(cx, cy, outer, inner, points = 5) {
-        const step = Math.PI / points;
-        return (
-          Array.from({ length: points * 2 }, (_, i) => {
-            const [x, y] = polar(cx, cy, i % 2 ? inner : outer, i * step - Math.PI / 2);
-            return `${i ? 'L' : 'M'}${x.toFixed(2)} ${y.toFixed(2)}`;
-          }).join('') + 'Z'
-        );
-      }
       document.getElementById('gear-path').setAttribute('d', gear(24, 24, 9, 21, 15.5));
-      document.getElementById('cog-big').setAttribute('d', gear(20, 22, 8, 17, 12.5));
-      document.getElementById('cog-small').setAttribute('d', gear(36, 36, 7, 10, 7));
-      document.getElementById('star-path').setAttribute('d', star(24, 25, 21, 9.5));
 
-      const i = (name, extra = '') => `<svg class="i ${extra}" viewBox="0 0 48 48" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+      const i = (name, extra = '') => `<svg class="i ${extra}" viewBox="0 0 48 48" aria-hidden="true"><use href="#${ref(name)}"/></svg>`;
 
       // ——— Pictogrammes ———
       const ICONS = [

@@ -92,9 +92,30 @@ export function withWorkers(arch: Architecture, catalog: Catalog): Architecture 
   };
 }
 
+/**
+ * Les vagues ajoutées au milieu d'un scénario déjà publié, par leur index : la passerelle d'API
+ * du raccourcisseur et la file des lettres mortes du marché sont arrivées en vague 5.
+ */
+const INSERTED_WAVES: Record<string, number> = { 'url-shortener': 4, market: 4 };
+
+/**
+ * Une partie terminée avant l'ajout d'une vague garde une note par vague de l'époque : sans
+ * correction, chaque note glisse d'un cran et la dernière vague s'affiche sans score. La vague
+ * ajoutée y entre sans note ni étoile, avec l'architecture de la vague d'avant. Une partie en
+ * cours n'est pas touchée : rien ne dit si elle date d'avant ou d'après l'ajout.
+ */
+export function withInsertedWaves(game: GameState, scenario: Scenario): GameState {
+  const at = INSERTED_WAVES[scenario.id];
+  if (at === undefined || !game.finished || game.scores.length !== scenario.waves.length - 1 || game.scores.length < at) return game;
+  const insert = <T>(xs: readonly T[], x: T) => [...xs.slice(0, at), x, ...xs.slice(at)];
+  const before = game.history[at] ?? game.committed;
+  return { ...game, scores: insert(game.scores, 0), stars: insert(game.stars, 0), history: insert(game.history, before), waveIndex: scenario.waves.length };
+}
+
 /** La partie convertie au catalogue courant : brouillon, architecture validée et historique ensemble. */
-function upgradedGame(game: GameState, catalog: Catalog): GameState {
-  return { ...game, committed: withWorkers(game.committed, catalog), history: game.history.map((a) => withWorkers(a, catalog)) };
+function upgradedGame(game: GameState, catalog: Catalog, scenario: Scenario): GameState {
+  const g = withInsertedWaves(game, scenario);
+  return { ...g, committed: withWorkers(g.committed, catalog), history: g.history.map((a) => withWorkers(a, catalog)) };
 }
 
 /** La partie d'un scénario : celle sauvegardée, ou une nouvelle ; `calibrated` si le joueur l'avait calibrée. */
@@ -105,7 +126,7 @@ export function gameOf(store: Store, id: string): Picked & { calibrated: boolean
   return {
     catalog,
     scenario,
-    game: saved?.game ? upgradedGame(saved.game, catalog) : newGame(),
+    game: saved?.game ? upgradedGame(saved.game, catalog, scenario) : newGame(),
     // Un brouillon d'avant le plateau reçoit des cases et des chemins une fois pour toutes.
     draft: autoPlace(withWorkers(withFixtures(saved?.draft ?? startOf(scenario), scenario), catalog)),
     calibrated: !!saved?.calibration,

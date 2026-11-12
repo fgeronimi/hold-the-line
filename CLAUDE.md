@@ -71,14 +71,16 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   `src/ui/icons.ts` : `icon('coin')` renvoie au sprite de `src/ui/sprite.ts` (I18), posé une
   fois par `installSprite()` au démarrage ; un nouveau pictogramme s'y dessine en `<symbol>`
   préfixé `hl-`, un test vérifie que chaque nom a le sien. Pas d'emoji dans un calque.
-  `design.html` (hors build, `/design.html`) est la planche où se choisissent ces dessins. Titrage : `--display`
+  `design.html` (hors build, `/design.html`) est la planche où se choisissent ces dessins : ce qui est
+  retenu s'y dessine depuis le sprite du jeu, seules les variantes écartées y restent en ligne. Titrage : `--display`
   (Lilita One, `src/ui/fonts/`, OFL). Une infobulle se pose avec `data-tip` et un `aria-label`.
 - `src/ui/draft.ts` : `draftInfo(arch, catalog)` donne validation, ordre, flux et facture d'un
   brouillon, mémorisés par identité de référence. Vues, guide, aide et plateau le lisent au
   lieu de rappeler `validateArchitecture` ou `linkFlows`.
 - L'analyse du chambellan est calculée quand la tentative est enregistrée
   (`Attempt.analysis`) et ne se refait que si le calibrage a changé. Ses répliques qui ne
-  viennent pas d'une leçon sont dans `Theme.debrief` ; le debrief reconnaît les évolutions
+  viennent pas d'une leçon sont dans `Theme.debrief` (celles du guide dans `Theme.guide`, aucun mot de
+  la métaphore dans `tutorial.ts`) ; le debrief reconnaît les évolutions
   par leur effet, jamais par leur identifiant.
 - `src/ui/views.ts` ré-exporte les calques de `src/ui/views/` (`hud.ts`, `toolbar.ts`,
   `hand.ts`, `card.ts`, `dialog.ts`, `debug.ts`, et `common.ts` pour les types, `esc` et les formats).

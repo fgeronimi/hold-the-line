@@ -6,7 +6,7 @@ import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { scoring } from '../src/data/scoring.ts';
 import { hintsLeft, newGame, playWave } from '../src/engine/game.ts';
 import { setAt } from '../src/ui/calibration.ts';
-import { choices, gameOf, isStore, readStore, startOf, withFixtures, withGame, withWorkers, type Store } from '../src/ui/session.ts';
+import { choices, gameOf, isStore, readStore, startOf, withFixtures, withGame, withInsertedWaves, withWorkers, type Store } from '../src/ui/session.ts';
 import { migrationCost } from '../src/engine/budget.ts';
 import { validateArchitecture } from '../src/engine/validate.ts';
 import type { Architecture } from '../src/engine/types.ts';
@@ -135,5 +135,28 @@ describe('le bâtiment Worker dans une partie en cours (ticket n° 1)', () => {
     }
     expect(migrationCost(picked.game.committed, picked.draft, catalog)).toBe(0);
     expect(picked.game.history[3]).toEqual(A.scaled(3));
+  });
+});
+
+describe('une vague ajoutée au milieu d’un scénario publié', () => {
+  const n = urlShortener.waves.length;
+  const archs = Array.from({ length: n }, (_, i) => ({ ...A.minimal, nodes: A.minimal.nodes.map((x) => ({ ...x, id: `${x.id}-${i}` })) }));
+  const old = { ...newGame(), waveIndex: n - 1, committed: archs[n - 1]!, history: archs, scores: [10, 20, 30, 40, 60], stars: [3, 3, 2, 2, 1], finished: true };
+
+  it('une partie terminée avant l’ajout garde chaque note sur sa vague, la nouvelle sans note', () => {
+    const game = withInsertedWaves(old, urlShortener);
+    expect(game.scores).toEqual([10, 20, 30, 40, 0, 60]);
+    expect(game.stars).toEqual([3, 3, 2, 2, 0, 1]);
+    expect(game.history).toHaveLength(n + 1);
+    expect(game.history[4]).toBe(archs[4]);
+    expect(game.history[5]).toBe(archs[4]);
+    expect(game.waveIndex).toBe(n);
+  });
+
+  it('une partie à jour, ou en cours, n’est pas touchée', () => {
+    const current = { ...old, scores: [...old.scores, 70], stars: [...old.stars, 3] };
+    expect(withInsertedWaves(current, urlShortener)).toBe(current);
+    const playing = { ...old, finished: false };
+    expect(withInsertedWaves(playing, urlShortener)).toBe(playing);
   });
 });

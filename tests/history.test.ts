@@ -32,9 +32,9 @@ describe('annuler et rétablir', () => {
     expect(travel(emptyHistory, 'undo', A.minimal, true)).toEqual({ history: emptyHistory });
   });
 
-  it('hors construction, le pas est consommé sans être appliqué', () => {
+  it('hors construction, rien ne bouge : le pas reste à annuler', () => {
     const step = travel(remember(emptyHistory, A.minimal), 'undo', A.withCache, false);
     expect(step.draft).toBeUndefined();
-    expect(historyCounts(step.history)).toEqual({ undo: 0, redo: 0 });
+    expect(historyCounts(step.history)).toEqual({ undo: 1, redo: 0 });
   });
 });

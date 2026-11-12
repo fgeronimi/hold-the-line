@@ -60,7 +60,7 @@ function initialState(): ViewState {
 installSprite();
 const root = document.getElementById('app')!;
 root.innerHTML = `
-  <div id="board" class="board"><p class="replay-loading">Chargement de la cité…</p></div>
+  <div id="board" class="board"><p class="replay-loading">${theme.loading}</p></div>
   <div id="hud" class="layer top"></div>
   <div id="hand" class="layer hand-layer"></div>
   <div id="toolbar" class="layer bottom"></div>

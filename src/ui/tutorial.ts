@@ -1,9 +1,13 @@
 import { migrationCost } from '../engine/budget.ts';
 import type { Architecture, Catalog, Wave } from '../engine/types.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
-import { nodeNames } from '../render/theme.ts';
+import { nodeNames, type GuideLine } from '../render/theme.ts';
 import { draftInfo } from './draft.ts';
 import { minuteSpan } from './time.ts';
+
+/** Une réplique du guide, prise dans le thème : le code ne connaît pas les mots de la métaphore. */
+const line = (key: GuideLine, vars: Record<string, string | number> = {}) =>
+  theme.guide[key].replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''));
 
 /** Ce qu'il faut faire maintenant, et quel bouton de la barre d'outils le montre. */
 export interface TutorialStep {
@@ -50,7 +54,7 @@ export function tutorialStep(arch: Architecture, catalog: Catalog): TutorialStep
   if (servers.length === 0) {
     return {
       id: 'place-server',
-      says: 'Il nous faut des scribes pour répondre aux voyageurs. Posez une Tour des scribes près des hameaux.',
+      says: line('placeServer'),
       real: 'Posez un Application server : c’est lui qui exécute le code, ici retrouver l’URL longue derrière un raccourci.',
       highlight: { tool: 'place', type: 'app-server' },
     };
@@ -58,7 +62,7 @@ export function tutorialStep(arch: Architecture, catalog: Catalog): TutorialStep
   if (!arch.links.some((l) => sources.has(l.from) && serverIds.has(l.to))) {
     return {
       id: 'link-source',
-      says: 'Tracez un chemin des hameaux à la tour, sans quoi personne n’y arrivera.',
+      says: line('linkSourceServer'),
       real: 'Reliez les Clients au serveur : outil Relier, cliquer le départ puis l’arrivée. Le sens du lien est celui de la requête.',
       highlight: { tool: 'link' },
     };
@@ -66,7 +70,7 @@ export function tutorialStep(arch: Architecture, catalog: Catalog): TutorialStep
   if (databases.length === 0) {
     return {
       id: 'place-database',
-      says: 'Les scribes ne savent rien par cœur : il leur faut les Archives royales, où tout est consigné.',
+      says: line('placeDatabase'),
       real: 'Posez une Database : elle stocke les raccourcis créés (écritures) et les retrouve (lectures).',
       highlight: { tool: 'place', type: 'database' },
     };
@@ -74,7 +78,7 @@ export function tutorialStep(arch: Architecture, catalog: Catalog): TutorialStep
   if (!arch.links.some((l) => serverIds.has(l.from) && databaseIds.has(l.to))) {
     return {
       id: 'link-database',
-      says: 'Reliez la tour aux archives, que les scribes puissent y consulter et y inscrire.',
+      says: line('linkDatabase'),
       real: 'Reliez le serveur à la base : sans ce lien, lectures et écritures n’ont nulle part où aller.',
       highlight: { tool: 'link' },
     };
@@ -83,13 +87,13 @@ export function tutorialStep(arch: Architecture, catalog: Catalog): TutorialStep
   if (!validation.ok) {
     return {
       id: 'fix',
-      says: 'Quelque chose cloche dans le plan de la cité.',
+      says: line('fix'),
       real: validation.errors[0] ?? 'Architecture invalide.',
     };
   }
   return {
     id: 'launch',
-    says: 'La cité est prête, Sire. Que les voyageurs viennent !',
+    says: line('ready'),
     real: 'Clients → serveur → base : l’architecture minimale d’un service web. Lancez la vague.',
     highlight: { tool: 'launch' },
   };
@@ -116,14 +120,14 @@ export function guideStep(
   const info = draftInfo(arch, catalog);
   const validation = info.validation;
   if (!validation.ok) {
-    return { id: 'fix', says: 'Quelque chose cloche dans le plan de la cité.', real: validation.errors[0] ?? 'Architecture invalide.' };
+    return { id: 'fix', says: line('fix'), real: validation.errors[0] ?? 'Architecture invalide.' };
   }
   // Le plan est valide mais vide de sens : rien ne sort des hameaux, ou un service attendu n'est alimenté par rien.
   const source = arch.nodes.find((n) => catalog.components[n.type]?.behavior === 'source');
   if (source && !arch.links.some((l) => l.from === source.id)) {
     return {
       id: 'link-source',
-      says: 'Personne ne quitte encore les hameaux : aucun chemin n’en part.',
+      says: line('linkSource'),
       real: 'Reliez les Clients au premier bâtiment de votre architecture : outil Relier, cliquer le départ puis l’arrivée.',
       highlight: { tool: 'link' },
     };
@@ -142,7 +146,7 @@ export function guideStep(
     const { tech, metaphor } = nodeNames(deadEnd, catalog, theme);
     return {
       id: 'dead-end',
-      says: `${metaphor} reçoit du travail mais n’a nulle part où le porter : aucun chemin n’en part.`,
+      says: line('deadEnd', { name: metaphor }),
       real: `${tech} reçoit des requêtes mais n’a aucun lien sortant : tout ce qu’il ne termine pas lui-même échouera (no-route).`,
       highlight: { tool: 'link' },
     };
@@ -151,7 +155,7 @@ export function guideStep(
   if (starved?.fixed) {
     return {
       id: 'feed-consumer',
-      says: `Le ${starved.fixed.metaphor.toLowerCase()} attend toujours les commandes : aucun chemin ne mène à lui.`,
+      says: line('feedConsumer', { name: starved.fixed.metaphor.toLowerCase() }),
       real: `Le ${starved.fixed.tech} doit recevoir chaque événement de commande, et rien ne l’alimente encore.`,
     };
   }
@@ -160,14 +164,14 @@ export function guideStep(
   if (bill > wave.budget) {
     return {
       id: 'over-budget',
-      says: `Le trésor ne suffira pas, Sire : ${Math.round(bill)} écus pour ${wave.budget}.`,
+      says: line('overBudget', { bill: Math.round(bill), budget: wave.budget }),
       real: `La facture prévue dépasse le budget de la vague (${Math.round(bill)} / ${wave.budget}, retraits compris). Retirer un composant ou baisser une évolution.`,
     };
   }
   if (complexity > wave.complexityCap) {
     return {
       id: 'over-complexity',
-      says: `Trop de rouages à entretenir : vos gens n’en suivront pas ${complexity}.`,
+      says: line('overComplexity', { complexity }),
       real: `La complexité dépasse le plafond de la vague (${complexity} / ${wave.complexityCap}). Chaque composant et chaque évolution en ajoute.`,
     };
   }
@@ -175,7 +179,7 @@ export function guideStep(
   if (tutorial) return { ...tutorialStep(arch, catalog), real: `${tutorialStep(arch, catalog).real}${incidents}` };
   return {
     id: 'launch',
-    says: `${wave.title} : la cité tiendra-t-elle ? Quand vous serez prêt, lancez la vague.`,
+    says: line('launch', { wave: wave.title }),
     real: `${wave.briefing}${incidents}`,
     highlight: { tool: 'launch' },
   };

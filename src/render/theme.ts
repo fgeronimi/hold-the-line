@@ -65,7 +65,31 @@ export interface Theme {
   debrief: Record<DebriefLine, string>;
   /** L'écran de choix du scénario : la question du narrateur, puis « En vrai ». */
   choose: { says: string; real: string };
+  /**
+   * Les répliques du narrateur dans le guide (`src/ui/tutorial.ts`) : le pas-à-pas de la vague 1,
+   * puis ce qui bloque le lancement. La ligne « En vrai » reste dans le code. `{name}`, `{bill}`,
+   * `{budget}`, `{complexity}` et `{wave}` y sont remplacés.
+   */
+  guide: Record<GuideLine, string>;
+  /** La fin d'une partie gagnée, au debrief de la dernière vague ; la suite (étoiles, score) est chiffrée à côté. */
+  finale: string;
+  /** Ce qu'affiche le plateau pendant qu'il se charge. */
+  loading: string;
 }
+
+export type GuideLine =
+  | 'placeServer'
+  | 'linkSourceServer'
+  | 'placeDatabase'
+  | 'linkDatabase'
+  | 'fix'
+  | 'ready'
+  | 'linkSource'
+  | 'deadEnd'
+  | 'feedConsumer'
+  | 'overBudget'
+  | 'overComplexity'
+  | 'launch';
 
 export type HintLine = 'place' | 'placeMore' | 'link' | 'upgrade' | 'level' | 'remove' | 'unlink' | 'lower' | 'rewind' | 'rebuilt' | 'ready';
 
