@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { enumerate, reductions, strategyName, strategyParts, type BalanceSpace, type Choice } from '../src/balance/canonical.ts';
 import { runMassSim, type MassSimReport } from '../src/balance/mass-sim.ts';
 import { formatScenarioReport } from '../src/balance/report.ts';
@@ -11,6 +11,10 @@ import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { scoring } from '../src/data/scoring.ts';
 import { simulateWave } from '../src/engine/simulate.ts';
 import { validateArchitecture } from '../src/engine/validate.ts';
+
+// Ces tests énumèrent des milliers d'architectures : une seconde ici en vaut quatre sur la
+// machine de CI, bien au-delà des délais par défaut de Vitest (5 s par test, 30 s par hook).
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 300_000 });
 
 /** Le même espace avec d'autres bornes. */
 const narrowed = (space: BalanceSpace, levels: Record<string, number[]>): BalanceSpace => ({
