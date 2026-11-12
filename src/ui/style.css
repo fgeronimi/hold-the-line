@@ -301,6 +301,10 @@ button.scenario-card:active:not(:disabled) { transform: translateY(1px); box-sha
 
 /* Les pastilles d'évolution au pied du bâtiment sélectionné (plateau, construction). */
 .city-pips { pointer-events: none; }
+/* Les pastilles du bâtiment sélectionné passent devant toutes les étiquettes. Le moteur des
+   étiquettes réécrit à chaque image le z-index de chacune selon sa distance à la caméra :
+   seule une règle !important l'emporte sur ce style posé en ligne. */
+.city-labels .city-pips { z-index: 100000 !important; }
 .pips { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .pip { pointer-events: auto; position: relative; display: flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; font: inherit; user-select: none; }
 .pip .icon { position: relative; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; background: var(--m-stone); border: 1px solid #8f8a7c; box-shadow: 0 1px 3px rgba(30, 20, 8, .25); opacity: .85; transition: opacity .15s, border-color .15s, background .15s; }
