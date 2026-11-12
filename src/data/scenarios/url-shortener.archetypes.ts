@@ -106,3 +106,53 @@ export function autoscaled(extraInstances: number, maxAuto: number): Architectur
     links: base.links,
   };
 }
+
+/**
+ * Une passerelle d'API à l'entrée (C7), derrière le CDN s'il y en a un, devant le load
+ * balancer : un quota par clé pour les partenaires, une limite par adresse pour les anonymes.
+ * `singleLimit` garde en plus la limite unique du load balancer ; `noBalancer` relie la
+ * passerelle directement au serveur, sans scaling possible.
+ */
+export function gated(opts: {
+  partnerTier: number;
+  anonymousTier: number;
+  cdn?: boolean;
+  extraInstances?: number;
+  replicas?: number;
+  queue?: boolean;
+  singleLimit?: number;
+  noBalancer?: boolean;
+}): Architecture {
+  const nodes: ArchNode[] = [source];
+  const links: ArchLink[] = [];
+  let entry = 'src';
+  if (opts.cdn) {
+    nodes.push({ id: 'cdn', type: 'cdn' });
+    links.push(link('src', 'cdn'));
+    entry = 'cdn';
+  }
+  nodes.push({ id: 'gateway', type: 'api-gateway', upgrades: { 'partner-quota': opts.partnerTier, 'anonymous-quota': opts.anonymousTier } });
+  links.push(link(entry, 'gateway'));
+  if (opts.noBalancer) {
+    links.push(link('gateway', 'app'));
+    nodes.push({ id: 'app', type: 'app-server' });
+  } else {
+    nodes.push(
+      { id: 'lb', type: 'load-balancer', upgrades: { 'rate-limiting': opts.singleLimit ?? 0 } },
+      { id: 'app', type: 'app-server', upgrades: { 'horizontal-scaling': opts.extraInstances ?? 0 } },
+    );
+    links.push(link('gateway', 'lb'), link('lb', 'app'));
+  }
+  nodes.push({ id: 'cache', type: 'cache' }, { ...db, upgrades: { 'read-replica': opts.replicas ?? 0 } });
+  links.push(link('app', 'cache'), link('app', 'db'));
+  if (opts.queue) {
+    nodes.push({ id: 'queue', type: 'message-queue' }, { id: 'worker', type: 'worker' });
+    links.push(link('app', 'queue'), link('queue', 'worker'), link('worker', 'db'));
+  }
+  return { nodes, links };
+}
+
+/** Quota par clé à 160 req/s : au-dessus des partenaires (125), il coupe la clé qui boucle (2 000). */
+export const PARTNER_160 = 5;
+/** Limite par adresse à 10 req/s : au-dessus d'un visiteur (3), bien sous le scraper (60). */
+export const ANONYMOUS_10 = 1;

@@ -5,15 +5,29 @@ const flat = [{ until: TICKS, factor: 1 }];
 /** Le trafic monte au départ et retombe à la fin (décision S11). */
 const RAMP = { up: 8, down: 8 };
 
-const users = (rps: TrafficSource['rps']): TrafficSource => ({ id: 'users', clients: 1000, rps });
+// Une passerelle d'API reconnaît la classe de chaque client (décision C7) : une clé d'API pour
+// les partenaires, rien pour les autres, scraper compris. La limite unique du load balancer,
+// elle, ne voit que des clients.
+const users = (rps: TrafficSource['rps']): TrafficSource => ({ id: 'users', clients: 1000, class: 'anonymous', rps });
 
 // Légitimes mais gourmands : une limite trop basse les coupe (décision C2). Ils appellent
 // l'API, dont les réponses ne se gardent pas en bordure : un CDN ne les arrête pas (SC1).
-const partners = (rps: TrafficSource['rps']): TrafficSource => ({ id: 'partners', clients: 50, noEdgeCache: true, rps });
+const partners = (rps: TrafficSource['rps'], clients = 50): TrafficSource => ({ id: 'partners', clients, class: 'partner', noEdgeCache: true, rps });
 
 // Quelques adresses à très fort débit : une limite trop haute les laisse passer.
 // Il visite tous les liens, donc aucun cache ne l'arrête : seul le rate limiting le fait.
-const scraper: TrafficSource = { id: 'scraper', clients: 2, abusive: true, longTail: true, rps: { read: 2000 } };
+const scraper: TrafficSource = { id: 'scraper', clients: 2, class: 'anonymous', abusive: true, longTail: true, rps: { read: 2000 } };
+
+// À partir de la vague 5 (C7) : douze partenaires deux fois plus gros que le plus gros
+// d'avant, un scraper qui s'est réparti sur vingt adresses, plus gourmand qu'un visiteur mais
+// moins qu'un partenaire, et une clé de partenaire dont le script boucle. Aucune limite unique
+// ne sépare les légitimes des abusifs : à 80 et en dessous, elle coupe les partenaires ; à 160,
+// le scraper passe en entier.
+const bigPartners = (rps: TrafficSource['rps']) => partners(rps, 12);
+const spreadScraper: TrafficSource = { ...scraper, clients: 20, rps: { read: 1200 } };
+// Il ne visite que les liens de son partenaire : le cache applicatif les sert, pas la bordure.
+// Ses requêtes en trop ne sont pas un client à servir : écartées, elles ne sont pas des échecs.
+const runaway = (rps: TrafficSource['rps']): TrafficSource => ({ id: 'runaway-partner', clients: 1, class: 'partner', abusive: true, noEdgeCache: true, rps });
 
 export const urlShortener: Scenario = {
   id: 'url-shortener',
@@ -115,6 +129,33 @@ export const urlShortener: Scenario = {
       conceptRef: 'Rate Limiting',
     },
     {
+      id: 'partner-keys',
+      title: 'À chacun sa limite',
+      briefing:
+        'Les partenaires ont grandi : 12 partenaires appellent l’API avec leur clé, à 125 requêtes par seconde chacun. L’un d’eux a mis en production un script qui boucle : 2 000 requêtes par seconde sur sa seule clé. Et le scraper a changé de tactique : 20 adresses, 60 requêtes par seconde chacune, bien plus qu’un visiteur (3 par seconde), bien moins qu’un partenaire.',
+      ticks: TICKS,
+      ramp: RAMP,
+      profile: flat,
+      sources: [users({ read: 3000, write: 50 }), bigPartners({ read: 1500 }), runaway({ read: 2000 }), spreadScraper],
+      sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
+      // Depuis la réponse sans CDN de la vague 4, garder ses instances et ajouter passerelle et
+      // réplica, en coupant la limite unique (5 de migration) : 255.
+      budget: 255,
+      // Sans la limite unique : avec elle, un point de trop. L'autoscaling, sur ce trafic qui ne
+      // retombe pas, n'y tient pas non plus (+2).
+      complexityCap: 13,
+      thriftyCost: 210,
+      // La limite unique ne passe à aucun palier : à 80 et en dessous, elle coupe les
+      // partenaires ; à 160, le scraper charge la base. La passerelle limite chaque classe à son
+      // palier : 160 par clé, 10 par adresse anonyme. Elle ajoute 5 ms à chaque requête : sans
+      // CDN, une instance de plus et un réplica.
+      answers: [
+        { cdn: 1, lb: 1, scaling: 2, cache: 1, gateway: 1, partnerQuota: 5, anonymousQuota: 1 },
+        { lb: 1, scaling: 4, cache: 1, replicas: 1, gateway: 1, partnerQuota: 5, anonymousQuota: 1 },
+      ],
+      conceptRef: 'Rate Limiting',
+    },
+    {
       id: 'click-tracking',
       title: 'Compter les clics',
       briefing:
@@ -122,14 +163,14 @@ export const urlShortener: Scenario = {
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,
-      sources: [users({ read: 3000, write: 50, async: 3000 }), partners({ read: 1500, async: 1500 }), scraper],
+      sources: [users({ read: 3000, write: 50, async: 3000 }), bigPartners({ read: 1500, async: 1500 }), runaway({ read: 2000, async: 2000 }), spreadScraper],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
-      budget: 225,
-      complexityCap: 12,
+      budget: 300,
+      complexityCap: 16,
       conceptRef: 'Backpressure',
-      thriftyCost: 205,
+      thriftyCost: 295,
       answers: [
-        { lb: 1, scaling: 3, rateLimit: 3, cache: 1, queue: 1 },
+        { lb: 1, scaling: 4, cache: 1, replicas: 1, gateway: 1, partnerQuota: 5, anonymousQuota: 1, queue: 1 },
       ],
       // La file est la seule réponse ; un CDN posé en vague 3 y perd les clics des redirections en cache.
       singleStrategy: true,

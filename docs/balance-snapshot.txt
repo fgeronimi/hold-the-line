@@ -1,4 +1,4 @@
-## Raccourcisseur d’URL — 17376 architectures × 5 vagues
+## Raccourcisseur d’URL — 51936 architectures × 6 vagues
 [ok] launch (réponse unique assumée) — 1 stratégie(s) : serveur + base
      serveur + base                                      1 gagnantes | meilleure : — | score 56.6 | coût 70/100 | marges coût 30 %, cx 25 %, échecs 100 %, p95 72 %
      load balancer                                       1 gagnantes | meilleure : — | score 47.5 | coût 80/100 | marges coût 20 %, cx 0 %, échecs 100 %, p95 70 %
@@ -30,8 +30,11 @@
 [ok] noisy-client — 2 stratégie(s) : CDN + load balancer + scaling + rate limiting + cache | load balancer + scaling + rate limiting + cache
      CDN + load balancer + scaling + rate limiting + cache    3 gagnantes | meilleure : scaling 2, rate limiting 3 | score 39.6 | coût 180/180 | marges coût 0 %, cx 0 %, échecs 100 %, p95 58 %
      load balancer + scaling + rate limiting + cache     1 gagnantes | meilleure : scaling 4, rate limiting 3 | score 34.8 | coût 180/180 | marges coût 0 %, cx 20 %, échecs 100 %, p95 19 %
-[ok] click-tracking (réponse unique assumée) — 1 stratégie(s) : load balancer + scaling + rate limiting + cache + file
-     load balancer + scaling + rate limiting + cache + file    6 gagnantes | meilleure : scaling 4, rate limiting 3 | score 38.8 | coût 225/225 | marges coût 0 %, cx 8 %, échecs 100 %, p95 47 %
+[ok] partner-keys — 2 stratégie(s) : load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica | CDN + load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache
+     load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica    2 gagnantes | meilleure : scaling 4, quota par clé 5, limite par adresse 1, réplica 1 | score 32.7 | coût 250/255 | marges coût 2 %, cx 8 %, échecs 100 %, p95 21 %
+     CDN + load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache    3 gagnantes | meilleure : scaling 3, quota par clé 5, limite par adresse 1 | score 32.2 | coût 230/255 | marges coût 10 %, cx 0 %, échecs 100 %, p95 19 %
+[ok] click-tracking (réponse unique assumée) — 1 stratégie(s) : load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica + file
+     load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica + file    2 gagnantes | meilleure : scaling 4, quota par clé 5, limite par adresse 1, réplica 1 | score 33.3 | coût 295/300 | marges coût 2 %, cx 6 %, échecs 100 %, p95 25 %
 [ok] Enchaînement read-surge, depuis la réponse 1 de launch : 10 gagnante(s) | moins chère : — | coût 85/115, dont 0 de migration
 [ok] Enchaînement marketing-peak, depuis la réponse 1 de read-surge : 19 gagnante(s) | moins chère : — | coût 125/170, dont 0 de migration
 [ok] Enchaînement marketing-peak, depuis la réponse 2 de read-surge : 2 gagnante(s) | moins chère : — | coût 165/170, dont 40 de migration
@@ -39,16 +42,19 @@
 [ok] Enchaînement noisy-client, depuis la réponse 1 de marketing-peak : 3 gagnante(s) | moins chère : scaling 1, rate limiting 3 | coût 160/180, dont 0 de migration
 [ok] Enchaînement noisy-client, depuis la réponse 2 de marketing-peak : 4 gagnante(s) | moins chère : scaling 1, rate limiting 3 | coût 160/180, dont 0 de migration
 [ok] Enchaînement noisy-client, depuis la réponse 3 de marketing-peak : 1 gagnante(s) | moins chère : scaling 1, rate limiting 3 | coût 165/180, dont 5 de migration
-[ok] Enchaînement click-tracking, depuis la réponse 1 de noisy-client : 6 gagnante(s) | moins chère : scaling 3, rate limiting 3 | coût 205/225, dont 0 de migration
-[impasse] click-tracking, depuis la réponse 2 de noisy-client : aucune gagnante (retour en arrière, E6)
+[ok] Enchaînement partner-keys, depuis la réponse 1 de noisy-client : 5 gagnante(s) | moins chère : scaling 2, quota par clé 5, limite par adresse 1 | coût 215/255, dont 5 de migration
+[ok] Enchaînement partner-keys, depuis la réponse 2 de noisy-client : 3 gagnante(s) | moins chère : scaling 2, quota par clé 5, limite par adresse 1 | coût 215/255, dont 5 de migration
+[impasse] click-tracking, depuis la réponse 1 de partner-keys : aucune gagnante (retour en arrière, E6)
+[ok] Enchaînement click-tracking, depuis la réponse 2 de partner-keys : 2 gagnante(s) | moins chère : scaling 4, quota par clé 5, limite par adresse 1, réplica 1 | coût 295/300, dont 0 de migration
 
 Architecture gagnant toutes les vagues : aucune (ok)
 Deux stratégies sur la majorité des vagues : oui
-Tout au maximum, launch : perd (ok) — Budget dépassé : 610 / 100 ; Trop complexe : 21 / 4 points
-Tout au maximum, read-surge : perd (ok) — Budget dépassé : 610 / 115 ; Trop complexe : 21 / 7 points
-Tout au maximum, marketing-peak : perd (ok) — Budget dépassé : 610 / 170 ; Trop complexe : 21 / 9 points
-Tout au maximum, noisy-client : perd (ok) — Budget dépassé : 610 / 180 ; Trop complexe : 21 / 10 points
-Tout au maximum, click-tracking : perd (ok) — Budget dépassé : 610 / 225 ; Trop complexe : 21 / 12 points ; SLA rompu : 25.53 % d'échecs (max 1.00 %)
+Tout au maximum, launch : perd (ok) — Budget dépassé : 645 / 100 ; Trop complexe : 25 / 4 points
+Tout au maximum, read-surge : perd (ok) — Budget dépassé : 645 / 115 ; Trop complexe : 25 / 7 points
+Tout au maximum, marketing-peak : perd (ok) — Budget dépassé : 645 / 170 ; Trop complexe : 25 / 9 points
+Tout au maximum, noisy-client : perd (ok) — Budget dépassé : 645 / 180 ; Trop complexe : 25 / 10 points
+Tout au maximum, partner-keys : perd (ok) — Budget dépassé : 645 / 255 ; Trop complexe : 25 / 13 points
+Tout au maximum, click-tracking : perd (ok) — Budget dépassé : 645 / 300 ; Trop complexe : 25 / 16 points ; SLA rompu : 23.43 % d'échecs (max 1.00 %)
 
 ## Prise de commande — 1408 architectures × 6 vagues
 [ok] market-open (réponse unique assumée) — 1 stratégie(s) : file

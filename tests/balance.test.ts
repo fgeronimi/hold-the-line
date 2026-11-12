@@ -27,9 +27,11 @@ const shortener = narrowed(shortenerSpace, {
   replicas: [0, 1],
   workers: [0],
   autoscaling: [0, 3],
+  partnerQuota: [0, 5],
+  anonymousQuota: [0, 1],
 });
 
-const base: Choice = { cdn: 0, lb: 1, scaling: 3, autoscaling: 0, rateLimit: 0, cache: 1, replicas: 0, queue: 0, workers: 0 };
+const base: Choice = { cdn: 0, lb: 1, scaling: 3, autoscaling: 0, rateLimit: 0, gateway: 0, partnerQuota: 0, anonymousQuota: 0, cache: 1, replicas: 0, queue: 0, workers: 0 };
 
 describe('enumerate', () => {
   const candidates = [...enumerate(shortener)];
@@ -37,8 +39,9 @@ describe('enumerate', () => {
   it('couvre tout l’espace canonique', () => {
     // Sans LB : CDN × cache × réplicas × file.
     const withoutLb = 2 * 2 * 2 * 2;
-    // Avec LB : en plus, autoscaling × instances × paliers.
-    const withLb = withoutLb * 2 * 5 * 6;
+    // Avec LB : en plus, autoscaling × instances × (5 paliers de limite unique, ou sans elle :
+    // pas de passerelle, ou une passerelle et ses 2 × 2 limites par classe).
+    const withLb = withoutLb * 2 * 5 * (5 + 1 + 2 * 2);
     expect(candidates).toHaveLength(withoutLb + withLb);
   });
 
@@ -63,6 +66,13 @@ describe('enumerate', () => {
   it('retirer le load balancer retire ce qui en dépend', () => {
     const withLimit = { ...base, rateLimit: 2, autoscaling: 3 };
     expect(reductions(shortener, withLimit)).toContainEqual({ ...withLimit, lb: 0, scaling: 0, autoscaling: 0, rateLimit: 0 });
+  });
+
+  it('la passerelle d’API ne s’essaie que devant un load balancer sans limite unique (C7)', () => {
+    expect(candidates.some((c) => (c.choice.gateway ?? 0) > 0 && (c.choice.rateLimit ?? 0) > 0)).toBe(false);
+    expect(candidates.some((c) => (c.choice.gateway ?? 0) > 0 && (c.choice.lb ?? 0) === 0)).toBe(false);
+    const gated = { ...base, gateway: 1, partnerQuota: 5, anonymousQuota: 1 };
+    expect(reductions(shortener, gated)).toContainEqual({ ...gated, gateway: 0, partnerQuota: 0, anonymousQuota: 0 });
   });
 
   it('un simple réglage, sans nom, n’est pas un élément à retirer', () => {
@@ -102,8 +112,15 @@ describe('runMassSim sur le raccourcisseur', () => {
     );
   });
 
-  it('vague 4 : le rate limiting est dans toutes les stratégies', () => {
-    expect(wave('noisy-client').strategies.every((s) => s.includes('rate limiting'))).toBe(true);
+  it('vague 4 : le rate limiting est dans toutes les stratégies, la passerelle dans aucune', () => {
+    expect(wave('noisy-client').strategies.every((s) => s.includes('rate limiting') && !s.includes('passerelle'))).toBe(true);
+  });
+
+  it('vague 5 : des limites par classe dans toutes les stratégies, la limite unique dans aucune (C7)', () => {
+    const strategies = wave('partner-keys').strategies;
+    expect(strategies.length).toBeGreaterThanOrEqual(2);
+    expect(strategies.every((s) => s.includes('passerelle d’API') && s.includes('quota par clé') && s.includes('limite par adresse'))).toBe(true);
+    expect(strategies.some((s) => s.includes('rate limiting'))).toBe(false);
   });
 
   it('l’architecture au maximum de tout perd chaque vague par le coût ou la complexité', () => {

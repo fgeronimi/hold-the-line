@@ -98,7 +98,13 @@ describe('suivre les indices mène à la victoire', () => {
 });
 
 describe('aide du raccourcisseur', () => {
-  const cdnPath = [A.minimal, A.withCache, A.withCdn(), A.withCdn({ rateLimitTier: A.TIER_40 })];
+  const cdnPath = [
+    A.minimal,
+    A.withCache,
+    A.withCdn(),
+    A.withCdn({ rateLimitTier: A.TIER_40 }),
+    A.gated({ partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, cdn: true, extraInstances: 2 }),
+  ];
   const pathGame = (upTo: number): GameState => ({
     ...newGame(),
     waveIndex: upTo,
@@ -107,8 +113,8 @@ describe('aide du raccourcisseur', () => {
     replays: 1,
   });
 
-  it('CDN validé en vague 3 : en vague 5, l’indice est de revenir à la vague 3', () => {
-    const game = pathGame(4);
+  it('CDN validé en vague 3 : en vague 6, l’indice est de revenir à la vague 3', () => {
+    const game = pathGame(5);
     const plan = planHints({ game, scenario: urlShortener, catalog, draft: game.committed });
     expect(plan.status).toBe('rewind');
     expect(plan.hints[0]).toMatchObject({ kind: 'rewind', wave: 2 });

@@ -19,7 +19,11 @@ const levels = (id: string) => catalog.upgrades[id]?.maxLevel ?? 0;
 const link = (from: string, to: string): ArchLink => ({ from, to });
 const on = (c: Choice, id: string) => (c[id] ?? 0) > 0;
 
-/** Le raccourcisseur : CDN, load balancer et ses évolutions, cache, réplicas, file et workers. */
+/**
+ * Le raccourcisseur : CDN, passerelle d'API et ses limites par classe, load balancer et ses
+ * évolutions, cache, réplicas, file et workers. La passerelle se pose derrière le CDN, devant
+ * le load balancer : les lectures des partenaires, que le CDN ne garde pas, y arrivent toutes.
+ */
 function shortener(c: Choice): Architecture {
   const nodes: ArchNode[] = [{ id: 'src', type: 'traffic-source' }];
   const links: ArchLink[] = [];
@@ -29,6 +33,11 @@ function shortener(c: Choice): Architecture {
     nodes.push({ id: 'cdn', type: 'cdn' });
     links.push(link('src', 'cdn'));
     entry = 'cdn';
+  }
+  if (on(c, 'gateway')) {
+    nodes.push({ id: 'gateway', type: 'api-gateway', upgrades: { 'partner-quota': c.partnerQuota ?? 0, 'anonymous-quota': c.anonymousQuota ?? 0 } });
+    links.push(link(entry, 'gateway'));
+    entry = 'gateway';
   }
   if (on(c, 'lb')) {
     nodes.push({ id: 'lb', type: 'load-balancer', upgrades: { 'rate-limiting': c.rateLimit ?? 0 } });
@@ -64,6 +73,13 @@ export const shortenerSpace: BalanceSpace = {
     { id: 'scaling', levels: upTo(levels('horizontal-scaling')), label: 'scaling', requires: 'lb' },
     { id: 'autoscaling', levels: [0, 3, 6], label: 'autoscaling', requires: 'lb' },
     { id: 'rateLimit', levels: upTo(levels('rate-limiting')), label: 'rate limiting', requires: 'lb' },
+    // Seulement devant un load balancer sans limite unique (C7) : avec elle, la passerelle ne
+    // gagne rien ou coupe les mêmes partenaires, et sans load balancer, pas de scaling. Les
+    // paliers essayés : 80 coupe les partenaires de la vague 5, 160 non ; au-delà de 40, la
+    // limite des anonymes laisse passer tout le scraper, comme aucune limite.
+    { id: 'gateway', levels: [0, 1], label: 'passerelle d’API', requires: 'lb', excludes: 'rateLimit' },
+    { id: 'partnerQuota', levels: [0, 4, 5], label: 'quota par clé', requires: 'gateway' },
+    { id: 'anonymousQuota', levels: upTo(3), label: 'limite par adresse', requires: 'gateway' },
     { id: 'cache', levels: [0, 1], label: 'cache' },
     { id: 'replicas', levels: upTo(levels('read-replica')), label: 'réplica' },
     { id: 'queue', levels: [0, 1], label: 'file' },

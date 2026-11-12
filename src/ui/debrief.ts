@@ -92,6 +92,11 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
   // Les évolutions se reconnaissent à leur effet, comme dans le moteur : pas à leur identifiant.
   const upgradesOf = (n: Architecture['nodes'][number]) => resolveUpgrades(n, catalog);
   const anyHas = (effect: UpgradeEffect['type']) => arch.nodes.some((n) => hasEffect(upgradesOf(n), effect));
+  // Une limite par classe de client (C7) se dit à part de la limite unique : ni le même compromis,
+  // ni la même victoire.
+  const limits = arch.nodes.flatMap((n) => withEffect(upgradesOf(n), 'rateLimit').filter((u) => u.level > 0));
+  const classLimits = limits.some((u) => u.effect.class !== undefined);
+  const singleLimit = limits.some((u) => u.effect.class === undefined);
   const problem: Finding['tone'] = won ? 'warn' : 'bad';
 
   // Les ticks d'incident : ce qui y déborde est raconté par l'incident, pas comme un goulot.
@@ -252,7 +257,14 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
   // Ce qu'ont coûté les parades en place : une protection a aussi un prix pour le client (D1).
   const costs = [
     ...(ofBehavior('queue').length > 0 ? [paradeCosts.queue] : []),
-    ...(Object.keys(paradeCosts) as (keyof typeof paradeCosts)[]).filter((k) => k !== 'queue' && anyHas(k as UpgradeEffect['type'])).map((k) => paradeCosts[k]),
+    ...(Object.keys(paradeCosts) as (keyof typeof paradeCosts)[])
+      .filter((k) => {
+        if (k === 'queue') return false;
+        if (k === 'rateLimit') return singleLimit;
+        if (k === 'classLimits') return classLimits;
+        return anyHas(k);
+      })
+      .map((k) => paradeCosts[k]),
   ].filter((c): c is string => !!c);
   if (costs.length > 0) out.push({ tone: 'tip', says: line('paradeCosts'), tech: costs.join(' '), concept: 'Compromis des parades' });
 
@@ -332,10 +344,17 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
       }
     }
     if (result.shed > 0 && result.failuresByReason['rate-limited'] === 0) {
-      worked.push({
-        says: line('rateLimit'),
-        tech: `Le rate limiting a écarté ${Math.round(result.shed)} requêtes abusives du scraper, et aucune requête légitime.`,
-      });
+      worked.push(
+        classLimits
+          ? {
+              says: line('classLimits'),
+              tech: `Les limites par classe de la passerelle d’API ont écarté ${Math.round(result.shed)} requêtes abusives, chaque classe sous son propre palier, et aucune requête légitime.`,
+            }
+          : {
+              says: line('rateLimit'),
+              tech: `Le rate limiting a écarté ${Math.round(result.shed)} requêtes abusives du scraper, et aucune requête légitime.`,
+            },
+      );
     }
     for (const id of ofBehavior('pubsub')) {
       const subscribers = arch.links.filter((l) => l.from === id).length;

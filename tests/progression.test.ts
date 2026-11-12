@@ -112,22 +112,29 @@ describe('playWave', () => {
       A.withCache,
       A.scaled(3),
       A.scaled(4, { rateLimitTier: A.TIER_40 }),
-      A.queuedClicks(4),
+      A.gated({ partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, extraInstances: 4, replicas: 1 }),
+      A.gated({ partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, extraInstances: 4, replicas: 1, queue: true }),
     ];
     let state = newGame();
     for (const arch of answers) ({ state } = playWave(state, urlShortener, arch, catalog, scoring));
     expect(state.finished).toBe(true);
-    expect(state.scores).toHaveLength(5);
+    expect(state.scores).toHaveLength(6);
     expect(state.scores.every((s) => s > 0)).toBe(true);
     expect(() => playWave(state, urlShortener, A.minimal, catalog, scoring)).toThrow();
   });
 
   it('revient à une vague antérieure avec son architecture, au prix d’un rejeu', () => {
-    // Parcours CDN : il gagne les vagues 3 et 4, puis la vague 5 est ingagnable depuis là.
-    const answers = [A.minimal, A.withCache, A.withCdn(), A.withCdn({ rateLimitTier: A.TIER_40, extraInstances: 1 })];
+    // Parcours CDN : il gagne les vagues 3 à 5, puis la vague 6 est ingagnable depuis là.
+    const answers = [
+      A.minimal,
+      A.withCache,
+      A.withCdn(),
+      A.withCdn({ rateLimitTier: A.TIER_40, extraInstances: 1 }),
+      A.gated({ partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, cdn: true, extraInstances: 2 }),
+    ];
     let state = newGame();
     for (const arch of answers) ({ state } = playWave(state, urlShortener, arch, catalog, scoring));
-    expect(state.waveIndex).toBe(4);
+    expect(state.waveIndex).toBe(5);
 
     const back = rewindTo(state, 2);
     expect(back.waveIndex).toBe(2);
@@ -136,11 +143,12 @@ describe('playWave', () => {
     expect(back.replays).toBe(1);
 
     let replay = back;
-    for (const arch of [A.scaled(3), A.scaled(4, { rateLimitTier: A.TIER_40 }), A.queuedClicks(3)]) {
+    const gated = { partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, extraInstances: 4, replicas: 1 };
+    for (const arch of [A.scaled(3), A.scaled(4, { rateLimitTier: A.TIER_40 }), A.gated(gated), A.gated({ ...gated, queue: true })]) {
       ({ state: replay } = playWave(replay, urlShortener, arch, catalog, scoring));
     }
     expect(replay.finished).toBe(true);
-    expect(replay.history).toHaveLength(6);
+    expect(replay.history).toHaveLength(7);
   });
 
   it('refuse de sauter à une vague pas encore atteinte', () => {

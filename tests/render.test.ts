@@ -113,7 +113,11 @@ describe('trajets', () => {
   });
 
   it('un clic async part sans revenir', () => {
-    const clicks = simulateWave(A.queuedClicks(4), urlShortener.waves[4]!, catalog);
+    const clicks = simulateWave(
+      A.gated({ partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, extraInstances: 4, replicas: 1, queue: true }),
+      urlShortener.waves[5]!,
+      catalog,
+    );
     const journeys = journeysForTick(clicks.ticks[0]!, 0, trafficScale(clicks.ticks)).filter((j) => j.kind === 'async');
     expect(journeys.length).toBeGreaterThan(0);
     expect(journeys.every((j) => j.legs.every((l) => !l.back) && chained(j))).toBe(true);

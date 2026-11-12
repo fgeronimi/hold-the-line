@@ -19,6 +19,11 @@ export interface Dimension {
   label?: string | readonly string[];
   /** N'a de sens que si cette autre dimension est active : le scaling sans load balancer. */
   requires?: string;
+  /**
+   * N'a de sens que si cette autre dimension est à 0 : la passerelle d'API, avec la limite unique
+   * du load balancer déjà en place, ne fait que gagner moins, ou rien. Elle vient après elle.
+   */
+  excludes?: string;
 }
 
 export type Choice = Readonly<Record<string, number>>;
@@ -86,7 +91,8 @@ export function* enumerate(space: BalanceSpace): Generator<Candidate> {
     }
     const d = dims[i]!;
     // Une dimension dont le parent est absent ne prend que 0 : pas de doublon.
-    const levels = d.requires && (acc[d.requires] ?? 0) === 0 ? [0] : d.levels;
+    const off = (d.requires && (acc[d.requires] ?? 0) === 0) || (d.excludes && (acc[d.excludes] ?? 0) > 0);
+    const levels = off ? [0] : d.levels;
     for (const level of levels) {
       acc[d.id] = level;
       yield* walk(i + 1, acc);

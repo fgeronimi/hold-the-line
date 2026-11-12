@@ -114,16 +114,66 @@ describe('Raccourcisseur d’URL', () => {
     expect(play(A.scaled(5, { rateLimitTier: A.TIER_40 }), 'noisy-client').lossReasons).toContain('Budget dépassé : 200 / 180');
   });
 
-  it('vague 5 — file de messages pour compter les clics hors du chemin critique', () => {
+  // La réponse sans CDN de la vague 5, et sa limite par classe, reprises par la vague 6.
+  const keyed = { partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, extraInstances: 4, replicas: 1 };
+
+  it('vague 5 — aucune limite unique ne sépare les partenaires du scraper (C7)', () => {
+    const at = (tier: number) => play(A.scaled(4, { rateLimitTier: tier }), 'partner-keys', A.scaled(4, { rateLimitTier: A.TIER_40 }));
+    expect([1, 2, 3, 4, 5].filter((tier) => at(tier).won)).toEqual([]);
+    // À 80 et en dessous, elle coupe les partenaires (125 req/s par clé) ; à 160, le scraper
+    // (60 req/s par adresse) passe en entier et noie la base.
+    expect([1, 2, 3, 4].every((tier) => at(tier).failuresByReason['rate-limited'] > 0)).toBe(true);
+    expect(at(5).failuresByReason['rate-limited']).toBe(0);
+    expect(at(5).nodes.db!.peakUtilization).toBeGreaterThan(1);
+    // L'acheter en réplicas et en instances dépasse le budget.
+    const absorbed = A.scaled(5, { rateLimitTier: 5 });
+    absorbed.nodes = absorbed.nodes.map((n) => (n.id === 'db' ? { ...n, upgrades: { 'read-replica': 3 } } : n));
+    const bought = play(absorbed, 'partner-keys');
+    expect(bought.gauges.failureRate.value).toBeLessThan(0.01);
+    expect(bought.losses.map((l) => l.kind)).toEqual(['budget']);
+  });
+
+  it('vague 5 — la passerelle d’API donne à chaque classe sa limite, avec ou sans CDN', () => {
+    const r = play(A.gated(keyed), 'partner-keys');
+    expect(r.won).toBe(true);
+    expect(r.failuresByReason['rate-limited']).toBe(0);
+    expect(r.shed).toBeGreaterThan(0);
+    expect(play(A.gated({ partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, cdn: true, extraInstances: 2 }), 'partner-keys').won).toBe(true);
+    // Derrière le CDN, les partenaires n'échappent pas à leur quota : leurs lectures ne s'y gardent pas (SC1).
+    const behindCdn = play(A.gated({ partnerTier: 4, anonymousTier: A.ANONYMOUS_10, cdn: true, extraInstances: 2 }), 'partner-keys');
+    expect(behindCdn.failuresByReason['rate-limited']).toBeGreaterThan(0);
+  });
+
+  it('vague 5 — chaque limite de classe est nécessaire, à son palier', () => {
+    // Sans quota par clé, le script qui boucle passe ; à 80, les partenaires sont coupés.
+    expect(play(A.gated({ ...keyed, partnerTier: 0 }), 'partner-keys').won).toBe(false);
+    expect(play(A.gated({ ...keyed, partnerTier: 4 }), 'partner-keys').failuresByReason['rate-limited']).toBeGreaterThan(0);
+    // Sans limite par adresse, ou à 40, le scraper passe.
+    expect(play(A.gated({ ...keyed, anonymousTier: 0 }), 'partner-keys').won).toBe(false);
+    expect(play(A.gated({ ...keyed, anonymousTier: 3 }), 'partner-keys').won).toBe(false);
+  });
+
+  it('vague 5 — un saut de plus : sans CDN, la passerelle coûte une instance', () => {
+    // 5 ms de plus sur chaque requête : sur 4 instances, le p95 sort de l'objectif.
+    const short = play(A.gated({ ...keyed, extraInstances: 3 }), 'partner-keys');
+    expect(short.losses.map((l) => l.kind)).toEqual(['latency']);
+    // Derrière le CDN, la limite unique gardée en plus, même à 160, coûte un point de complexité de trop.
+    const cdn = { partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, cdn: true, extraInstances: 2 };
+    expect(play(A.gated({ ...cdn, singleLimit: 5 }), 'partner-keys').losses.map((l) => l.kind)).toEqual(['complexity']);
+    // Sur-dimensionnée, elle dépasse le budget.
+    expect(play(A.gated({ ...keyed, extraInstances: 5 }), 'partner-keys').losses.map((l) => l.kind)).toEqual(['budget']);
+  });
+
+  it('vague 6 — file de messages pour compter les clics hors du chemin critique', () => {
     expect(waveById('click-tracking').singleStrategy).toBe(true);
-    expect(play(A.queuedClicks(4), 'click-tracking').won).toBe(true);
-    const inline = play(A.inlineClicks(4), 'click-tracking');
+    expect(play(A.gated({ ...keyed, queue: true }), 'click-tracking', A.gated(keyed)).won).toBe(true);
+    const inline = play(A.gated(keyed), 'click-tracking');
     expect(inline.won).toBe(false);
     expect(inline.nodes.db!.peakUtilization).toBeGreaterThan(1);
   });
 
-  it('vague 5 — le worker tombe : la file garde les clics, puis les rend', () => {
-    const r = play(A.queuedClicks(4), 'click-tracking');
+  it('vague 6 — le worker tombe : la file garde les clics, puis les rend', () => {
+    const r = play(A.gated({ ...keyed, queue: true }), 'click-tracking');
     expect(r.won).toBe(true);
     const incident = r.ticks.find((t) => t.incidents?.includes('worker-crash'))!.tick;
     const end = incident + waveById('click-tracking').incidents![0]!.until - waveById('click-tracking').incidents![0]!.from;
@@ -136,9 +186,9 @@ describe('Raccourcisseur d’URL', () => {
     expect(r.ticks.slice(end).every((t) => t.nodes.db!.failed === 0)).toBe(true);
   });
 
-  it('vague 5 — le CDN de la vague 3 perd les clics des redirections en cache', () => {
+  it('vague 6 — le CDN perd les clics des redirections en cache', () => {
     // Le débat 301 contre 302 : une redirection servie en bordure ne passe jamais par le serveur.
-    const r = play(A.withCdn({ rateLimitTier: A.TIER_40, queue: true }), 'click-tracking');
+    const r = play(A.gated({ ...keyed, cdn: true, queue: true }), 'click-tracking');
     expect(r.won).toBe(false);
     expect(r.failuresByReason['lost-at-edge']).toBeGreaterThan(0);
   });

@@ -330,6 +330,11 @@ const ARCHETYPES: Record<string, Architecture[]> = {
     U.withCdn({ rateLimitTier: U.TIER_40, queue: true }),
     U.autoscaled(2, 3),
     U.autoscaled(1, 6),
+    U.gated({ partnerTier: U.PARTNER_160, anonymousTier: U.ANONYMOUS_10, extraInstances: 4, replicas: 1 }),
+    U.gated({ partnerTier: U.PARTNER_160, anonymousTier: U.ANONYMOUS_10, cdn: true, extraInstances: 2 }),
+    U.gated({ partnerTier: 2, anonymousTier: 3, extraInstances: 4, replicas: 1, queue: true }),
+    U.gated({ partnerTier: U.PARTNER_160, anonymousTier: U.ANONYMOUS_10, singleLimit: U.TIER_40, extraInstances: 3, queue: true }),
+    U.gated({ partnerTier: 1, anonymousTier: 0, noBalancer: true }),
   ],
   market: [
     M.inline,

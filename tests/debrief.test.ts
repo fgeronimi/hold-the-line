@@ -151,5 +151,16 @@ describe('le debrief ne connaît la métaphore que par le thème', () => {
     expect(sizing?.tech).toMatch(/unités de travail par seconde/);
     expect(sizing?.tech).toMatch(/⌈.*⌉ = \d+ instance/);
   });
+
+  it('des limites par classe se racontent à part de la limite unique, avec leur propre compromis (C7)', () => {
+    const arch = A.gated({ partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, extraInstances: 4, replicas: 1 });
+    const findings = analyze(arch, 'partner-keys');
+    const told = JSON.stringify(findings);
+    expect(told).toContain(fortifiedCity.debrief.classLimits);
+    expect(told).not.toContain(fortifiedCity.debrief.rateLimit);
+    const costs = findings.find((f) => f.concept === 'Compromis des parades')!;
+    expect(costs.tech).toContain('un saut de plus');
+    expect(costs.tech).not.toContain('La limite par client');
+  });
 });
 
