@@ -402,15 +402,28 @@ button.pip:active .icon { transform: translateY(2px); box-shadow: inset 0 2px 3p
 .hcard.hint .hcard-face { outline: 3px solid #e9a23b; outline-offset: 2px; animation: hint-ring 1.1s ease-in-out infinite; }
 @keyframes hint-ring { 50% { outline-color: rgba(233, 162, 59, .35); outline-offset: 5px; } }
 
-/* La carte du bâtiment sélectionné : même facture, posée au bord pour laisser voir le bâtiment et ses pastilles. */
-.detail-card { justify-self: end; width: 272px; max-height: calc(100vh - 230px); overflow-y: auto; margin-right: 14px; padding: 10px 12px; box-sizing: border-box;
-  border: 3px solid #5a3a1e; border-radius: 12px; background: var(--grain), linear-gradient(170deg, #fbf3dc, #ecd9ad);
-  box-shadow: inset 0 0 0 2px var(--brass), 0 3px 0 #3d2812, 0 12px 22px rgba(30, 20, 8, .38); animation: detail-in .26s cubic-bezier(.2, .8, .2, 1); }
+/*
+ * La carte du bâtiment sélectionné : la même carte que dans la main, en grand (bandeau de bois,
+ * illustration, corps, jetons de prix, ruban d'actions). Posée au bord pour laisser voir le
+ * bâtiment et ses pastilles.
+ */
+.detail-card { justify-self: end; width: 264px; max-height: calc(100vh - 210px); margin-right: 16px; padding: 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+  border: 3px solid #5a3a1e; border-radius: 14px; background: var(--m-parchment);
+  box-shadow: inset 0 0 0 2px var(--brass), inset 0 3px 0 2px #fff7, 0 3px 0 var(--edge), 0 14px 24px rgba(30, 20, 8, .42); animation: detail-in .26s cubic-bezier(.2, .8, .2, 1); }
 .settled .detail-card { animation: none; }
 @keyframes detail-in { from { opacity: 0; transform: translateX(24px) rotate(2deg); } }
-.detail-card h3 { font-size: 18px; }
-.detail-card h3 small { display: block; font: 12px system-ui, sans-serif; color: #7a6a55; }
-.detail-card .hcard-art { --art-h: 120px; margin: 6px 0; }
+.detail-card > * { flex: none; }
+.detail-card .hcard-title { position: relative; padding: 8px 34px 7px; }
+.detail-card .hcard-title b { font-size: 18px; }
+.detail-card .hcard-title small { font-size: 12px; }
+.detail-card .hcard-title .close { position: absolute; top: 9px; right: 9px; text-shadow: none; }
+.detail-card .hcard-art { --art-h: 128px; margin: 8px 9px 0; }
+.detail-card .detail-body { flex: 1 1 auto; min-height: 60px; overflow-y: auto; padding: 2px 11px 4px; }
+.detail-card .detail-body p { margin: 6px 0; }
+.detail-card .hcard-cost { display: flex; justify-content: center; gap: 8px; margin: 6px 0; font-weight: bold; font-size: 12px; }
+.detail-card .hcard-ribbon { display: flex; justify-content: center; gap: 8px; padding: 7px 8px; }
+.detail-card .hcard-ribbon button { display: inline-flex; align-items: center; gap: 4px; text-shadow: none; font-weight: normal; font-size: 13px; }
+.detail-card .hcard-ribbon .ico { width: 16px; height: 16px; }
 
 @media (max-width: 760px), (pointer: coarse) and (max-width: 1000px) {
   /* Petit écran : plus d'éventail, une rangée qui défile ; la carte touchée se soulève sur place. */
@@ -420,7 +433,8 @@ button.pip:active .icon { transform: translateY(2px); box-shadow: inset 0 2px 3p
   /* La rangée qui défile coupe ce qui dépasse : la carte grandit dans la marge du haut, sans en sortir. */
   .hcard.lifted .hcard-face, .hcard:focus-visible .hcard-face { transform: translateY(-6px) scale(1.04); }
   .hand-head { white-space: normal; border-radius: 14px; }
-  .detail-card { justify-self: stretch; align-self: end; width: auto; margin: 0 10px 132px; max-height: 46vh; }
+  .detail-card { justify-self: center; align-self: end; width: min(320px, calc(100vw - 20px)); margin: 0 10px 132px; max-height: 52vh; }
+  .detail-card .hcard-art { --art-h: 84px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .hcard, .hcard.hint, .detail-card { animation: none; }

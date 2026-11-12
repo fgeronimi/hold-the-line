@@ -35,8 +35,8 @@ const SHAPES = {
   select: `<path d="M6 3.5l12 9.5-5.6.9 3.1 6.1-2.7 1.3-3.1-6.1L6 19z" fill="${PAPER}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>`,
   /** Relier : un chemin entre deux bâtiments. */
   link: `<path d="M6 17.5c5 0 2.5-11 12-11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="1 4.2"/><circle cx="5.5" cy="17.5" r="3" fill="${PAPER}" stroke="currentColor" stroke-width="2"/><circle cx="18.5" cy="6.5" r="3" fill="${PAPER}" stroke="currentColor" stroke-width="2"/>`,
-  /** Retirer : une pioche. */
-  remove: `<path d="M5.5 19.5L16 9" ${line}/><path d="M8.5 4.5c5-1.5 10 2 11.5 8-3-3.5-7-5.5-11.5-8z" fill="${STEEL}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>`,
+  /** Retirer : un bâton de dynamite, mèche allumée. */
+  remove: `<g transform="rotate(35 12 13)"><rect x="8.4" y="7" width="7.2" height="14" rx="1.8" fill="${RED}" stroke="currentColor" stroke-width="2"/><path d="M8.4 11.2h7.2M8.4 16.8h7.2" stroke="currentColor" stroke-width="1.5"/></g><path d="M15.4 8c.4-2.2 1.6-3.4 3.4-3.6" ${line}/><path d="M20.6 1.6v4M18.6 3.6h4M19.2 2.2l2.8 2.8M22 2.2l-2.8 2.8" stroke="${GOLD}" stroke-width="1.5" stroke-linecap="round"/>`,
   undo: `<path d="M9 14.5L4.5 10 9 5.5" ${line}/><path d="M4.5 10h9a6 6 0 0 1 0 12h-3" ${line} transform="translate(0 -3)"/>`,
   redo: `<path d="M15 14.5l4.5-4.5L15 5.5" ${line}/><path d="M19.5 10h-9a6 6 0 0 0 0 12h3" ${line} transform="translate(0 -3)"/>`,
   /** Bâtir : la main de cartes. */

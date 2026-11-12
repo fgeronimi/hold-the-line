@@ -71,21 +71,25 @@ function renderNodeCard(s: ViewState): string {
   }
   const fixedNote = node.fixed ? '<p class="muted">Service déjà en place, tenu par une autre équipe : il ne se démolit pas, mais ses évolutions sont à vous.</p>' : '';
   const removeHinted = hinted?.tool === 'remove' && hinted.node === node.id;
-  const remove = permanent ? '' : `<button data-action="remove-node" data-node="${esc(node.id)}"${removeHinted ? ' class="hint"' : ''}>Retirer</button>`;
+  const remove = permanent ? '' : `<button data-action="remove-node" data-node="${esc(node.id)}"${removeHinted ? ' class="hint"' : ''}>${icon('remove')} Retirer</button>`;
+  const cost = def && def.behavior !== 'source' ? `<p class="hcard-cost"><span title="Prix">${icon('coin')} ${def.cost}</span><span title="Complexité">${icon('cog')} ${def.complexity}</span></p>` : '';
   return `
-    <section class="card detail-card">
-      <button class="close" data-action="deselect" title="Fermer" aria-label="Fermer">${icon('close')}</button>
-      <h3>${esc(own.tech)} <small>${esc(own.metaphor)}</small></h3>
+    <section class="card detail-card" aria-label="${esc(own.tech)}">
+      <header class="hcard-title"><b>${esc(own.tech)}</b><small>${esc(own.metaphor)}</small>
+        <button class="close" data-action="deselect" title="Fermer" aria-label="Fermer">${icon('close')}</button></header>
       <div class="hcard-art">${cardArt(s, node.type)}</div>
-      ${fixedNote}
-      ${role ? speech(role.says, role.real) : ''}
-      ${def && def.behavior !== 'source' ? `<p class="figures">${capacityText(node, def, s.catalog)}</p>` : ''}
-      <p>${upgradeSelects(node, s.catalog) || '<span class="muted">aucune évolution</span>'}</p>
-      ${links ? `<ul>${links}</ul>` : '<p class="muted">Aucun chemin.</p>'}
-      <p>
-        <button data-action="tool" data-tool="move" data-node="${esc(node.id)}">Déplacer</button>
+      <div class="detail-body">
+        ${fixedNote}
+        ${role ? speech(role.says, role.real) : ''}
+        ${def && def.behavior !== 'source' ? `<p class="figures">${capacityText(node, def, s.catalog)}</p>` : ''}
+        <p>${upgradeSelects(node, s.catalog) || '<span class="muted">aucune évolution</span>'}</p>
+        ${links ? `<ul>${links}</ul>` : '<p class="muted">Aucun chemin.</p>'}
+      </div>
+      ${cost}
+      <footer class="hcard-ribbon">
+        <button data-action="tool" data-tool="move" data-node="${esc(node.id)}">${icon('move')} Déplacer</button>
         ${remove}
-      </p>
+      </footer>
     </section>`;
 }
 
