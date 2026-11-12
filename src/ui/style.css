@@ -240,8 +240,7 @@ select, input { font: inherit; color: var(--ink); background: #fffaf0; border: 2
 
 /* Tutoriel : la bulle au-dessus de la barre, le bouton à utiliser qui pulse. */
 .tutorial { max-width: min(640px, 100%); padding: 4px 10px; }
-/* Ce que le guide désigne : un filet doré fixe, et un reflet qui le traverse (en fin de fichier, I18). */
-.hint { outline: 3px solid #e9a23b; outline-offset: 2px; }
+/* Ce que le guide désigne : un reflet qui le traverse, sans contour (en fin de fichier, I18). */
 /* Aide : les indices donnés sous la bulle, puis le bouton qui en demande un de plus. */
 .hints { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #cbb98f; }
 .hints ol { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 32vh; overflow-y: auto; }
@@ -250,8 +249,7 @@ select, input { font: inherit; color: var(--ink); background: #fffaf0; border: 2
 .hints li .says small { color: var(--ok); font-weight: bold; }
 .hints li.done { opacity: .6; }
 .hint-ask { display: flex; align-items: center; gap: 8px; margin: 0; flex-wrap: wrap; }
-.pip.hint { outline: none; }
-.pip.hint .icon { opacity: 1; outline: 3px solid #e9a23b; outline-offset: 1px; }
+.pip.hint .icon { opacity: 1; }
 .speech p.real { background: none; border: none; border-left: 3px solid #b9a77f; border-radius: 0; padding: 0 8px; font-size: 13px; }
 .card .speech .speaker { width: 30px; height: 30px; }
 .card .speech .speaker .ico { width: 21px; height: 21px; }
@@ -409,8 +407,7 @@ button.pip:active .icon { transform: translateY(1px); box-shadow: var(--pressed)
 /* La carte que désigne le guide : l'anneau est sur sa face, la distribution reste sur la carte. */
 .hcard.hint { animation: deal .42s cubic-bezier(.2, .9, .3, 1.15) backwards; animation-delay: calc(var(--i) * 28ms); box-shadow: none; }
 .settled .hcard.hint { animation: none; }
-.hcard.hint { outline: none; }
-.hcard.hint .hcard-face { outline: 3px solid #e9a23b; outline-offset: 2px; }
+
 
 /*
  * La carte du bâtiment sélectionné : la même carte que dans la main, en grand (bandeau,
