@@ -4,7 +4,11 @@ const TICKS = 60;
 const flat = [{ until: TICKS, factor: 1 }];
 /** Le trafic monte au départ et retombe à la fin (décision S11). */
 const RAMP = { up: 8, down: 8 };
-const SLA = { maxFailureRate: 0.01, maxP95LatencyMs: 60 };
+/**
+ * L'envoi du billet a son propre objectif (M4) : 50 achats sur 1 700 requêtes ne pèseraient pas
+ * 5 % des réponses, et un prestataire d'e-mail appelé en direct met ses 200 ms sur chaque achat.
+ */
+const SLA = { maxFailureRate: 0.01, maxP95LatencyMs: 60, maxP95LatencyMsByKind: { async: 60 } };
 /** Comme tous les clients, ceux de la billetterie relancent ce qui échoue (décision S19). */
 const RETRIES = 3;
 

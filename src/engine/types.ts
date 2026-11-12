@@ -253,7 +253,16 @@ export interface Wave {
    */
   ramp?: { up: number; down: number };
   sources: TrafficSource[];
-  sla: { maxFailureRate: number; maxP95LatencyMs: number };
+  sla: {
+    maxFailureRate: number;
+    /** Latence au p95 des réponses, pour tous les types qui n'ont pas leur propre objectif. */
+    maxP95LatencyMs: number;
+    /**
+     * Objectifs propres à un type de requête (M4) : ses réponses sont jugées à part, sur leur
+     * propre p95, et sortent de l'objectif général. Absent : un seul objectif.
+     */
+    maxP95LatencyMsByKind?: Partial<Record<RequestKind, number>>;
+  };
   budget: number;
   complexityCap: number;
   /** Fiche du calendrier Advent of System Design citée au debrief. */
@@ -376,14 +385,24 @@ export interface TickMetrics {
   tick: number;
   offered: number;
   failed: number;
-  /** Latence moyenne d'une requête, pondérée par le débit de chaque type. */
+  /** Latence moyenne des réponses du tick, pondérée par le débit de chaque chemin. */
   avgLatencyMs: number;
   /**
-   * Ce que le SLA mesure à ce tick (décision S17) : la moyenne, sauf si l'événement de
-   * commande, traité en direct, attend plus longtemps. Noyé dans les lectures, un client
-   * qui attend 200 ms sa commande passerait sinon le SLA.
+   * Latence au p95 des réponses de ce tick (M4) : chaque chemin servi pèse son débit, et une
+   * minorité lente se voit dès qu'elle dépasse 5 % des réponses. C'est ce que la barre, le
+   * sablier et les courbes affichent ; la jauge de la vague prend le même centile sur toutes
+   * les réponses de la vague.
    */
   slaLatencyMs: number;
+  /**
+   * Réponses du tick jugées par l'objectif général (req/s) : servies, ou en échec après une
+   * attente (M4). Le poids du tick dans le p95.
+   */
+  answeredRps: number;
+  /** Part de `answeredRps` plus lente que la limite générale de latence de la vague. */
+  slowRps: number;
+  /** Les types qui ont leur propre objectif de latence (`Wave.sla.maxP95LatencyMsByKind`), jugés à part. */
+  latencyByKind?: Partial<Record<RequestKind, TickLatency>>;
   nodes: Record<string, NodeTick>;
   /** Débit envoyé sur chaque lien (clé `from→to`) par type de requête : ce que le rendu anime. */
   links: Record<string, Partial<Record<RequestKind, number>>>;
@@ -408,6 +427,13 @@ export interface TickMetrics {
   clientFailedSoFar: number;
 }
 
+/** Ce qu'un tick montre d'un objectif de latence (M4). */
+export interface TickLatency {
+  p95Ms: number;
+  answeredRps: number;
+  slowRps: number;
+}
+
 export interface Gauge {
   value: number;
   limit: number;
@@ -428,8 +454,8 @@ export type LossReason =
   | { kind: 'budget'; cost: number; limit: number; autoscaling: number; migration: number }
   | { kind: 'complexity'; value: number; limit: number }
   | { kind: 'failure-rate'; value: number; limit: number }
-  /** p95 des latences par tick : toujours à présenter comme une approximation. */
-  | { kind: 'latency'; p95Ms: number; limitMs: number };
+  /** Latence au p95 des réponses de la vague (M4) ; `requestKind` pour un objectif propre à un type. */
+  | { kind: 'latency'; p95Ms: number; limitMs: number; requestKind?: RequestKind };
 
 export interface WaveResult {
   won: boolean;
@@ -446,9 +472,15 @@ export interface WaveResult {
     cost: Gauge;
     complexity: Gauge;
     failureRate: Gauge;
-    /** p95 des latences par tick : approximation, le moteur ne suit pas les requêtes une à une. */
+    /**
+     * Latence au p95 des réponses de la vague, pondérée par le débit de chaque chemin à chaque
+     * tick (M4) : un vrai centile par requête, à la minute près. Avec des objectifs propres à
+     * un type, celui dont la marge est la plus faible.
+     */
     latency: Gauge;
   };
+  /** Les objectifs propres à un type de requête, chacun sur ses seules réponses. */
+  latencyByKind?: Partial<Record<RequestKind, Gauge>>;
   offered: number;
   /**
    * Échecs comptés par le SLA, en requêtes, relances déduites : un événement que k services
@@ -465,8 +497,9 @@ export interface WaveResult {
   ticks: TickMetrics[];
   events: SimEvent[];
   /**
-   * Tick où la latence scelle la défaite : passé lui, le p95 final dépasse forcément sa
-   * limite. Absent si la vague tient sa latence.
+   * Tick où la latence scelle la défaite : le premier où les réponses plus lentes que la
+   * limite, cumulées depuis le début, pèsent plus de 5 % des réponses de toute la vague.
+   * Passé lui, le p95 final dépasse forcément sa limite. Absent si la vague tient sa latence.
    */
   latencyBreachTick?: number;
 }

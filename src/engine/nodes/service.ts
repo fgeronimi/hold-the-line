@@ -4,7 +4,7 @@ import { retryingShare, timedOut } from '../retries.ts';
 import { REQUEST_KINDS, type ArchNode, type ComponentDef } from '../types.ts';
 import { instancesOf, withEffect } from '../upgrades.ts';
 import { instancesNow, type Now, type World } from '../world.ts';
-import { allForwarded, deferExcess, fits, ratio, serveWithin, splitQueued, type NodeOutcome } from './common.ts';
+import { deferExcess, fits, ratio, serveWithin, splitQueued, type NodeOutcome } from './common.ts';
 
 export function processService(node: ArchNode, def: ComponentDef, incoming: Flow, w: World, now: Now): NodeOutcome {
   const base = instancesNow(w, now.incidents, node);
@@ -34,7 +34,6 @@ export function processService(node: ArchNode, def: ComponentDef, incoming: Flow
   return {
     passed,
     utilization: taken.utilization,
-    syncForwardShare: allForwarded(),
     instances,
     ...(auto && auto.starting() > 0 ? { starting: auto.starting() } : {}),
     ...(taken.threads !== undefined ? { threads: taken.threads } : {}),

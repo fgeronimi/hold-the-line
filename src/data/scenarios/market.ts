@@ -4,6 +4,12 @@ const TICKS = 60;
 const flat = [{ until: TICKS, factor: 1 }];
 /** Le trafic monte au départ et retombe à la fin (décision S11). */
 const RAMP = { up: 8, down: 8 };
+/**
+ * La commande a son propre objectif (M4) : le client veut la sienne validée en 60 ms, et 80
+ * commandes sur 1 660 requêtes ne pèseraient pas 5 % des réponses. Un service appelé en
+ * direct met ses 200 ms sur le chemin de chaque commande (S10).
+ */
+const SLA = { maxFailureRate: 0.01, maxP95LatencyMs: 60, maxP95LatencyMsByKind: { async: 60 } };
 
 /**
  * Les trois services des autres équipes, déjà en place de l'autre côté de la rivière
@@ -43,7 +49,7 @@ export const market: Scenario = {
       ramp: RAMP,
       profile: flat,
       sources: [shoppers(100, 100)],
-      sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
+      sla: SLA,
       budget: 100,
       complexityCap: 5,
       thriftyCost: 95,
@@ -62,7 +68,7 @@ export const market: Scenario = {
       ramp: RAMP,
       profile: flat,
       sources: [shoppers(200, 100)],
-      sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
+      sla: SLA,
       budget: 180,
       complexityCap: 12,
       thriftyCost: 175,
@@ -81,7 +87,7 @@ export const market: Scenario = {
       ramp: RAMP,
       profile: flat,
       sources: [shoppers(200, 100)],
-      sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
+      sla: SLA,
       budget: 210,
       complexityCap: 15,
       thriftyCost: 205,
@@ -101,7 +107,7 @@ export const market: Scenario = {
       ramp: RAMP,
       profile: flat,
       sources: [shoppers(200, 80)],
-      sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
+      sla: SLA,
       budget: 260,
       complexityCap: 19,
       thriftyCost: 240,
@@ -125,15 +131,17 @@ export const market: Scenario = {
       ramp: RAMP,
       profile: flat,
       sources: [shoppers(1500, 80)],
-      sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
-      budget: 270,
-      complexityCap: 21,
-      thriftyCost: 265,
+      sla: SLA,
+      budget: 310,
+      complexityCap: 22,
+      thriftyCost: 305,
       answers: [
-        { delivery: 4, scaling: 1, idempotence: 1, outbox: 1, cache: 1 },
+        { delivery: 4, scaling: 1, idempotence: 1, outbox: 1, cache: 1, replicas: 1 },
       ],
       consumers: ALL,
-      // Le réplica de la vague 4 ne suffit plus : l'outbox et les soldes chargent trop la base.
+      // Ni le cache ni le réplica de la vague 4 ne suffisent seuls : l'outbox double les écritures,
+      // et les lectures qui ratent le cache, avec les écritures, plus de 5 % des requêtes,
+      // attendent une base chargée (M4).
       singleStrategy: true,
       incidents: [
         // Plus forts qu'aux vagues 3 et 4 : noyés dans 1 500 lectures par seconde, ils doivent encore compter.

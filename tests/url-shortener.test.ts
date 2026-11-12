@@ -54,13 +54,17 @@ describe('Raccourcisseur d’URL', () => {
 
   it('vague 3 — trois familles de réponses aux profils différents', () => {
     const permanent = play(A.scaled(3), 'marketing-peak');
-    const auto = play(A.autoscaled(1, 3), 'marketing-peak');
+    const auto = play(A.autoscaled(2, 3), 'marketing-peak');
 
-    // L'autoscaling est moins cher que le scaling permanent, mais échoue un peu pendant la montée en charge.
+    // L'autoscaling est moins cher que le scaling permanent.
     expect(auto.gauges.cost.value).toBeLessThan(permanent.gauges.cost.value);
     expect(auto.bill.autoscaling).toBeGreaterThan(0);
-    expect(auto.failed).toBeGreaterThan(0);
     expect(permanent.failed).toBe(0);
+    // Sur un socle trop mince, la montée en charge sature le serveur le temps que les instances
+    // démarrent : des échecs, et ces minutes lentes pèsent plus de 5 % des requêtes (M4).
+    const thin = play(A.autoscaled(1, 3), 'marketing-peak');
+    expect(thin.failed).toBeGreaterThan(0);
+    expect(thin.losses.map((l) => l.kind)).toEqual(['latency']);
 
     // Les instances demandées démarrent avant de servir : le rendu montre ce chantier.
     const first = auto.ticks.findIndex((t) => (t.nodes.app!.starting ?? 0) > 0);
@@ -79,9 +83,12 @@ describe('Raccourcisseur d’URL', () => {
   });
 
   it('vague 4 — seule une limite bien choisie passe', () => {
-    const at = (tier: number) => play(A.scaled(3, { rateLimitTier: tier }), 'noisy-client', A.scaled(3));
+    const at = (tier: number) => play(A.scaled(4, { rateLimitTier: tier }), 'noisy-client', A.scaled(3));
     const winning = [1, 2, 3, 4, 5].filter((tier) => at(tier).won);
-    expect(winning).toEqual([A.TIER_40, A.TIER_40 + 1]);
+    // Depuis M4, le palier 80 laisse passer assez de scraper pour ralentir la base, que les
+    // lectures ratant le cache attendent : plus de 5 % des requêtes.
+    expect(winning).toEqual([A.TIER_40]);
+    expect(at(A.TIER_40 + 1).losses.map((l) => l.kind)).toEqual(['latency']);
 
     // Trop basse, elle coupe les partenaires légitimes ; trop haute, elle laisse passer le scraper.
     expect(at(2).failuresByReason['rate-limited']).toBeGreaterThan(0);
@@ -103,8 +110,8 @@ describe('Raccourcisseur d’URL', () => {
   });
 
   it('vague 4 — tout scaler au lieu de limiter dépasse le budget', () => {
-    expect(play(A.scaled(3), 'noisy-client').won).toBe(false);
-    expect(play(A.scaled(5), 'noisy-client').lossReasons).toContain('Budget dépassé : 195 / 180');
+    expect(play(A.scaled(4), 'noisy-client').won).toBe(false);
+    expect(play(A.scaled(5, { rateLimitTier: A.TIER_40 }), 'noisy-client').lossReasons).toContain('Budget dépassé : 200 / 180');
   });
 
   it('vague 5 — file de messages pour compter les clics hors du chemin critique', () => {

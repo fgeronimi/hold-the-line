@@ -180,7 +180,7 @@ function renderBriefing(wave: Wave, s: ViewState): string {
       ${(wave.incidents ?? []).map((i) => incidentLine(i, s)).join('')}
       <p>⭐ Objectifs : tenir · du premier coup · facture ≤ ${wave.thriftyCost ?? wave.budget}</p>
       <p>Budget ${wave.budget} · complexité max ${wave.complexityCap}
-        · SLA : ${pct(wave.sla.maxFailureRate)} d'échecs, ${wave.sla.maxP95LatencyMs} ms p95 (approx.)
+        · SLA : ${pct(wave.sla.maxFailureRate)} d'échecs, ${wave.sla.maxP95LatencyMs} ms p95
         ${replays}</p>
       <p class="muted">Trafic : ${wave.sources.map(trafficLine).join(' · ')}</p>
     </section>`;

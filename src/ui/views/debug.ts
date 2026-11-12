@@ -187,7 +187,7 @@ function renderDebrief(a: Attempt, s: ViewState): string {
             ${gaugeRow('coût', r.gauges.cost, fmt)}
             ${gaugeRow('complexité', r.gauges.complexity, fmt)}
             ${gaugeRow("taux d'échec", r.gauges.failureRate, pct)}
-            ${gaugeRow('latence p95 (approx.)', r.gauges.latency, (v) => `${fmt(v)} ms`)}
+            ${gaugeRow('latence p95', r.gauges.latency, (v) => `${fmt(v)} ms`)}
           </table>
           <p class="muted">Facture : fixe ${fmt(r.bill.fixed)} · autoscaling ${fmt(r.bill.autoscaling)} · migration ${fmt(r.bill.migration)}
             · latence moyenne ${fmt(r.avgLatencyMs)} ms</p>

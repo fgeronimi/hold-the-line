@@ -39,9 +39,13 @@ describe('alarme de latence', () => {
     const inline = simulateWave(M.inline, wave, catalog);
     expect(inline.won).toBe(false);
     const at = inline.latencyBreachTick!;
-    // Le 4e tick lent sur 60 : trois sont tolérés par le p95.
-    const slowBefore = inline.ticks.slice(0, at + 1).filter((t) => t.slaLatencyMs > wave.sla.maxP95LatencyMs).length;
-    expect(slowBefore).toBe(4);
+    // Le premier tick où les commandes lentes cumulées pèsent plus de 5 % des commandes de la
+    // vague : elles ont leur propre objectif (M4).
+    const orders = (t: (typeof inline.ticks)[number]) => t.latencyByKind!.async!;
+    const total = inline.ticks.reduce((a, t) => a + orders(t).answeredRps, 0);
+    const slowUpTo = (tick: number) => inline.ticks.slice(0, tick + 1).reduce((a, t) => a + orders(t).slowRps, 0);
+    expect(slowUpTo(at)).toBeGreaterThan(0.05 * total);
+    expect(slowUpTo(at - 1)).toBeLessThanOrEqual(0.05 * total);
     expect(simulateWave(M.queued, wave, catalog).latencyBreachTick).toBeUndefined();
   });
 

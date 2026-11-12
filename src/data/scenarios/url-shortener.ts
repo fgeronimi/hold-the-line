@@ -78,11 +78,13 @@ export const urlShortener: Scenario = {
       budget: 170,
       complexityCap: 9,
       thriftyCost: 125,
+      // Plus de CDN + réplica depuis M4 : les 20 % de lectures que la bordure laisse passer
+      // attendent une base à 87 %, et ce sont plus de 5 % des requêtes. Plus d'autoscaling sur
+      // une seule instance fixe : les minutes de la montée, où le serveur sature, pèsent trop.
       answers: [
         { cdn: 1, cache: 1 },
-        { cdn: 1, replicas: 1 },
         { lb: 1, scaling: 3, cache: 1 },
-        { lb: 1, scaling: 1, autoscaling: 3, cache: 1 },
+        { lb: 1, scaling: 2, autoscaling: 3, cache: 1 },
       ],
       // Après le pic : une cité à serveur unique perd quelques requêtes, pas la vague.
       incidents: [{ id: 'server-crash', title: 'Une instance du serveur tombe', component: 'app-server', from: 45, until: 48, effect: { type: 'instance-down', count: 1 } }],
@@ -102,9 +104,10 @@ export const urlShortener: Scenario = {
       budget: 180,
       complexityCap: 10,
       thriftyCost: 160,
+      // Depuis M4, les lectures qui ratent le cache attendent serveur et base, et pèsent plus de
+      // 5 % : sans CDN, il faut une instance de plus, et le palier 80 laisse passer trop de scraper.
       answers: [
-        { lb: 1, scaling: 3, rateLimit: 3, cache: 1 },
-        { lb: 1, scaling: 3, rateLimit: 4, cache: 1 },
+        { lb: 1, scaling: 4, rateLimit: 3, cache: 1 },
         { cdn: 1, lb: 1, scaling: 1, rateLimit: 3, cache: 1 },
         // Plus d'autoscaling ici depuis M9b : sur un trafic qui ne retombe pas, l'instance à la
         // demande, plus chère, coûte plus que l'instance fixe qu'elle remplace.

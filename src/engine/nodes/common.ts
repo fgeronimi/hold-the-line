@@ -1,14 +1,12 @@
 import { addStream, filterFlow, scaleFlow, work, type Flow, type Stream } from '../flow.ts';
 import { failFlow, tally, type Ledger } from '../ledger.ts';
-import type { ComponentDef, RequestKind } from '../types.ts';
+import type { ComponentDef } from '../types.ts';
 import type { World } from '../world.ts';
 
 export interface NodeOutcome {
   /** Flux servi par ce nœud et qui continue vers l'aval (avant routage). */
   passed: Flow;
   utilization: number;
-  /** Part de chaque type servi qui poursuit sa route de façon synchrone. */
-  syncForwardShare: Partial<Record<RequestKind, number>>;
   instances?: number;
   /** Instances d'autoscaling demandées et pas encore prêtes. */
   starting?: number;
@@ -23,10 +21,6 @@ const OUTAGE_UTILIZATION = 10;
 export function ratio(demand: number, capacity: number): number {
   if (demand === 0) return 0;
   return capacity > 0 ? demand / capacity : OUTAGE_UTILIZATION;
-}
-
-export function allForwarded(): Partial<Record<RequestKind, number>> {
-  return { read: 1, write: 1, async: 1 };
 }
 
 /** Sert ce qui tient dans la capacité, fait échouer le reste à parts égales. */

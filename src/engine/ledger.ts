@@ -1,4 +1,4 @@
-import { isEvent, type Flow, type Stream } from './flow.ts';
+import { classOf, isEvent, type Flow, type Stream } from './flow.ts';
 import type { FailureReason, NodeTick, RequestKind, SimEvent } from './types.ts';
 
 /** Ce que le rendu doit montrer et que les échecs confondent, par nœud et par tick. */
@@ -32,6 +32,12 @@ export interface Ledger {
    * une lecture périmée, une copie non livrée, un message de file.
    */
   clientFailed: Map<string, Record<RequestKind, number>>;
+  /**
+   * Requêtes du client qui s'arrêtent à ce nœud sans y être servies (échecs, trafic abusif
+   * écarté), par nœud et par classe (`classOf`) : la latence ne porte que sur les réponses
+   * servies (M4).
+   */
+  classLost: Map<string, Map<string, number>>;
 }
 
 /** Raisons d'échec qui reviennent au client sous forme d'erreur : il peut relancer. */
@@ -66,10 +72,20 @@ export function fail(ctx: Ledger, nodeId: string, reason: FailureReason, rps: nu
   ctx.asyncTally.failed += events;
 }
 
+/** `rps` requêtes du client du flux `s` s'arrêtent ici sans réponse : hors de la latence (M4). */
+export function lose(ctx: Ledger, nodeId: string, s: Stream, rps: number): void {
+  const cls = classOf(s);
+  if (rps <= 0 || cls === undefined) return;
+  const byClass = ctx.classLost.get(nodeId) ?? new Map<string, number>();
+  byClass.set(cls, (byClass.get(cls) ?? 0) + rps);
+  ctx.classLost.set(nodeId, byClass);
+}
+
 /** L'échec de `rps` d'un flux élémentaire, attribué à sa source quand le client le voit. */
 export function failStream(ctx: Ledger, nodeId: string, reason: FailureReason, s: Stream, rps: number): void {
   if (rps <= 0) return;
   fail(ctx, nodeId, reason, rps, isEvent(s) ? rps : 0);
+  lose(ctx, nodeId, s, rps);
   if (!CLIENT_VISIBLE.has(reason) || s.duplicate || s.queue !== undefined) return;
   const bySource = ctx.clientFailed.get(s.source) ?? { read: 0, write: 0, async: 0 };
   bySource[s.kind] += rps;

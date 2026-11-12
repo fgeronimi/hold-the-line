@@ -163,13 +163,18 @@ Le joueur est coincé entre « pas assez » et « trop » :
 | --- | --- | --- |
 | Coût | Facture de la vague : instances, évolutions, migration | Le surdimensionnement |
 | Complexité | Points par composant et évolution | L'over-engineering |
-| Fiabilité | Taux d'échec de la vague et latence p95 des ticks face au SLA | Le sous-dimensionnement, le composant manquant |
+| Fiabilité | Taux d'échec de la vague et latence p95 de ses réponses face au SLA | Le sous-dimensionnement, le composant manquant |
 
 Une vague est gagnée si le SLA est tenu sans dépasser le budget ni le plafond de
-complexité. La latence est un p95 des latences par tick, affiché « p95 (approx.) » (M4) ;
-elle compte lectures, écritures et événements async, sauf l'async qui passe par une file
-(S10). Un événement traité en direct compte entier, pas dilué dans les lectures (S17), et
-les lectures qui doivent être à jour comptent à part dès qu'elles pèsent plus de 5 % (S21).
+complexité. La latence est le p95 des réponses de la vague (M15) : à chaque minute, chaque
+chemin servi (une lecture servie par le cache, une autre qui l'a raté et attend la base, un
+événement traité en direct ou déposé dans une file) pèse son débit, et le p95 se prend sur
+toutes ces réponses. Une minorité lente se voit dès qu'elle pèse plus de 5 % des réponses.
+L'async qui passe par une file n'attend que la file (S10). Un refus est immédiat et n'est que
+dans le taux d'échec ; un appel abandonné par un délai d'attente, ou fait à une dépendance qui
+se tait, compte pour son attente. Une vague peut donner son propre objectif à un type de
+requête : le marché, le banquier et le tournoi jugent la commande à part (60 ms), parce
+qu'elle pèse moins de 5 % des requêtes et que le client l'attend.
 Un événement que k services attendus sur n n'ont pas reçu compte pour k / n d'échec : le
 taux reste un taux, une commande jamais livrée compte pour une (M14). Une requête échouée
 que le client relance n'est pas un échec : sa relance compte à sa place (S19). Chaque source ne relance que ses propres échecs, du même type, et une requête
@@ -194,8 +199,8 @@ une vague à réponse unique le déclare dans ses données.
 | --- | --- | --- |
 | 1. Lancement | 100 req/s, 90 % de lectures | Serveur + base (tutoriel, réponse unique) |
 | 2. Les lectures explosent | 900 lectures/s ; le cache redémarre à froid | Cache, réplica, ou CDN (X9) |
-| 3. Campagne marketing | Pic à 5 fois le trafic, en rampe ; une instance tombe | CDN + cache, CDN + réplica, scaling + cache, scaling + autoscaling + cache |
-| 4. Un client trop gourmand | Un scraper, et des partenaires légitimes qui appellent une API non cachable en bordure (X7) | Rate limiting au bon palier, avec scaling ou CDN (une instance de plus derrière lui) ; sur ce trafic qui ne retombe pas, l'autoscaling coûte trop (X10) |
+| 3. Campagne marketing | Pic à 5 fois le trafic, en rampe ; une instance tombe | CDN + cache, scaling + cache, scaling + autoscaling + cache (sur 3 instances fixes) |
+| 4. Un client trop gourmand | Un scraper, et des partenaires légitimes qui appellent une API non cachable en bordure (X7) | Rate limiting au palier 40, avec scaling ou CDN (une instance de plus derrière lui) ; sur ce trafic qui ne retombe pas, l'autoscaling coûte trop (X10) |
 | 5. Compter les clics | Chaque redirection émet un événement de clic ; le worker tombe dix minutes | File de messages et worker (réponse unique) ; la file garde les clics et se vide au rythme de la base ; le CDN y perd les clics servis en bordure |
 
 ### Le grand marché : la prise de commande d'une boutique
@@ -209,7 +214,7 @@ l'autre côté de la rivière (S8). Il faut leur faire parvenir chaque commande.
 | 2. Trois services à prévenir | Chacun veut chaque événement | Pub/sub + une file par service ; une file partagée n'en livre qu'un tiers à chacun |
 | 3. Livrés deux fois | Le bus relivre une part des messages | Idempotence sur les services |
 | 4. Commandes perdues | Le serveur tombe entre l'écriture et la publication | Outbox, et de quoi soulager la base qu'elle charge (cache ou réplica) |
-| 5. Les soldes | 1 500 lectures/s, les deux incidents reviennent | Tout, plus une instance derrière un load balancer |
+| 5. Les soldes | 1 500 lectures/s, les deux incidents reviennent | Tout, plus une instance derrière un load balancer, et cache et réplica pour la base que l'outbox charge |
 
 ### Le banquier lombard : un paiement chez un prestataire externe
 
@@ -260,7 +265,8 @@ et déterministe, séparée de l'affichage.
   (I1) : chaque composant déclare ce qu'il accepte, et un type va au voisin le plus
   spécialisé qui l'accepte.
 - **Latence** : chaque nœud a la sienne, qui monte avec sa charge ; elle s'additionne le
-  long du chemin critique.
+  long du chemin critique. Le p95 se prend sur les chemins servis, pondérés par leur débit
+  minute par minute (M15).
 - **Trafic** : il monte au départ et retombe à la fin de chaque vague (S11), avec un profil
   propre à la vague (rampe de la campagne, X4).
 - **Pas d'aléa, donc pas de graine** (M2) : la même vague donne toujours le même résultat.
@@ -349,8 +355,5 @@ Les thèmes Équipe et Sécurité du calendrier restent hors du jeu.
 
 ## Questions ouvertes
 
-- Le p95 reste celui des ticks (M4) : des clients lents mais peu nombreux se diluent dans
-  la moyenne. Deux populations sont mesurées à part (S17, S21) ; un vrai p95 par requête
-  demanderait de suivre la distribution des chemins, et de recalibrer.
 - La file n'a ni délai de visibilité ni compte d'essais : un message qui échoue toujours
   la bloquerait (file des lettres mortes, ticket n° 3).

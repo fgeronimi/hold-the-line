@@ -53,7 +53,7 @@ describe('analyzeWave', () => {
   });
 
   it('une vague tenue s’ouvre sur ce qui a marché, chiffré', () => {
-    const [opening] = analyze(A.scaled(3, { rateLimitTier: A.TIER_40 }), 'noisy-client');
+    const [opening] = analyze(A.scaled(4, { rateLimitTier: A.TIER_40 }), 'noisy-client');
     expect(opening!.tone).toBe('good');
     expect(opening!.says).toContain('pillards');
     expect(opening!.says).toContain('tours de scribes');

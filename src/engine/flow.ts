@@ -17,15 +17,28 @@ export interface Stream {
    * retourne au lieu d'échouer (décision M1).
    */
   queue?: string;
+  /**
+   * Copie interne d'un événement (l'écriture de l'outbox, S6) : du travail en plus pour la
+   * base, pas une requête que le client attend.
+   */
+  internal?: boolean;
 }
 
 /** Un événement async original : ce qu'un service attend de recevoir. */
 export const isEvent = (s: Stream) => s.kind === 'async' && !s.duplicate;
 
+/**
+ * La classe d'une requête du client, celle dont la latence se mesure (M4) : sa source et son
+ * type. Un doublon, un message relâché par une file, une copie interne n'en ont pas : le
+ * client ne les attend pas.
+ */
+export const classOf = (s: Stream): string | undefined =>
+  s.duplicate || s.queue !== undefined || s.internal ? undefined : `${s.source}|${s.kind}`;
+
 export type Flow = Map<string, Stream>;
 
-function streamKey(s: Pick<Stream, 'kind' | 'source' | 'batch' | 'duplicate' | 'queue'>): string {
-  return `${s.kind}|${s.source}|${s.batch}${s.duplicate ? '|dup' : ''}${s.queue ? `|q:${s.queue}` : ''}`;
+function streamKey(s: Pick<Stream, 'kind' | 'source' | 'batch' | 'duplicate' | 'queue' | 'internal'>): string {
+  return `${s.kind}|${s.source}|${s.batch}${s.duplicate ? '|dup' : ''}${s.queue ? `|q:${s.queue}` : ''}${s.internal ? '|int' : ''}`;
 }
 
 export function addStream(flow: Flow, s: Stream): void {

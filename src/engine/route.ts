@@ -1,5 +1,5 @@
-import { addStream, isEvent, type Flow, type Stream } from './flow.ts';
-import { fail, failStream, tally } from './ledger.ts';
+import { addStream, classOf, isEvent, type Flow, type Stream } from './flow.ts';
+import { fail, failStream, lose, tally } from './ledger.ts';
 import type { NodeRoutes, RouteTable } from './routing.ts';
 import { REQUEST_KINDS, type ArchNode, type Catalog, type ComponentDef, type RequestKind, type TickMetrics } from './types.ts';
 import { hasEffect, type NodeUpgrades } from './upgrades.ts';
@@ -14,6 +14,13 @@ export interface Delivery {
   routed: Routed;
   /** Appels abandonnés par un délai d'attente, par nœud, type et dépendance : ils ont attendu (M12). */
   waited: Routed;
+  /**
+   * Requêtes du client envoyées par nœud, par classe (`classOf`) et par voisin : les chemins
+   * dont la latence se mesure, avec leur débit (M4).
+   */
+  classes: Map<string, Map<string, Map<string, number>>>;
+  /** Requêtes du client abandonnées par le délai d'attente de chaque nœud, par classe : elles ont attendu (M4, M12). */
+  classWaited: Map<string, Map<string, number>>;
   /** Chaque nœud et type sans route n'est signalé qu'une fois par vague. */
   reportedNoRoute: Set<string>;
 }
@@ -103,6 +110,13 @@ export function route(id: string, def: ComponentDef, passed: Flow, w: World, now
     byTo.set(to, (byTo.get(to) ?? 0) + rps);
     byKind.set(s.kind, byTo);
     out.routed.set(id, byKind);
+    const cls = classOf(s);
+    if (cls === undefined) return;
+    const byClass = out.classes.get(id) ?? new Map<string, Map<string, number>>();
+    const sent = byClass.get(cls) ?? new Map<string, number>();
+    sent.set(to, (sent.get(to) ?? 0) + rps);
+    byClass.set(cls, sent);
+    out.classes.set(id, byClass);
   };
 
   for (const original of passed.values()) {
@@ -123,12 +137,13 @@ export function route(id: string, def: ComponentDef, passed: Flow, w: World, now
       }
       if (!def.terminalFor.includes(s.kind)) {
         if (roles.publisher && roles.outbox) {
-          send(roles.outbox, { ...s, kind: 'write' }, s.rps);
+          send(roles.outbox, { ...s, kind: 'write', internal: true }, s.rps);
         } else if (roles.publisher) {
           const lost = s.rps * Math.min(1, now.incidents.share(type, 'publish-loss'));
           if (lost > 0) {
             tally(ctx, id, 'lost', lost);
             fail(ctx, id, 'lost-event', lost, lost);
+            lose(ctx, id, s, lost);
             s = { ...s, rps: s.rps - lost };
           }
         }
@@ -177,6 +192,12 @@ export function route(id: string, def: ComponentDef, passed: Flow, w: World, now
         byTo.set(to, (byTo.get(to) ?? 0) + each);
         byKind.set(s.kind, byTo);
         out.waited.set(id, byKind);
+        const cls = classOf(s);
+        if (cls !== undefined && each > 0) {
+          const byClass = out.classWaited.get(id) ?? new Map<string, number>();
+          byClass.set(cls, (byClass.get(cls) ?? 0) + each);
+          out.classWaited.set(id, byClass);
+        }
         continue;
       }
       send(to, s, each);

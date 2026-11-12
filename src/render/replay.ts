@@ -1,6 +1,7 @@
 import { attachChart, chartModel, renderChart } from './charts.ts';
 import { nodeNames } from './theme.ts';
 import type { Architecture, Catalog, Wave, WaveResult } from '../engine/types.ts';
+import { KIND_NAMES } from '../engine/messages.ts';
 import { escapeHtml } from './html.ts';
 import { firstSaturations, replayStats } from './hud.ts';
 import type { CityScene } from './scene.ts';
@@ -93,9 +94,13 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   alarm.hidden = true;
   barHost.appendChild(alarm);
   const latencyBreach = o.result.latencyBreachTick;
+  // L'objectif rompu peut être propre à un type de requête (M4) : la bannière dit lequel.
+  const brokenLatency = o.result.losses.find((l) => l.kind === 'latency');
+  const latencyLabel = brokenLatency?.kind === 'latency' && brokenLatency.requestKind ? ` ${KIND_NAMES[brokenLatency.requestKind]}` : '';
+  const latencyLimit = brokenLatency?.kind === 'latency' ? brokenLatency.limitMs : o.wave.sla.maxP95LatencyMs;
   const alarmText = {
     failures: `SLA rompu : plus de ${(o.wave.sla.maxFailureRate * 100).toFixed(0)} % d’échecs`,
-    latency: `SLA rompu : latence p95 au-delà de ${o.wave.sla.maxP95LatencyMs} ms`,
+    latency: `SLA rompu : latence p95${latencyLabel} au-delà de ${latencyLimit} ms`,
   };
 
   const typeOf = new Map(o.arch.nodes.map((n) => [n.id, n.type]));

@@ -303,19 +303,23 @@ describe('simulateWave', () => {
     });
   });
 
-  it('mesure la latence au p95 des ticks, pas en moyenne', () => {
-    // 1 tick de pic sur 20 : la moyenne l'écrase, le p95 (rang 19 sur 20) ne le voit pas encore.
+  it('mesure la latence au p95 des réponses, chaque tick pesé par son débit (M4)', () => {
+    // 1 tick de pic sur 20 à 9,5 fois le trafic : il porte un tiers des requêtes de la vague,
+    // le p95 le voit, la moyenne le dilue.
     const oneSpike = wave([users({ read: 10 })], {
       ticks: 20,
       profile: [{ until: 19, factor: 1 }, { until: 20, factor: 9.5 }],
     });
     const r1 = simulateWave(appToDb, oneSpike, catalog);
-    expect(r1.gauges.latency.value).toBeLessThan(r1.avgLatencyMs);
+    expect(r1.gauges.latency.value).toBeGreaterThan(r1.avgLatencyMs);
+    expect(r1.gauges.latency.value).toBeCloseTo(r1.ticks[19]!.slaLatencyMs, 9);
 
-    const twoSpikes = { ...oneSpike, profile: [{ until: 18, factor: 1 }, { until: 20, factor: 9.5 }] };
-    const r2 = simulateWave(appToDb, twoSpikes, catalog);
-    expect(r2.gauges.latency.value).toBeGreaterThan(r2.avgLatencyMs);
-    expect(r2.gauges.latency.value).toBe(Math.max(...r2.ticks.map((t) => t.avgLatencyMs)));
+    // Un tick lent qui porte moins de 5 % des requêtes ne fait pas le p95 : 1 tick sur 40 à
+    // 1,2 fois le trafic, 3 %.
+    const small = wave([users({ read: 10 })], { ticks: 40, profile: [{ until: 39, factor: 1 }, { until: 40, factor: 1.2 }] });
+    const r2 = simulateWave(appToDb, small, catalog);
+    expect(r2.gauges.latency.value).toBeCloseTo(r2.ticks[0]!.slaLatencyMs, 9);
+    expect(r2.ticks[39]!.slaLatencyMs).toBeGreaterThan(r2.gauges.latency.value);
   });
 
   it('calcule coût et complexité, et perd sur l’un ou l’autre', () => {

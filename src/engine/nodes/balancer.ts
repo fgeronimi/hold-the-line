@@ -1,9 +1,9 @@
 import { addStream, scaleFlow, work, type Flow } from '../flow.ts';
-import { failFlow, failStream } from '../ledger.ts';
+import { failFlow, failStream, lose } from '../ledger.ts';
 import { SYNC_KINDS, type ArchNode, type ComponentDef } from '../types.ts';
 import { activeEffect, withEffect } from '../upgrades.ts';
 import { defOf, instancesNow, type Now, type World } from '../world.ts';
-import { allForwarded, ratio, serveShared, type NodeOutcome } from './common.ts';
+import { ratio, serveShared, type NodeOutcome } from './common.ts';
 import { servingInstances } from './service.ts';
 
 export function processBalancer(node: ArchNode, def: ComponentDef, incoming: Flow, w: World, now: Now): NodeOutcome {
@@ -19,7 +19,6 @@ export function processBalancer(node: ArchNode, def: ComponentDef, incoming: Flo
   return {
     passed: shedding ? shedExcess(node.id, passed, shedding.targetUtilization, w, now) : passed,
     utilization: ratio(demand, capacity),
-    syncForwardShare: allForwarded(),
   };
 }
 
@@ -75,6 +74,7 @@ function applyRateLimit(nodeId: string, flow: Flow, limitPerClient: number, w: W
     if (w.sourcesById.get(s.source)?.abusive) {
       ctx.shed.value += lost;
       ctx.nodeShed.set(nodeId, (ctx.nodeShed.get(nodeId) ?? 0) + lost);
+      lose(ctx, nodeId, s, lost);
     } else failStream(ctx, nodeId, 'rate-limited', s, lost);
   }
   return out;

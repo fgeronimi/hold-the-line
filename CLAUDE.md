@@ -119,11 +119,11 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 - Les réponses attendues de chaque vague sont des données (`Wave.answers`, des choix de
   `src/data/balance-space.ts`) : les tests de verrouillage et l'aide les lisent. Un
   recalibrage qui déplace une réponse la met à jour là, nulle part ailleurs.
-- La latence du SLA compte lectures, écritures et événements async ; l'async sort du chemin
-  critique dès qu'il passe par une file (décision S10). Un service métier appelé en direct
-  met sa latence (200 ms) sur le chemin du client, entière : un tick vaut la moyenne, ou
-  l'événement direct s'il attend plus (`slaLatencyMs`, S17). C'est un p95 des latences par tick, pas un
-  vrai p99 par requête : toujours l'afficher « p95 (approx.) ».
+- La latence du SLA est le p95 des réponses (M15) : chaque chemin servi d'un tick (cache,
+  base, file…) pèse son débit ; l'async sort du chemin critique dès qu'il passe par une file
+  (S10). Les refus n'y sont pas, un appel qui a attendu (délai d'attente, dépendance muette)
+  y est. Une minorité lente ne se voit qu'au-delà de 5 % des réponses : l'événement de
+  commande, plus rare, a son propre objectif en données (`sla.maxP95LatencyMsByKind`).
 - Le rate limiting ne compte que le synchrone (décision C5) ; ses niveaux sont des index
   de palier, pas des quantités.
 - Imports relatifs avec l'extension `.ts` obligatoire : c'est ce qui permet à Node
@@ -174,5 +174,5 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   du taux d'échec (sa relance compte à sa place, `replayStats` fait pareil), et un nœud
   saturé sert capacité / charge de ce qu'il pourrait. Une saturation légère peut donc
   dégénérer en tempête : vérifier la marge quand un scénario a des clients qui relancent.
-- Une source `consistent` (S21) ne tombe jamais en cache et sa latence compte à part dans
-  le SLA : c'est la seule population, avec l'événement direct (S17), mesurée hors moyenne.
+- Une source `consistent` (S21) ne tombe jamais en cache : ses lectures attendent la base,
+  et se voient au p95 avec les absences du cache dès qu'elles pèsent plus de 5 % (M15).

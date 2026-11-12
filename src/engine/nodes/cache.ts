@@ -1,7 +1,7 @@
 import type { Flow } from '../flow.ts';
 import type { ArchNode, ComponentDef } from '../types.ts';
 import { instancesNow, type Now, type World } from '../world.ts';
-import { allForwarded, ratio, serveShared, type NodeOutcome } from './common.ts';
+import { ratio, serveShared, type NodeOutcome } from './common.ts';
 
 /**
  * Cache-aside : le routage ne lui envoie que les lectures qu'il sert, il n'a donc qu'à
@@ -15,6 +15,5 @@ export function processCache(node: ArchNode, def: ComponentDef, incoming: Flow, 
   return {
     passed,
     utilization: ratio(demand, capacity),
-    syncForwardShare: allForwarded(),
   };
 }

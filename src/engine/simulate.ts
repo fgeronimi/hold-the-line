@@ -2,7 +2,7 @@ import { migrationCost, totals } from './budget.ts';
 import { callTimeouts, openCircuits } from './circuits.ts';
 import { addStream, isEvent, sumRps, type Flow } from './flow.ts';
 import { activeAt, incidentState } from './incidents.ts';
-import { breachTick, loadedLatency, P95, percentile, tickLatency } from './latency.ts';
+import { judgeLatency, latencyObjectives, latencyPoints, loadedLatency, tickLatencyOf, weightedMean, type LatencyPoint } from './latency.ts';
 import { noFailures, nonZero, sumFailures, type Ledger } from './ledger.ts';
 import { lossMessages } from './messages.ts';
 import { factorAt } from './profile.ts';
@@ -83,8 +83,8 @@ export function simulateWave(
   const reportedBlocked = new Set<string>();
 
   let offeredTotal = 0;
-  let syncWeightedLatency = 0;
-  let syncOffered = 0;
+  /** Les chemins servis de chaque tick, avec leur débit : la distribution du p95 de la vague (M4). */
+  const servedPaths: LatencyPoint[][] = [];
   let countedSoFar = 0;
   /** Arrivées cumulées de chaque file, tick par tick : de quoi dater son plus vieux message (M13). */
   const arrivals = new Map<string, number[]>();
@@ -95,6 +95,7 @@ export function simulateWave(
   // à moitié livrée est à moitié en échec, et le taux ne dépasse jamais 100 % (B9).
   const copyWeight = fanOut > 1 ? 1 / fanOut : 1;
   let active: Incident[] = [];
+  const [general, ...ownObjectives] = latencyObjectives(wave.sla);
 
   for (let tick = 0; tick < wave.ticks; tick++) {
     const factor = factorAt(wave, tick);
@@ -102,7 +103,7 @@ export function simulateWave(
     active = activeAt(wave.incidents, tick);
     for (const i of active) if (!was.has(i.id)) events.push({ type: 'incident-start', tick, incident: i.id });
     for (const id of was) if (!active.some((i) => i.id === id)) events.push({ type: 'incident-end', tick, incident: id });
-    const ledger: Ledger = { tick, failures, nodeFailed: new Map(), nodeShed: new Map(), nodeTally: new Map(), events, shed, asyncTally, clientFailed: new Map() };
+    const ledger: Ledger = { tick, failures, nodeFailed: new Map(), nodeShed: new Map(), nodeTally: new Map(), events, shed, asyncTally, clientFailed: new Map(), classLost: new Map() };
     const failedBefore = sumFailures(failures);
     const eventsFailedBefore = asyncTally.failed;
     const undeliveredBefore = failures.undelivered;
@@ -112,6 +113,8 @@ export function simulateWave(
       inbound: new Map<string, Flow>([...nodes.keys()].map((id) => [id, new Map()])),
       routed: new Map(),
       waited: new Map(),
+      classes: new Map(),
+      classWaited: new Map(),
       reportedNoRoute,
     };
     delivery.inbound.set(validation.sourceId, injected);
@@ -158,9 +161,18 @@ export function simulateWave(
       nodeTicks[id] = nodeTickOf(w, now, nodes.get(id)!, defOf(w, id), delivery.inbound.get(id)!, outcomes.get(id)!, age);
     }
 
-    const latency = tickLatency(w, { order: validation.order, routes, routed: delivery.routed, waited: delivery.waited, timeouts: now.timeouts, outcomes, nodeTicks, open: now.open }, validation.sourceId, injected);
-    syncWeightedLatency += latency.avg * latency.syncRps;
-    syncOffered += latency.syncRps;
+    const paths = latencyPoints(w, {
+      sourceId: validation.sourceId,
+      injected,
+      classes: delivery.classes,
+      lost: ledger.classLost,
+      waited: delivery.classWaited,
+      timeoutMs: (id) => now.timeouts.get(id)?.ms ?? 0,
+      // Une dépendance qui se tait fait attendre chaque appel jusqu'au délai du client (M12).
+      silent: (id) => isDown(w, incidents, id) && latencyOf(w, incidents, id) > defOf(w, id).latencyMs,
+      nodeTicks,
+    });
+    servedPaths.push(paths);
 
     // Ce qui manque aux abonnés attendus, une fois retirés les échecs déjà comptés et ce
     // qui attend encore en file : compté au fil des ticks, pour que le rejeu le montre.
@@ -182,6 +194,7 @@ export function simulateWave(
     const slaFailedNow = failedNow - copiesFailedNow * (1 - copyWeight);
     slaFailed += slaFailedNow;
     const shedNow = Object.values(nodeTicks).reduce((a, n) => a + (n.shed ?? 0), 0);
+    const shown = tickLatencyOf(paths, general!, wave.sla);
     ticks.push({
       tick,
       offered,
@@ -189,8 +202,13 @@ export function simulateWave(
       // Déduites à l'injection, comme le rejeu les a toujours affichées (voir `TickMetrics`).
       countedSoFar: (countedSoFar += offered - shedNow - retried),
       clientFailedSoFar: (clientFailedSoFar += slaFailedNow - retried),
-      avgLatencyMs: latency.avg,
-      slaLatencyMs: latency.sla,
+      avgLatencyMs: weightedMean(paths),
+      slaLatencyMs: shown.p95Ms,
+      answeredRps: shown.answeredRps,
+      slowRps: shown.slowRps,
+      ...(ownObjectives.length > 0
+        ? { latencyByKind: Object.fromEntries(ownObjectives.map((o) => [o.kind!, tickLatencyOf(paths, o, wave.sla)])) }
+        : {}),
       nodes: nodeTicks,
       links: linkTraffic(delivery.routed),
       ...(active.length > 0 ? { incidents: active.map((i) => i.id) } : {}),
@@ -207,17 +225,22 @@ export function simulateWave(
   const failed = slaFailed - retries.total;
   const counted = offeredTotal - shed.value - retries.total;
   const failureRate = counted > 0 ? failed / counted : 0;
-  const avgLatency = syncOffered > 0 ? syncWeightedLatency / syncOffered : 0;
+  const avgLatency = weightedMean(servedPaths.flat());
 
-  const slaLatencies = ticks.map((t) => t.slaLatencyMs);
+  // Chaque objectif de latence juge ses réponses (M4) ; la jauge retient le plus serré.
+  const verdicts = judgeLatency(servedPaths, wave.sla);
+  const latencyGauges = verdicts.map((v) => ({ v, g: gauge(v.p95Ms, v.objective.limitMs) }));
+  const binding = latencyGauges.reduce((worst, x) => (x.g.margin < worst.g.margin ? x : worst));
   const gauges = {
     cost: gauge(billed.fixed + billed.autoscaling + billed.migration, wave.budget),
     complexity: gauge(complexity, wave.complexityCap),
     failureRate: gauge(failureRate, wave.sla.maxFailureRate),
-    latency: gauge(percentile(slaLatencies, P95), wave.sla.maxP95LatencyMs),
+    latency: binding.g,
   };
-  const losses = lossesFor(gauges, billed);
-  const latencyBreach = breachTick(slaLatencies, P95, wave.sla.maxP95LatencyMs);
+  const losses = lossesFor(gauges, billed, verdicts);
+  const breaches = verdicts.flatMap((v) => (v.breachTick !== undefined ? [v.breachTick] : []));
+  const latencyBreach = breaches.length > 0 ? Math.min(...breaches) : undefined;
+  const byKind = latencyGauges.filter((x) => x.v.objective.kind !== undefined);
 
   return {
     won: losses.length === 0,
@@ -226,6 +249,7 @@ export function simulateWave(
     bill: billed,
     avgLatencyMs: avgLatency,
     gauges,
+    ...(byKind.length > 0 ? { latencyByKind: Object.fromEntries(byKind.map((x) => [x.v.objective.kind!, x.g])) } : {}),
     offered: offeredTotal,
     failed,
     failuresByReason: failures,

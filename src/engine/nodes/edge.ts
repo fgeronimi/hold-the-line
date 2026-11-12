@@ -1,8 +1,8 @@
-import { addStream, sumRps, type Flow, type Stream } from '../flow.ts';
-import { fail } from '../ledger.ts';
+import { addStream, type Flow, type Stream } from '../flow.ts';
+import { fail, lose } from '../ledger.ts';
 import type { ArchNode, ComponentDef } from '../types.ts';
 import { instancesNow, type Now, type World } from '../world.ts';
-import { allForwarded, ratio, serveShared, type NodeOutcome } from './common.ts';
+import { ratio, serveShared, type NodeOutcome } from './common.ts';
 
 /**
  * Bordure (CDN) : sert une part des lectures sans les transmettre. Les tâches async
@@ -18,6 +18,7 @@ export function processEdge(node: ArchNode, def: ComponentDef, incoming: Flow, w
       addStream(passed, { ...s, rps: s.rps * (1 - hitRate) });
     } else if (s.kind === 'async') {
       fail(now.ledger, node.id, 'lost-at-edge', s.rps * hitRate, s.duplicate ? 0 : s.rps * hitRate);
+      lose(now.ledger, node.id, s, s.rps * hitRate);
       addStream(passed, { ...s, rps: s.rps * (1 - hitRate) });
     } else {
       addStream(passed, s);
@@ -26,15 +27,7 @@ export function processEdge(node: ArchNode, def: ComponentDef, incoming: Flow, w
   return {
     passed,
     utilization: ratio(demand, capacity),
-    syncForwardShare: { ...allForwarded(), read: readShare(served, passed) },
   };
-}
-
-/** Part des lectures servies qui continue vers l'aval, longue traîne comprise. */
-function readShare(served: Flow, passed: Flow): number {
-  const isRead = (s: Stream) => s.kind === 'read';
-  const before = sumRps(served, isRead);
-  return before > 0 ? sumRps(passed, isRead) / before : 0;
 }
 
 // La bordure ne garde ni la longue traîne, ni une donnée qui doit être à jour (S21), ni les

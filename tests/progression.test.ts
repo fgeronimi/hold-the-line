@@ -111,7 +111,7 @@ describe('playWave', () => {
       A.minimal,
       A.withCache,
       A.scaled(3),
-      A.scaled(3, { rateLimitTier: A.TIER_40 }),
+      A.scaled(4, { rateLimitTier: A.TIER_40 }),
       A.queuedClicks(4),
     ];
     let state = newGame();
@@ -136,7 +136,7 @@ describe('playWave', () => {
     expect(back.replays).toBe(1);
 
     let replay = back;
-    for (const arch of [A.scaled(3), A.scaled(3, { rateLimitTier: A.TIER_40 }), A.queuedClicks(3)]) {
+    for (const arch of [A.scaled(3), A.scaled(4, { rateLimitTier: A.TIER_40 }), A.queuedClicks(3)]) {
       ({ state: replay } = playWave(replay, urlShortener, arch, catalog, scoring));
     }
     expect(replay.finished).toBe(true);

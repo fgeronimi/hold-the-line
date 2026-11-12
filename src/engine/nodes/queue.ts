@@ -36,7 +36,6 @@ export function processQueue(node: ArchNode, def: ComponentDef, incoming: Flow, 
   return {
     passed,
     utilization: ratio(demand, capacity),
-    syncForwardShare: { read: 0, write: 0, async: 0 },
   };
 }
 

@@ -4,7 +4,7 @@ import { answersOf, balanceSpaces } from '../src/data/balance-space.ts';
 import { catalog } from '../src/data/catalog.ts';
 import { lossMessage, lossMessages } from '../src/engine/messages.ts';
 import { simulateWave } from '../src/engine/simulate.ts';
-import type { Architecture, Wave, WaveResult } from '../src/engine/types.ts';
+import type { Architecture, RequestKind, Wave, WaveResult } from '../src/engine/types.ts';
 
 /**
  * Pour chaque vague des quatre scénarios : ses réponses attendues, l'architecture la plus
@@ -68,16 +68,26 @@ describe('une seule définition du SLA, publiée par le moteur', () => {
   });
 
   it('le tick de rupture existe si et seulement si la jauge de latence dépasse sa limite', () => {
-    for (const { label, r } of played) {
+    for (const { label, wave, r } of played) {
       const { value, limit } = r.gauges.latency;
       expect(r.latencyBreachTick !== undefined, label).toBe(value > limit);
-      if (r.latencyBreachTick === undefined) continue;
-      // C'est le premier tick lent au-delà de ce que le p95 tolère : rien ne cassait avant.
-      const n = r.ticks.length;
-      const tolerated = n - Math.ceil(0.95 * n);
-      const slow = (upTo: number) => r.ticks.slice(0, upTo + 1).filter((t) => t.slaLatencyMs > limit).length;
-      expect(r.ticks[r.latencyBreachTick]!.slaLatencyMs, label).toBeGreaterThan(limit);
-      expect(slow(r.latencyBreachTick), label).toBe(tolerated + 1);
+      // Pour chaque objectif (le général, puis ceux propres à un type), le premier tick où ses
+      // réponses lentes cumulées dépassent 5 % de ses réponses sur la vague (M4).
+      const views: ((t: WaveResult['ticks'][number]) => { answered: number; slow: number })[] = [
+        (t) => ({ answered: t.answeredRps, slow: t.slowRps }),
+        ...Object.keys(wave.sla.maxP95LatencyMsByKind ?? {}).map((k) => (t: WaveResult['ticks'][number]) => {
+          const x = t.latencyByKind![k as RequestKind]!;
+          return { answered: x.answeredRps, slow: x.slowRps };
+        }),
+      ];
+      const sealed = views.flatMap((view) => {
+        const total = r.ticks.reduce((a, t) => a + view(t).answered, 0);
+        let slow = 0;
+        const at = r.ticks.findIndex((t) => (slow += view(t).slow) > 0.05 * total * (1 + 1e-9));
+        return at >= 0 ? [at] : [];
+      });
+      if (r.latencyBreachTick === undefined) expect(sealed, label).toEqual([]);
+      else expect(r.latencyBreachTick, label).toBe(Math.min(...sealed));
     }
   });
 
@@ -94,18 +104,23 @@ describe('raisons de défaite typées', () => {
     for (const { label, r } of played) {
       const g = r.gauges;
       const kinds = r.losses.map((l) => l.kind);
-      expect(kinds, label).toEqual(
+      expect(kinds.filter((k) => k !== 'latency'), label).toEqual(
         [
           g.cost.value > g.cost.limit && 'budget',
           g.complexity.value > g.complexity.limit && 'complexity',
           g.failureRate.value > g.failureRate.limit && 'failure-rate',
-          g.latency.value > g.latency.limit && 'latency',
         ].filter(Boolean),
       );
+      // Une raison par objectif de latence dépassé (M4) ; la jauge retient le plus serré.
+      expect(kinds.includes('latency'), label).toBe(g.latency.value > g.latency.limit);
       expect(r.won, label).toBe(r.losses.length === 0);
       for (const l of r.losses) {
         if (l.kind === 'budget') expect(l, label).toEqual({ kind: 'budget', cost: g.cost.value, limit: g.cost.limit, autoscaling: r.bill.autoscaling, migration: r.bill.migration });
-        if (l.kind === 'latency') expect(l, label).toEqual({ kind: 'latency', p95Ms: g.latency.value, limitMs: g.latency.limit });
+        if (l.kind === 'latency' && l.requestKind) {
+          const own = r.latencyByKind![l.requestKind]!;
+          expect(l, label).toEqual({ kind: 'latency', p95Ms: own.value, limitMs: own.limit, requestKind: l.requestKind });
+        }
+        if (l.kind === 'latency') expect(l.p95Ms, label).toBeGreaterThan(l.limitMs);
         if (l.kind === 'failure-rate') expect(l, label).toEqual({ kind: 'failure-rate', value: g.failureRate.value, limit: g.failureRate.limit });
       }
     }
@@ -120,7 +135,8 @@ describe('raisons de défaite typées', () => {
     expect(lossMessage({ kind: 'budget', cost: 180.25, limit: 170, autoscaling: 10.25, migration: 0 })).toBe('Budget dépassé : 180.3 / 170, dont 10.3 d\'autoscaling');
     expect(lossMessage({ kind: 'complexity', value: 5, limit: 4 })).toBe('Trop complexe : 5 / 4 points');
     expect(lossMessage({ kind: 'failure-rate', value: 0.0234, limit: 0.01 })).toBe('SLA rompu : 2.34 % d\'échecs (max 1.00 %)');
-    expect(lossMessage({ kind: 'latency', p95Ms: 312.5, limitMs: 200 })).toBe('SLA rompu : latence p95 (approx.) 312.5 ms (max 200 ms)');
+    expect(lossMessage({ kind: 'latency', p95Ms: 312.5, limitMs: 200 })).toBe('SLA rompu : latence p95 312.5 ms (max 200 ms)');
+    expect(lossMessage({ kind: 'latency', p95Ms: 4200, limitMs: 500, requestKind: 'async' })).toBe('SLA rompu : latence p95 des événements 4200 ms (max 500 ms)');
   });
 
   it('une architecture invalide dit pourquoi, erreur par erreur', () => {

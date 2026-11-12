@@ -1,10 +1,10 @@
 import { addStream, filterFlow, work, type Flow, type Stream } from '../flow.ts';
-import { fail, tally } from '../ledger.ts';
+import { fail, lose, tally } from '../ledger.ts';
 import { retryingShare, timedOut } from '../retries.ts';
 import type { ArchNode, ComponentDef } from '../types.ts';
 import { hasEffect, withEffect } from '../upgrades.ts';
 import { instancesNow, type Now, type World } from '../world.ts';
-import { allForwarded, deferExcess, failAll, fits, ratio, serveWithin, splitQueued, type NodeOutcome } from './common.ts';
+import { deferExcess, failAll, fits, ratio, serveWithin, splitQueued, type NodeOutcome } from './common.ts';
 
 export function processDatabase(node: ArchNode, def: ComponentDef, incoming: Flow, w: World, now: Now): NodeOutcome {
   const ctx = now.ledger;
@@ -55,6 +55,7 @@ export function processDatabase(node: ArchNode, def: ComponentDef, incoming: Flo
       const stale = consistent(s) ? s.rps * staleShare : 0;
       if (stale > 0) {
         fail(ctx, node.id, 'stale-read', stale);
+        lose(ctx, node.id, s, stale);
         tally(ctx, node.id, 'stale', stale);
       }
       addStream(passed, { ...s, rps: s.rps - stale });
@@ -76,5 +77,5 @@ export function processDatabase(node: ArchNode, def: ComponentDef, incoming: Flo
     ratio(writeDemand + queuedDemand, primary),
     ratio(writeDemand + queuedDemand + readDemand, primary + replicaCapacity),
   );
-  return { passed, utilization, syncForwardShare: allForwarded() };
+  return { passed, utilization };
 }

@@ -4,7 +4,12 @@ const TICKS = 60;
 const flat = [{ until: TICKS, factor: 1 }];
 /** Le trafic monte au départ et retombe à la fin (décision S11). */
 const RAMP = { up: 8, down: 8 };
-const SLA = { maxFailureRate: 0.01, maxP95LatencyMs: 60 };
+/**
+ * Les paiements sont jugés à part (M4) : 30 commandes sur 330 requêtes, et un banquier qui
+ * traîne quatre minutes, ne pèseraient pas 5 % des réponses de la vague. Le client qui paie,
+ * lui, attend la banque.
+ */
+const SLA = { maxFailureRate: 0.01, maxP95LatencyMs: 60, maxP95LatencyMsByKind: { async: 60 } };
 
 /**
  * Les clients consultent leurs commandes (lectures) et en passent (écritures) ; chaque

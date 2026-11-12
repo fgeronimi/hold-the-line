@@ -216,13 +216,14 @@ describe('circuit breaker (S15)', () => {
     expect(r.ticks[5]!.nodes.a!.open).toBeUndefined();
   });
 
-  it('un appel coupé ne compte pas la latence de l’aval', () => {
-    // Lecture : 20 (serveur à 50 %) + 13,3 (base à 25 %) ; async coupé : 20, sans p.
+  it('un appel coupé ne compte pas la latence de l’aval : refusé tout de suite, il n’en a pas (M4)', () => {
+    // Lecture : 20 (serveur à 50 %) + 13,3 (base à 25 %) ; l'async coupé est un échec immédiat,
+    // dans le taux d'échec seulement.
     const r = simulateWave(direct({ breaker: 1 }), wave([half], { incidents: [slow] }), catalog);
     const a = lat(10, 0.5);
     const d = lat(10, 0.25);
-    expect(r.ticks[3]!.avgLatencyMs).toBeCloseTo((25 * (a + d) + 25 * a) / 50, 9);
-    expect(r.ticks[3]!.slaLatencyMs).toBeCloseTo((25 * (a + d) + 25 * a) / 50, 9);
+    expect(r.ticks[3]!.avgLatencyMs).toBeCloseTo(a + d, 9);
+    expect(r.ticks[3]!.slaLatencyMs).toBeCloseTo(a + d, 9);
   });
 
   it('s’ouvre aussi sur une dépendance qui ne répond plus, et évite la cascade', () => {
@@ -772,9 +773,10 @@ describe('partition et lectures à jour (S21)', () => {
   });
 });
 
-describe('latence du SLA (S10, S17, S21)', () => {
+describe('latence du SLA : un p95 pondéré par le débit de chaque chemin (M4)', () => {
   it('l’async traité en direct compte entier, pas dilué dans les lectures', () => {
     // 45 lectures et 5 commandes : la commande attend le serveur (20 ms) puis le service (100 ms).
+    // 5 sur 50, c'est 10 % des requêtes : le p95 tombe sur elles.
     const a = arch([n('s', 'src'), n('a', 'app'), n('d', 'db'), n('s1', 'svc')], [['s', 'a'], ['a', 'd'], ['a', 's1']]);
     const r = simulateWave(a, wave([users({ read: 45, async: 5 })]), catalog);
     const app = lat(10, 0.5);
@@ -787,25 +789,60 @@ describe('latence du SLA (S10, S17, S21)', () => {
     const a = arch([n('s', 'src'), n('a', 'app'), n('d', 'db'), n('q', 'queue'), n('s1', 'svc')], [['s', 'a'], ['a', 'd'], ['a', 'q'], ['q', 's1']]);
     const r = simulateWave(a, wave([users({ read: 45, async: 5 })]), catalog);
     const app = lat(10, 0.5);
-    expect(r.ticks[0]!.slaLatencyMs).toBeCloseTo((45 * (app + lat(10, 0.45)) + 5 * app) / 50, 9);
-    expect(r.ticks[0]!.slaLatencyMs).toBe(r.ticks[0]!.avgLatencyMs);
+    const queued = r.ticks[0]!.nodes.q!.latencyMs;
+    // Le client n'attend que la file : 10 % des requêtes, plus rapides que les lectures.
+    expect(r.ticks[0]!.avgLatencyMs).toBeCloseTo((45 * (app + lat(10, 0.45)) + 5 * (app + queued)) / 50, 9);
+    expect(r.ticks[0]!.slaLatencyMs).toBeCloseTo(app + lat(10, 0.45), 9);
+  });
+
+  it('une minorité lente compte dès qu’elle pèse plus de 5 % des réponses, pas avant', () => {
+    // 2 commandes sur 50 (4 %) attendent le service : le p95 ne les voit pas ; 3 sur 50 (6 %), si.
+    const a = arch([n('s', 'src'), n('a', 'app'), n('d', 'db'), n('s1', 'svc')], [['s', 'a'], ['a', 'd'], ['a', 's1']]);
+    const at = (orders: number) => simulateWave(a, wave([users({ read: 50 - orders, async: orders })]), catalog).ticks[0]!;
+    expect(at(2).slaLatencyMs).toBeCloseTo(at(2).nodes.a!.latencyMs + at(2).nodes.d!.latencyMs, 9);
+    expect(at(3).slaLatencyMs).toBeCloseTo(at(3).nodes.a!.latencyMs + at(3).nodes.s1!.latencyMs, 9);
+  });
+
+  it('un type peut avoir son propre objectif : ses réponses sont jugées à part, et sortent du général', () => {
+    // 2 commandes sur 50 attendent le service : 4 %, invisibles du p95 général, mais jugées seules.
+    const a = arch([n('s', 'src'), n('a', 'app'), n('d', 'db'), n('s1', 'svc')], [['s', 'a'], ['a', 'd'], ['a', 's1']]);
+    const sla = { maxFailureRate: 0.01, maxP95LatencyMs: 60, maxP95LatencyMsByKind: { async: 100 } };
+    const r = simulateWave(a, wave([users({ read: 48, async: 2 })], { sla }), catalog);
+    const t = r.ticks[0]!;
+    expect(t.slaLatencyMs).toBeCloseTo(t.nodes.a!.latencyMs + t.nodes.d!.latencyMs, 9);
+    expect(t.latencyByKind!.async!.p95Ms).toBeCloseTo(t.nodes.a!.latencyMs + t.nodes.s1!.latencyMs, 9);
+    expect(r.latencyByKind!.async!.value).toBeGreaterThan(100);
+    expect(r.losses).toEqual([{ kind: 'latency', p95Ms: r.latencyByKind!.async!.value, limitMs: 100, requestKind: 'async' }]);
+    expect(r.gauges.latency).toEqual(r.latencyByKind!.async);
+    expect(r.latencyBreachTick).toBe(0);
+  });
+
+  it('la vague prend le p95 de toutes ses réponses, minute par minute pondérées par leur débit', () => {
+    // Une minute lente qui porte 10 % des requêtes de la vague fait le p95, même si la
+    // médiane des minutes est rapide.
+    const a = arch([n('s', 'src'), n('a', 'app'), n('d', 'db')], [['s', 'a'], ['a', 'd']]);
+    const w = wave([users({ read: 10 })], { ticks: 10, profile: [{ until: 9, factor: 1 }, { until: 10, factor: 1 }] });
+    const r = simulateWave(a, w, catalog);
+    expect(r.gauges.latency.value).toBeCloseTo(r.ticks[0]!.slaLatencyMs, 9);
   });
 
   describe('lectures à jour', () => {
     const a = arch([n('s', 'src'), n('a', 'app'), n('c', 'cache'), n('d', 'db')], [['s', 'a'], ['a', 'c'], ['a', 'd']]);
     const seats = (rps: number): TrafficSource => ({ id: 'seats', clients: 10, consistent: true, rps: { read: rps } });
 
-    it('comptent à part au-delà de 5 % du trafic : serveur puis base, sans cache', () => {
-      // 5 lectures à jour sur 55, soit 9 % : leur chemin, plus lent que la moyenne, fait le SLA.
+    it('ne passent par aucun cache : serveur puis base', () => {
+      // 5 lectures à jour sur 55, soit 9 % : leur chemin, plus lent que le cache, fait le SLA.
       const t = simulateWave(a, wave([users({ read: 50 }), seats(5)]), catalog).ticks[0]!;
       expect(t.slaLatencyMs).toBeCloseTo(t.nodes.a!.latencyMs + t.nodes.d!.latencyMs, 9);
       expect(t.slaLatencyMs).toBeGreaterThan(t.avgLatencyMs);
     });
 
-    it('en deçà, la moyenne seule', () => {
-      // 2 sur 52 : 3,8 %, le p95 ne les voit pas.
+    it('sans règle à part : elles comptent avec les lectures qui ratent le cache, sans effet de falaise', () => {
+      // 2 lectures à jour sur 52 (3,8 %) : seules, le p95 ne les verrait pas ; avec les 10
+      // lectures sur 50 qui ratent le cache (hors cache, 80 % de succès), 23 % des réponses
+      // attendent la base, et le p95 les voit.
       const t = simulateWave(a, wave([users({ read: 50 }), seats(2)]), catalog).ticks[0]!;
-      expect(t.slaLatencyMs).toBe(t.avgLatencyMs);
+      expect(t.slaLatencyMs).toBeCloseTo(t.nodes.a!.latencyMs + t.nodes.d!.latencyMs, 9);
     });
   });
 });

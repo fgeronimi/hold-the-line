@@ -1,8 +1,6 @@
-import { sumRps, type Flow } from './flow.ts';
-import type { NodeOutcome } from './nodes/index.ts';
-import type { Routed } from './route.ts';
-import type { RouteTable } from './routing.ts';
-import { REQUEST_KINDS, type NodeTick, type RequestKind } from './types.ts';
+import { classOf, type Flow } from './flow.ts';
+import type { Delivery } from './route.ts';
+import type { NodeTick, RequestKind, TickLatency, Wave } from './types.ts';
 import { defOf, type World } from './world.ts';
 
 /**
@@ -12,107 +10,191 @@ import { defOf, type World } from './world.ts';
 const MAX_UTILIZATION_FOR_LATENCY = 0.95;
 
 export const P95 = 0.95;
-/** Part du trafic au-delà de laquelle des clients lents se voient dans le p95. */
-const P95_SHARE = 1 - P95;
 
 export function loadedLatency(baseMs: number, utilization: number): number {
   return baseMs / (1 - Math.min(utilization, MAX_UTILIZATION_FOR_LATENCY));
 }
 
+/**
+ * Un chemin servi pendant un tick (M4) : sa latence de bout en bout, et le débit des réponses
+ * servies par lui, qui le pèse dans le p95. Une classe de requête (source × type) en donne un
+ * par chemin : une lecture servie par le cache et une lecture qui l'a raté et attend la base
+ * sont deux points.
+ */
+export interface LatencyPoint {
+  ms: number;
+  rps: number;
+  source: string;
+  kind: RequestKind;
+}
+
 /** Ce que le calcul des latences lit d'un tick déjà traité. */
 export interface TickPaths {
-  order: string[];
-  routes: RouteTable;
-  routed: Routed;
-  outcomes: Map<string, NodeOutcome>;
+  sourceId: string;
+  injected: Flow;
+  classes: Delivery['classes'];
+  /** Requêtes du client arrêtées à chaque nœud sans réponse, par classe. */
+  lost: Map<string, Map<string, number>>;
+  /** Appels abandonnés par le délai d'attente de chaque nœud, par classe (déjà dans `lost`). */
+  waited: Map<string, Map<string, number>>;
+  timeoutMs: (id: string) => number;
+  /** Nœud sans instance qui se tait au lieu de refuser : ses échecs ont attendu sa latence. */
+  silent: (id: string) => boolean;
   nodeTicks: Record<string, NodeTick>;
-  open: Map<string, Set<string>>;
-  /** Appels abandonnés par un délai d'attente : ils comptent pour ce délai (M12). */
-  waited?: Routed;
-  timeouts?: Map<string, { ms: number; cut: Set<string> }>;
 }
 
 /**
- * Latence moyenne d'une requête depuis un nœud jusqu'au bout de son chemin synchrone.
- * `skip` écarte des voisins : les caches, pour une lecture qui ne peut pas y tomber.
+ * Les chemins du tick, classe par classe. À chaque nœud, ce qui y arrive se partage entre ce
+ * qu'il sert lui-même (un succès du cache, de la bordure, ce qu'une file accepte, ce qu'une
+ * base termine), ce qu'il transmet à chaque voisin, et ce qui s'arrête là sans réponse. La
+ * latence porte sur ce que le client a attendu : un refus (saturation, rate limiting,
+ * délestage, disjoncteur, route manquante) est immédiat, il ne compte que dans le taux
+ * d'échec ; un appel abandonné par un délai d'attente compte pour ce délai, et un appel à une
+ * dépendance qui se tait pour le délai du client (M12). Un pub/sub copie l'événement à
+ * chacun : le client attend la copie la plus lente, pas la somme.
  */
-export function computePathLatencies(
-  { order, routes, routed, outcomes, nodeTicks, open, waited, timeouts }: TickPaths,
-  skip: (id: string) => boolean = () => false,
-): (id: string, kind: RequestKind) => number {
-  const memo = new Map<string, number>();
-  for (const id of [...order].reverse()) {
-    for (const kind of REQUEST_KINDS) {
-      const own = nodeTicks[id]?.latencyMs ?? 0;
-      const share = outcomes.get(id)?.syncForwardShare[kind] ?? 0;
-      const sent = [...(routed.get(id)?.get(kind) ?? new Map<string, number>())].filter(([to]) => !skip(to));
-      const gaveUp = [...(waited?.get(id)?.get(kind) ?? new Map<string, number>())].filter(([to]) => !skip(to));
-      const total = [...sent, ...gaveUp].reduce((a, [, x]) => a + x, 0);
-      let downstream = 0;
-      if (total > 0) {
-        for (const [to, rps] of sent) downstream += (rps / total) * (memo.get(`${to}|${kind}`) ?? 0);
-        // Un appel abandonné a attendu tout le délai, pas la réponse qu'il n'a jamais eue.
-        for (const [, rps] of gaveUp) downstream += (rps / total) * (timeouts?.get(id)?.ms ?? 0);
-      } else {
-        // Pas de trafic ce tick : on suppose une répartition égale, pour que la latence reste définie.
-        // Un appel coupé par le disjoncteur échoue tout de suite : il n'attend pas l'aval.
-        const targets = (routes.get(id)?.forward[kind] ?? []).filter((t) => !open.get(id)?.has(t) && !skip(t));
-        if (targets.length > 0) {
-          downstream = targets.reduce((a, to) => a + (memo.get(`${to}|${kind}`) ?? 0), 0) / targets.length;
-        }
-      }
-      memo.set(`${id}|${kind}`, own + share * downstream);
+export function latencyPoints(w: World, { sourceId, injected, classes, lost, waited, timeoutMs, silent, nodeTicks }: TickPaths): LatencyPoint[] {
+  const injectedByClass = new Map<string, number>();
+  for (const s of injected.values()) {
+    const cls = classOf(s);
+    if (cls !== undefined) injectedByClass.set(cls, (injectedByClass.get(cls) ?? 0) + s.rps);
+  }
+  const points: LatencyPoint[] = [];
+  for (const [cls, rps] of injectedByClass) {
+    if (rps <= 0) continue;
+    const [source, kind] = cls.split('|') as [string, RequestKind];
+    const arrived = new Map<string, number>([[sourceId, rps]]);
+    for (const [, byClass] of classes) {
+      for (const [to, x] of byClass.get(cls) ?? []) arrived.set(to, (arrived.get(to) ?? 0) + x);
     }
+    const memo = new Map<string, { ms: number; rps: number }[]>();
+    const served = (id: string): { ms: number; rps: number }[] => {
+      const known = memo.get(id);
+      if (known) return known;
+      const own = nodeTicks[id]?.latencyMs ?? 0;
+      const into = arrived.get(id) ?? 0;
+      const sent = classes.get(id)?.get(cls) ?? new Map<string, number>();
+      const out: { ms: number; rps: number }[] = [];
+      const stopped = lost.get(id)?.get(cls) ?? 0;
+      const here = into - [...sent.values()].reduce((a, x) => a + x, 0) - stopped;
+      if (here > 1e-9) out.push({ ms: own, rps: here });
+      const gaveUp = waited.get(id)?.get(cls) ?? 0;
+      if (gaveUp > 0) out.push({ ms: own + timeoutMs(id), rps: gaveUp });
+      else if (stopped > 0 && silent(id)) out.push({ ms: own, rps: stopped });
+      // La part de l'aval qui vient d'ici : un nœud peut être atteint par plusieurs chemins.
+      const below = (to: string) => {
+        const share = (sent.get(to) ?? 0) / (arrived.get(to) ?? 1);
+        return served(to).map((p) => ({ ms: own + p.ms, rps: p.rps * share }));
+      };
+      if (defOf(w, id).fanOut && sent.size > 0) {
+        const mean = (ps: { ms: number; rps: number }[]) => {
+          const total = ps.reduce((a, p) => a + p.rps, 0);
+          return total > 0 ? ps.reduce((a, p) => a + p.ms * p.rps, 0) / total : 0;
+        };
+        const branches = [...sent.keys()].map(below);
+        out.push(...branches.reduce((slowest, b) => (mean(b) > mean(slowest) ? b : slowest)));
+      } else {
+        for (const to of sent.keys()) out.push(...below(to));
+      }
+      memo.set(id, out);
+      return out;
+    };
+    for (const p of served(sourceId)) if (p.rps > 1e-9) points.push({ ...p, source, kind });
   }
-  return (id, kind) => memo.get(`${id}|${kind}`) ?? 0;
+  return points;
 }
 
 /**
- * La latence d'un tick : `avg`, la moyenne pondérée par le débit injecté de chaque type,
- * `sla`, ce que le SLA en retient, et `syncRps`, le débit qui pondère la moyenne de la vague.
+ * Le centile pondéré par le débit : la plus petite latence telle que les réponses servies
+ * aussi vite pèsent au moins `p` du total. Une minorité lente compte dès qu'elle pèse plus
+ * de 1 − `p` des réponses. Sans réponse servie, 0.
  */
-export function tickLatency(w: World, paths: TickPaths, sourceId: string, injected: Flow): { avg: number; sla: number; syncRps: number } {
-  const pathLatency = computePathLatencies(paths);
-  // L'événement fait partie de la commande : tant qu'il est traité en direct, le client
-  // l'attend. Une file le sort du chemin critique (sa part synchrone s'arrête à elle).
-  const injectedSync = REQUEST_KINDS.map((k) => ({ k, rps: sumRps(injected, (s) => s.kind === k) }));
-  const syncRps = injectedSync.reduce((a, x) => a + x.rps, 0);
-  const avg =
-    syncRps > 0
-      ? injectedSync.reduce((a, x) => a + x.rps * (pathLatency(sourceId, x.k)), 0) / syncRps
-      : 0;
-  // Le client qui passe commande attend tout l'événement tant qu'il est traité en direct :
-  // sa latence compte entière, pas diluée dans les lectures (décision S17). Derrière une
-  // file, la part synchrone de l'événement s'arrête à elle et reste courte.
-  const eventRps = injectedSync.find((x) => x.k === 'async')?.rps ?? 0;
-  // De même, une lecture qui doit être à jour ne passe par aucun cache : si ces clients
-  // pèsent plus de 5 % du trafic, le p95 les voit, leur latence compte entière (S21).
-  const consistentRps = sumRps(injected, (s) => s.kind === 'read' && !!w.sourcesById.get(s.source)?.consistent);
-  const consistentLatency =
-    consistentRps > P95_SHARE * syncRps
-      ? computePathLatencies(paths, (id) => !!defOf(w, id).lookaside)(sourceId, 'read')
-      : 0;
-  const sla = Math.max(avg, eventRps > 0 ? pathLatency(sourceId, 'async') : 0, consistentLatency);
-  return { avg, sla, syncRps };
+export function weightedPercentile(points: readonly { ms: number; rps: number }[], p: number): number {
+  const sorted = points.filter((x) => x.rps > 0).sort((a, b) => a.ms - b.ms);
+  const total = sorted.reduce((a, x) => a + x.rps, 0);
+  if (total <= 0) return 0;
+  let cumulative = 0;
+  for (const x of sorted) {
+    cumulative += x.rps;
+    if (cumulative >= p * total) return x.ms;
+  }
+  return sorted.at(-1)!.ms;
 }
 
-/** Percentile par rang le plus proche : sur 60 ticks, le p95 écarte les 3 pires. */
-export function percentile(values: number[], p: number): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.max(0, Math.ceil(p * sorted.length) - 1)]!;
+/** Moyenne des latences servies, pondérée par le débit. */
+export function weightedMean(points: readonly { ms: number; rps: number }[]): number {
+  const total = points.reduce((a, x) => a + x.rps, 0);
+  return total > 0 ? points.reduce((a, x) => a + x.ms * x.rps, 0) / total : 0;
 }
 
 /**
- * Le tick où la vague est perdue sur la latence, sans attendre sa fin : dès qu'un tick
- * au-dessus de la limite de plus que ce que le rang du percentile écarte est passé, le
- * percentile final dépassera forcément la limite. Même règle que `percentile`.
+ * Le tick où la vague est perdue sur la latence, sans attendre sa fin : le premier où les
+ * réponses plus lentes que la limite, cumulées depuis le début, pèsent plus de 1 − `p` de
+ * toutes les réponses de la vague. Passé lui, le centile final dépasse forcément la limite.
+ * `lost` dit si le centile final la dépasse : c'est lui qui tranche, au flottant près.
  */
-export function breachTick(values: number[], p: number, limit: number): number | undefined {
-  const tolerated = values.length - Math.max(1, Math.ceil(p * values.length));
-  let over = 0;
-  for (let i = 0; i < values.length; i++) {
-    if (values[i]! > limit && ++over > tolerated) return i;
+export function breachTick(byTick: readonly (readonly { ms: number; rps: number }[])[], p: number, limit: number, lost: boolean): number | undefined {
+  if (!lost) return undefined;
+  const total = byTick.reduce((a, ps) => a + ps.reduce((b, x) => b + x.rps, 0), 0);
+  let slow = 0;
+  let lastSlow: number | undefined;
+  for (let i = 0; i < byTick.length; i++) {
+    for (const x of byTick[i]!) {
+      if (x.ms > limit) {
+        slow += x.rps;
+        lastSlow = i;
+      }
+    }
+    if (slow > (1 - p) * total) return i;
   }
-  return undefined;
+  return lastSlow;
+}
+
+/**
+ * Un objectif de latence et les réponses qu'il juge : le général couvre tous les types qui
+ * n'ont pas le leur (`Wave.sla.maxP95LatencyMsByKind`).
+ */
+export interface LatencyObjective {
+  /** Absent : l'objectif général. */
+  kind?: RequestKind;
+  limitMs: number;
+}
+
+export function latencyObjectives(sla: Wave['sla']): LatencyObjective[] {
+  const own = Object.entries(sla.maxP95LatencyMsByKind ?? {}) as [RequestKind, number][];
+  return [{ limitMs: sla.maxP95LatencyMs }, ...own.map(([kind, limitMs]) => ({ kind, limitMs }))];
+}
+
+/** Les réponses qu'un objectif juge. */
+export function judgedBy(objective: LatencyObjective, sla: Wave['sla']): (p: LatencyPoint) => boolean {
+  if (objective.kind !== undefined) return (p) => p.kind === objective.kind;
+  const own = sla.maxP95LatencyMsByKind ?? {};
+  return (p) => own[p.kind] === undefined;
+}
+
+/** Un objectif jugé sur toute la vague : son p95, et le tick où il est perdu s'il l'est. */
+export interface ObjectiveVerdict {
+  objective: LatencyObjective;
+  p95Ms: number;
+  breachTick?: number;
+}
+
+export function judgeLatency(byTick: readonly (readonly LatencyPoint[])[], sla: Wave['sla']): ObjectiveVerdict[] {
+  return latencyObjectives(sla).map((objective) => {
+    const pick = judgedBy(objective, sla);
+    const ticks = byTick.map((ps) => ps.filter(pick));
+    const p95Ms = weightedPercentile(ticks.flat(), P95);
+    const breach = breachTick(ticks, P95, objective.limitMs, p95Ms > objective.limitMs);
+    return { objective, p95Ms, ...(breach !== undefined ? { breachTick: breach } : {}) };
+  });
+}
+
+/** Ce qu'un tick montre d'un objectif : son p95, ses réponses, et celles au-delà de la limite. */
+export function tickLatencyOf(points: readonly LatencyPoint[], objective: LatencyObjective, sla: Wave['sla']): TickLatency {
+  const judged = points.filter(judgedBy(objective, sla));
+  return {
+    p95Ms: weightedPercentile(judged, P95),
+    answeredRps: judged.reduce((a, p) => a + p.rps, 0),
+    slowRps: judged.reduce((a, p) => a + (p.ms > objective.limitMs ? p.rps : 0), 0),
+  };
 }
