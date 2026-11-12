@@ -106,7 +106,8 @@ export const urlShortener: Scenario = {
         { lb: 1, scaling: 3, rateLimit: 3, cache: 1 },
         { lb: 1, scaling: 3, rateLimit: 4, cache: 1 },
         { cdn: 1, lb: 1, scaling: 1, rateLimit: 3, cache: 1 },
-        { lb: 1, scaling: 1, autoscaling: 3, rateLimit: 3, cache: 1 },
+        // Plus d'autoscaling ici depuis M9b : sur un trafic qui ne retombe pas, l'instance à la
+        // demande, plus chère, coûte plus que l'instance fixe qu'elle remplace.
       ],
       conceptRef: 'Rate Limiting',
     },

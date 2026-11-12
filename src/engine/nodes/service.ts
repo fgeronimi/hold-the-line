@@ -1,19 +1,23 @@
 import { syncWait } from '../circuits.ts';
 import { mergeFlows, sumRps, work, type Flow } from '../flow.ts';
-import { timedOut } from '../retries.ts';
+import { retryingShare, timedOut } from '../retries.ts';
 import { REQUEST_KINDS, type ArchNode, type ComponentDef } from '../types.ts';
-import { withEffect } from '../upgrades.ts';
+import { instancesOf, withEffect } from '../upgrades.ts';
 import { instancesNow, type Now, type World } from '../world.ts';
 import { allForwarded, deferExcess, fits, ratio, serveWithin, splitQueued, type NodeOutcome } from './common.ts';
 
 export function processService(node: ArchNode, def: ComponentDef, incoming: Flow, w: World, now: Now): NodeOutcome {
   const base = instancesNow(w, now.incidents, node);
   const auto = autoscale(node, def, base, w, now.ledger.tick);
-  const instances = base + (auto?.active ?? 0);
+  // Une panne retire d'abord des instances fixes, puis des instances à la demande (M2) : un
+  // déploiement raté touche aussi les neuves, qui démarrent avec la même version cassée. Celles
+  // que l'autoscaler lance pendant la panne n'y échappent donc pas, et ne servent qu'après.
+  const autoDown = Math.max(0, now.incidents.down(node.type) - instancesOf(w.upgrades.get(node.id)!));
+  const instances = base + Math.max(0, (auto?.active ?? 0) - autoDown);
   const capacity = def.capacity * instances;
   const { direct, queued } = splitQueued(incoming);
   const own = pressure(node.id, def, direct, instances, w, now);
-  let passed = serveWithin(node.id, direct, timedOut(own.load, capacity, w.timeouts), capacity, now.ledger);
+  let passed = serveWithin(node.id, direct, timedOut(own.load, capacity, retryingShare(direct, def, w.retrying)), capacity, now.ledger);
   let taken = own;
   if (queued.size > 0) {
     // Les messages d'une file passent après le trafic direct et prennent ce qu'il laisse ; ils

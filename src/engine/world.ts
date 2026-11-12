@@ -25,10 +25,11 @@ export interface World {
   /** Services qui doivent recevoir chaque événement : ce qui leur parvient compte comme livré. */
   consumers: Set<string>;
   /**
-   * Les clients relancent (S19) : un serveur saturé ne rejette plus vite, il fait attendre
-   * jusqu'au délai du client, et travaille encore pour des requêtes déjà abandonnées.
+   * Sources dont les clients relancent (S19) : un nœud saturé ne leur rejette plus vite, il
+   * les fait attendre jusqu'à leur délai, et travaille encore pour des requêtes déjà
+   * abandonnées. Seule la part de son travail venue d'elles s'effondre ainsi (M10).
    */
-  timeouts: boolean;
+  retrying: ReadonlySet<string>;
   backlogs: Map<string, Flow>;
   /** Messages rendus à chaque file pendant le tick, remis dans son arriéré à la fin du tick (M1). */
   requeued: Map<string, Flow>;

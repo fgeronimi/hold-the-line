@@ -1,5 +1,5 @@
 import { addStream, type Flow } from '../flow.ts';
-import { fail } from '../ledger.ts';
+import { failStream } from '../ledger.ts';
 import { SYNC_KINDS, type ArchNode, type ComponentDef } from '../types.ts';
 import { withEffect } from '../upgrades.ts';
 import { instancesNow, type Now, type World } from '../world.ts';
@@ -39,25 +39,19 @@ function applyRateLimit(nodeId: string, flow: Flow, limitPerClient: number, w: W
       keepShare.set(sourceId, 1);
       continue;
     }
-    const rejected = rps - allowed;
     keepShare.set(sourceId, allowed / rps);
-    if (src?.abusive) {
-      ctx.shed.value += rejected;
-      ctx.nodeShed.set(nodeId, (ctx.nodeShed.get(nodeId) ?? 0) + rejected);
-    }
-    else fail(ctx, nodeId, 'rate-limited', rejected);
-    ctx.events.push({ type: 'rate-limited', tick: ctx.tick, node: nodeId, source: sourceId, rejectedRps: rejected });
+    ctx.events.push({ type: 'rate-limited', tick: ctx.tick, node: nodeId, source: sourceId, rejectedRps: rps - allowed });
   }
   for (const s of flow.values()) {
     const keep = keepShare.get(s.source) ?? 1;
     addStream(out, { ...s, rps: s.rps * keep });
     // L'async suit le sort de sa requête (C5) : écarté avec un abusif, en échec avec un client légitime.
-    const lost = SYNC_KINDS.includes(s.kind) ? 0 : s.rps * (1 - keep);
+    const lost = s.rps * (1 - keep);
     if (lost <= 0) continue;
     if (w.sourcesById.get(s.source)?.abusive) {
       ctx.shed.value += lost;
       ctx.nodeShed.set(nodeId, (ctx.nodeShed.get(nodeId) ?? 0) + lost);
-    } else fail(ctx, nodeId, 'rate-limited', lost, s.duplicate ? 0 : lost);
+    } else failStream(ctx, nodeId, 'rate-limited', s, lost);
   }
   return out;
 }

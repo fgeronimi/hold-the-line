@@ -1,5 +1,5 @@
-import { addStream, filterFlow, isEvent, scaleFlow, sumRps, work, type Flow, type Stream } from '../flow.ts';
-import { fail, tally, type Ledger } from '../ledger.ts';
+import { addStream, filterFlow, scaleFlow, work, type Flow, type Stream } from '../flow.ts';
+import { failFlow, tally, type Ledger } from '../ledger.ts';
 import type { ComponentDef, RequestKind } from '../types.ts';
 import type { World } from '../world.ts';
 
@@ -33,13 +33,12 @@ export function allForwarded(): Partial<Record<RequestKind, number>> {
 export function serveWithin(nodeId: string, flow: Flow, demand: number, capacity: number, ctx: Ledger): Flow {
   if (demand <= capacity || demand === 0) return flow;
   const servedShare = capacity / demand;
-  const lostShare = 1 - servedShare;
-  fail(ctx, nodeId, 'saturation', sumRps(flow) * lostShare, sumRps(flow, isEvent) * lostShare);
+  failFlow(ctx, nodeId, 'saturation', flow, 1 - servedShare);
   return scaleFlow(flow, servedShare);
 }
 
 export function failAll(nodeId: string, flow: Flow, ctx: Ledger): Flow {
-  fail(ctx, nodeId, 'saturation', sumRps(flow), sumRps(flow, isEvent));
+  failFlow(ctx, nodeId, 'saturation', flow);
   return new Map();
 }
 

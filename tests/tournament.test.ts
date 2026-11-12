@@ -23,14 +23,13 @@ describe('la billetterie du tournoi', () => {
   });
 
   // `npm run balance` le vérifie sur tout l'espace ; ici, sur les réponses attendues elles-mêmes.
-  // Limité à la finale : depuis la réponse 3 de la vague 1 (backoff + autoscaling), la vague 2
-  // n'a pas de réponse atteignable, défaut connu que l'outillage d'équilibrage signale.
-  it('depuis chaque réponse de la vague 3, une réponse de la finale est atteignable avec sa migration', () => {
-    const final = wave('final-joust');
-    for (const [k, previous] of answersOf(tournament.id, 2).entries()) {
-      const reachable = answersOf(tournament.id, 3).some((arch) => simulateWave(arch, final, catalog, previous).won);
-      expect(reachable, `réponse ${k + 1} de split-registry`).toBe(true);
-    }
+  it('depuis chaque réponse d’une vague, une réponse de la suivante est atteignable avec sa migration', () => {
+    tournament.waves.slice(1).forEach((w, i) => {
+      for (const [k, previous] of answersOf(tournament.id, i).entries()) {
+        const reachable = answersOf(tournament.id, i + 1).some((arch) => simulateWave(arch, w, catalog, previous).won);
+        expect(reachable, `${w.id}, depuis la réponse ${k + 1} de ${tournament.waves[i]!.id}`).toBe(true);
+      }
+    });
   });
 
   it('chaque vague est perdue sans sa réponse', () => {

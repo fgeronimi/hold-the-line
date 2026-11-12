@@ -95,7 +95,12 @@ export type UpgradeEffect =
   /** File : `perLevel` messages de plus avant de déborder, par niveau. */
   | { type: 'retention'; perLevel: number }
   /** Base : les lectures qui doivent être à jour vont au primaire, jamais aux réplicas (S21). */
-  | { type: 'leaderReads' };
+  | { type: 'leaderReads' }
+  /**
+   * Load balancer : au-delà de ce que les serveurs derrière lui peuvent servir ce tick, il
+   * rejette tout de suite l'excédent au lieu de le laisser entrer (délestage, S22).
+   */
+  | { type: 'loadShedding' };
 
 /**
  * Ce que coûte une baisse de niveau (décision E2) :
@@ -296,7 +301,9 @@ export type FailureReason =
   /** Appel coupé par un circuit breaker ouvert : échec rapide, sans bloquer le serveur. */
   | 'circuit-open'
   /** Lecture d'une donnée à jour servie périmée par un réplica coupé du primaire. */
-  | 'stale-read';
+  | 'stale-read'
+  /** Requête rejetée d'emblée par le délestage du load balancer : un vrai échec, que le client peut relancer. */
+  | 'load-shed';
 
 export type SimEvent =
   | { type: 'invalid'; message: string }

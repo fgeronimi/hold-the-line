@@ -1,4 +1,5 @@
-import type { FailureReason, NodeTick, SimEvent } from './types.ts';
+import { isEvent, type Flow, type Stream } from './flow.ts';
+import type { FailureReason, NodeTick, RequestKind, SimEvent } from './types.ts';
 
 /** Ce que le rendu doit montrer et que les échecs confondent, par nœud et par tick. */
 export interface Tally {
@@ -25,7 +26,16 @@ export interface Ledger {
   shed: { value: number };
   /** Cumul de la vague : événements async en échec, et copies arrivées au bout de leur chemin. */
   asyncTally: { failed: number; delivered: number };
+  /**
+   * Échecs du tick que le client voit, par source et par type (M3) : chaque source ne relance
+   * que les siens. Le reste n'en est pas : un doublon, un événement perdu après la réponse,
+   * une lecture périmée, une copie non livrée, un message de file.
+   */
+  clientFailed: Map<string, Record<RequestKind, number>>;
 }
+
+/** Raisons d'échec qui reviennent au client sous forme d'erreur : il peut relancer. */
+const CLIENT_VISIBLE: ReadonlySet<FailureReason> = new Set(['saturation', 'no-route', 'rate-limited', 'circuit-open', 'load-shed']);
 
 export function noFailures(): Record<FailureReason, number> {
   return {
@@ -39,6 +49,7 @@ export function noFailures(): Record<FailureReason, number> {
     undelivered: 0,
     'circuit-open': 0,
     'stale-read': 0,
+    'load-shed': 0,
   };
 }
 
@@ -52,6 +63,21 @@ export function fail(ctx: Ledger, nodeId: string, reason: FailureReason, rps: nu
   ctx.failures[reason] += rps;
   ctx.nodeFailed.set(nodeId, (ctx.nodeFailed.get(nodeId) ?? 0) + rps);
   ctx.asyncTally.failed += events;
+}
+
+/** L'échec de `rps` d'un flux élémentaire, attribué à sa source quand le client le voit. */
+export function failStream(ctx: Ledger, nodeId: string, reason: FailureReason, s: Stream, rps: number): void {
+  if (rps <= 0) return;
+  fail(ctx, nodeId, reason, rps, isEvent(s) ? rps : 0);
+  if (!CLIENT_VISIBLE.has(reason) || s.duplicate || s.queue !== undefined) return;
+  const bySource = ctx.clientFailed.get(s.source) ?? { read: 0, write: 0, async: 0 };
+  bySource[s.kind] += rps;
+  ctx.clientFailed.set(s.source, bySource);
+}
+
+/** La part `share` de chaque flux élémentaire de `flow` échoue. */
+export function failFlow(ctx: Ledger, nodeId: string, reason: FailureReason, flow: Flow, share = 1): void {
+  for (const s of flow.values()) failStream(ctx, nodeId, reason, s, s.rps * share);
 }
 
 export function tally(ctx: Ledger, nodeId: string, key: keyof Tally, rps: number): void {

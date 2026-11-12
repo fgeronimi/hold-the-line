@@ -1,6 +1,6 @@
 import { addStream, filterFlow, work, type Flow, type Stream } from '../flow.ts';
 import { fail, tally } from '../ledger.ts';
-import { timedOut } from '../retries.ts';
+import { retryingShare, timedOut } from '../retries.ts';
 import type { ArchNode, ComponentDef } from '../types.ts';
 import { hasEffect, withEffect } from '../upgrades.ts';
 import { instancesNow, type Now, type World } from '../world.ts';
@@ -23,7 +23,7 @@ export function processDatabase(node: ArchNode, def: ComponentDef, incoming: Flo
   const readFlow = filterFlow(direct, isRead);
 
   const writeDemand = work(writeFlow, def);
-  const servedWrites = serveWithin(node.id, writeFlow, timedOut(writeDemand, primary, w.timeouts), primary, ctx);
+  const servedWrites = serveWithin(node.id, writeFlow, timedOut(writeDemand, primary, retryingShare(writeFlow, def, w.retrying)), primary, ctx);
   const primaryLeft = Math.max(0, primary - Math.min(writeDemand, primary));
 
   const readDemand = work(readFlow, def);
@@ -39,14 +39,14 @@ export function processDatabase(node: ArchNode, def: ComponentDef, incoming: Flo
     const critical = filterFlow(readFlow, consistent);
     const others = filterFlow(readFlow, (s) => !consistent(s));
     const criticalDemand = work(critical, def);
-    for (const s of serveWithin(node.id, critical, timedOut(criticalDemand, primaryLeft, w.timeouts), primaryLeft, ctx).values()) addStream(passed, s);
+    for (const s of serveWithin(node.id, critical, timedOut(criticalDemand, primaryLeft, retryingShare(critical, def, w.retrying)), primaryLeft, ctx).values()) addStream(passed, s);
     const left = Math.max(0, primaryLeft - Math.min(criticalDemand, primaryLeft)) + replicaCapacity;
-    const served = left > 0 ? serveWithin(node.id, others, timedOut(work(others, def), left, w.timeouts), left, ctx) : failAll(node.id, others, ctx);
+    const served = left > 0 ? serveWithin(node.id, others, timedOut(work(others, def), left, retryingShare(others, def, w.retrying)), left, ctx) : failAll(node.id, others, ctx);
     for (const s of served.values()) addStream(passed, s);
   } else {
     const servedReads =
       readCapacity > 0
-        ? serveWithin(node.id, readFlow, timedOut(readDemand, readCapacity, w.timeouts), readCapacity, ctx)
+        ? serveWithin(node.id, readFlow, timedOut(readDemand, readCapacity, retryingShare(readFlow, def, w.retrying)), readCapacity, ctx)
         : failAll(node.id, readFlow, ctx);
     // Les lectures se répartissent selon la capacité : la part servie par des réplicas
     // coupés du primaire est périmée, un échec pour qui exige une donnée à jour.

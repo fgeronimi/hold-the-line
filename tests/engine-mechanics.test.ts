@@ -252,19 +252,38 @@ describe('incidents de cache et d’instances', () => {
       expect(r.ticks[2]!.nodes.a!.latencyMs).toBeCloseTo(200, 9);
     });
 
-    it('fige : les instances d’autoscaling ne tombent pas avec les autres (B1)', () => {
+    const auto = (upgrades: Record<string, number>) =>
+      arch([n('s', 'src'), n('lb', 'lb'), n('a', 'app', upgrades), n('d', 'db')], [['s', 'lb'], ['lb', 'a'], ['a', 'd']]);
+
+    it('une panne de tout le type éteint aussi les instances d’autoscaling, neuves comprises (M2, B1)', () => {
       // 80 lectures à 50 % de charge cible : une instance demandée au tick 0, en service au 2.
-      // La panne (ticks 4 et 5) éteint la seule instance fixe ; l'instance ajoutée continue
-      // de servir les 80 lectures, et l'autoscaler, qui calcule contre une base à 0, en
-      // redemande une, prête au tick 6, puis rendue aussitôt.
-      // À changer par M2 (docs/revue-et-plan.md) : la panne touche aussi les instances
-      // ajoutées : instances 0 aux ticks 4 et 5, et les 80 lectures y échouent.
-      const auto = arch([n('s', 'src'), n('lb', 'lb'), n('a', 'app', { auto: 3 }), n('d', 'db')], [['s', 'lb'], ['lb', 'a'], ['a', 'd']]);
-      const r = simulateWave(auto, wave([users({ read: 80 })], { incidents: [incident('app', 4, 6, { type: 'instance-down', count: 5 })] }), catalog);
-      expect(r.ticks.map((t) => t.nodes.a!.instances)).toEqual([1, 1, 2, 2, 1, 1, 3, 2, 2, 2]);
-      expect(r.ticks[4]!.nodes.a!.down).toBe(1);
-      expect(r.ticks[4]!.failed).toBe(0);
-      expect(r.failed).toBe(0);
+      // La panne (ticks 4 et 5) éteint l'instance fixe puis l'instance ajoutée : les 80 lectures
+      // échouent. L'autoscaler, qui calcule contre une base à 0, en demande une de plus au
+      // tick 4 ; prête au tick 6, après la panne, elle sert, puis est rendue au tick 7.
+      const r = simulateWave(auto({ auto: 3 }), wave([users({ read: 80 })], { incidents: [incident('app', 4, 6, { type: 'instance-down', count: 5 })] }), catalog);
+      expect(r.ticks.map((t) => t.nodes.a!.instances)).toEqual([1, 1, 2, 2, 0, 0, 3, 2, 2, 2]);
+      expect(r.ticks[4]!.nodes.a!.down).toBe(2);
+      expect(r.ticks[4]!.failed).toBe(80);
+      expect(r.failed).toBe(160);
+    });
+
+    it('une instance lancée pendant une panne de tout le type ne sert qu’après elle (M2)', () => {
+      // Panne des ticks 2 à 6 : l'instance demandée au tick 0 est prête au tick 2, en pleine
+      // panne, et ne sert pas ; celle demandée au tick 2 (prête au 4) non plus.
+      const r = simulateWave(auto({ auto: 3 }), wave([users({ read: 80 })], { incidents: [incident('app', 2, 6, { type: 'instance-down', count: 5 })] }), catalog);
+      expect(r.ticks.slice(2, 6).map((t) => t.nodes.a!.instances)).toEqual([0, 0, 0, 0]);
+      expect(r.ticks[6]!.nodes.a!.instances).toBeGreaterThan(1);
+      expect(r.ticks.slice(2, 6).every((t) => t.failed === 80)).toBe(true);
+    });
+
+    it('une panne partielle retire d’abord des instances fixes, puis à la demande (M2)', () => {
+      // 2 instances fixes et une à la demande (180 lectures, 50 % de cible : 4 voulues, plafond 1).
+      // Deux tombent : les deux fixes ; l'instance à la demande sert seule.
+      const r = simulateWave(auto({ scale: 1, auto: 1 }), wave([users({ read: 180 })], { incidents: [incident('app', 4, 6, { type: 'instance-down', count: 2 })] }), catalog);
+      expect(r.ticks[3]!.nodes.a!.instances).toBe(3);
+      expect(r.ticks[4]!.nodes.a!).toMatchObject({ instances: 1, down: 2 });
+      const three = simulateWave(auto({ scale: 1, auto: 1 }), wave([users({ read: 180 })], { incidents: [incident('app', 4, 6, { type: 'instance-down', count: 3 })] }), catalog);
+      expect(three.ticks[4]!.nodes.a!).toMatchObject({ instances: 0, down: 3 });
     });
   });
 });
@@ -330,45 +349,87 @@ describe('relances des clients (S19)', () => {
     expect(spread.failed).toBe(25);
   });
 
-  it('fige : une écriture relancée ne réémet pas son événement async (B2)', () => {
-    // 20 écritures et leurs 20 événements échouent au tick 2. Seules les écritures reviennent :
-    // tick 3 = 20 + 20 écritures et 20 événements neufs. Les 20 événements sont perdus.
-    // À changer par M3 (docs/revue-et-plan.md) : l'événement suit la relance de son écriture :
-    // ticks[3].offered = 80 (20 événements relancés de plus) et r.failed = 0.
+  it('une écriture relancée réémet son événement async (M10, B2)', () => {
+    // 20 écritures et leurs 20 événements échouent au tick 2 ; les deux reviennent au tick 3 :
+    // 20 + 20 écritures, 20 + 20 événements. Rien n'est perdu.
     const r = simulateWave(direct(), wave([retrying({ write: 20, async: 20 })], { incidents: [outage(2, 3)] }), catalog);
-    expect(r.ticks[3]!.retries).toBe(20);
-    expect(r.ticks[3]!.offered).toBe(60);
-    expect(r.ticks[3]!.links['a→p']!.async).toBe(20);
-    expect(r.failuresByReason.saturation).toBe(40);
-    expect(r.failed).toBe(20);
-  });
-
-  it('fige : les échecs d’une source sans relance sont relancés par celle qui relance (B3)', () => {
-    // Partenaires sans relance et clients à 3 relances, 20 lectures chacun : 40 échecs au
-    // tick 2, tous attribués aux clients (40 ≤ 3 × 20), qui en relancent 40.
-    // À changer par M3 (docs/revue-et-plan.md) : relances par source : ticks[3].retries = 20,
-    // et les 20 échecs des partenaires restent : r.failed = 20.
-    const partners: TrafficSource = { id: 'partners', clients: 10, rps: { read: 20 } };
-    const r = simulateWave(appToDb(), wave([partners, retrying({ read: 20 })], { incidents: [outage(2, 3)] }), catalog);
     expect(r.ticks[3]!.retries).toBe(40);
+    expect(r.ticks[3]!.offered).toBe(80);
+    expect(r.ticks[3]!.links['a→p']!.async).toBe(40);
+    expect(r.failuresByReason.saturation).toBe(40);
     expect(r.failed).toBe(0);
   });
 
-  it('fige : un doublon traité deux fois est relancé comme un échec synchrone', () => {
-    // Les doublons échouent sans compter comme événements (fail sans `events`), donc
-    // simulate.ts:430 les range dans les échecs synchrones : 10 doublons par tick reviennent
-    // en lectures au tick suivant, et 90 des 100 doublons disparaissent du taux d'échec.
-    // À trancher (hors docs/revue-et-plan.md, voisin de M3) : un doublon n'est pas une erreur
-    // que le client voit ; attendu : aucune relance, r.failed = 100.
+  it('un événement qui échoue seul, sa requête servie, n’est pas relancé (M10)', () => {
+    // Le prestataire ferme aux ticks 2 et 3 : les écritures passent, seuls les événements
+    // échouent. Le client a eu sa réponse : il ne relance rien.
+    const r = simulateWave(direct(), wave([retrying({ write: 20, async: 20 })], { incidents: [closed] }), catalog);
+    expect(r.ticks.every((t) => (t.retries ?? 0) === 0)).toBe(true);
+    expect(r.failed).toBe(60);
+  });
+
+  it('chaque source ne relance que ses propres échecs (M10, B3)', () => {
+    // Partenaires sans relance et clients à 3 relances, 20 lectures chacun : 40 échecs au
+    // tick 2. Les clients relancent leurs 20 ; les 20 des partenaires restent.
+    const partners: TrafficSource = { id: 'partners', clients: 10, rps: { read: 20 } };
+    const r = simulateWave(appToDb(), wave([partners, retrying({ read: 20 })], { incidents: [outage(2, 3)] }), catalog);
+    expect(r.ticks[3]!.retries).toBe(20);
+    expect(r.failed).toBe(20);
+  });
+
+  it('une relance refait la requête du même type : une lecture perdue revient en lecture (M10)', () => {
+    // La base, seule à saturer, ne fait échouer que des lectures : la relance n'apporte
+    // aucune écriture, quelle que soit la répartition de la source.
+    const wide = arch([n('s', 'src'), n('a', 'app', { scale: 2 }), n('d', 'db')], [['s', 'a'], ['a', 'd']]);
+    const r = simulateWave(wide, wave([retrying({ read: 150, write: 10 })], { ticks: 2, profile: [{ until: 2, factor: 1 }] }), catalog);
+    expect(r.ticks[0]!.nodes.a!.failed).toBe(0);
+    expect(r.ticks[0]!.nodes.d!.failed).toBeGreaterThan(0);
+    expect(r.ticks[1]!.retries).toBeCloseTo(r.ticks[0]!.failed, 9);
+    expect(r.ticks[1]!.links['a→d']!.write).toBeCloseTo(10, 9);
+  });
+
+  it('un doublon traité deux fois n’est pas relancé : ce n’est pas une requête du client (M10, B10)', () => {
     const a = arch(
       [n('s', 'src'), n('a', 'app'), n('d', 'db'), n('q', 'queue'), n('s1', 'svc')],
       [['s', 'a'], ['a', 'd'], ['a', 'q'], ['q', 's1']],
     );
     const dup = incident('queue', 0, 10, { type: 'duplicate-delivery', share: 0.5 });
     const r = simulateWave(a, wave([retrying({ read: 10, async: 20 })], { incidents: [dup] }), catalog);
-    expect(r.ticks[1]!.retries).toBe(10);
+    expect(r.ticks.every((t) => (t.retries ?? 0) === 0)).toBe(true);
     expect(r.failuresByReason.duplicate).toBe(100);
-    expect(r.failed).toBe(10);
+    expect(r.failed).toBe(100);
+  });
+
+  it('une copie non livrée n’est pas relancée (M10, B10)', () => {
+    // Une file partagée entre deux services attendus : chacun n'a que la moitié des
+    // événements, l'autre moitié est « non livrée ». Le client, servi, ne relance rien.
+    const a = arch(
+      [n('s', 'src'), n('a', 'app'), n('d', 'db'), n('q', 'queue'), n('s1', 'svc'), n('s2', 'svc')],
+      [['s', 'a'], ['a', 'd'], ['a', 'q'], ['q', 's1'], ['q', 's2']],
+    );
+    const r = simulateWave(a, wave([retrying({ read: 10, async: 20 })], { consumers: ['s1', 's2'] }), catalog);
+    expect(r.failuresByReason.undelivered).toBeGreaterThan(0);
+    expect(r.ticks.every((t) => (t.retries ?? 0) === 0)).toBe(true);
+  });
+
+  describe('effondrement, seulement pour la part du trafic qui relance (M10, B12)', () => {
+    // Les lectures des clients vont au serveur ; l'async des partenaires, sans relance, au
+    // prestataire directement (1 000 de capacité).
+    const split = arch([n('s', 'src'), n('a', 'app'), n('d', 'db'), n('p', 'provider')], [['s', 'a'], ['s', 'p'], ['a', 'd']]);
+    const partners = (async: number): TrafficSource => ({ id: 'partners', clients: 10, rps: { async } });
+
+    it('un nœud qui ne voit aucun client qui relance rejette vite son excédent', () => {
+      // 1 500 pour 1 000 : 500 échecs, pas l'effondrement (833) des clients qui relancent.
+      const r = simulateWave(split, wave([retrying({ read: 10 }), partners(1500)]), catalog);
+      expect(r.ticks[0]!.nodes.p!.failed).toBeCloseTo(500, 9);
+    });
+
+    it('seule la part du travail venue de clients qui relancent s’effondre', () => {
+      // Moitié relance, moitié pas : charge 1 500 + 0,5 × (1 500² / 1 000 − 1 500) = 1 875 ;
+      // le prestataire sert 1 000 / 1 875 de ce qu'il reçoit, 700 échecs.
+      const r = simulateWave(split, wave([retrying({ read: 10, async: 750 }), partners(750)]), catalog);
+      expect(r.ticks[0]!.nodes.p!.failed).toBeCloseTo(700, 9);
+    });
   });
 });
 

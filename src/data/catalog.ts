@@ -244,7 +244,7 @@ export const catalog: Catalog = {
       complexity: { base: 2, perLevel: 0 },
       requiresUpstream: ['load-balancer'],
       removalCost: 'on-disable',
-      effect: { type: 'autoscaling', instanceCost: 20, startupTicks: 2, targetUtilization: 0.7 },
+      effect: { type: 'autoscaling', instanceCost: 25, startupTicks: 2, targetUtilization: 0.7 },
     },
     'read-replica': {
       id: 'read-replica',

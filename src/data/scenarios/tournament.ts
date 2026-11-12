@@ -48,8 +48,9 @@ export const tournament: Scenario = {
       thriftyCost: 145,
       answers: [
         { backoff: 1, scaling: 1, cache: 1, queue: 1 },
-        { scaling: 1, autoscaling: 3, cache: 1, queue: 1 },
-        { backoff: 1, autoscaling: 3, cache: 1, queue: 1 },
+        // La panne éteint aussi les instances à la demande (M2) : l'autoscaling ne remplace pas
+        // l'instance fixe, il absorbe après coup le surplus des relances.
+        { scaling: 1, autoscaling: 6, cache: 1, queue: 1 },
       ],
       consumers: ['mail'],
       incidents: [{ id: 'bad-deploy', title: 'Un déploiement raté redémarre tous les guichetiers', component: 'app-server', from: 20, until: 23, effect: { type: 'instance-down', count: 10 } }],
@@ -67,10 +68,10 @@ export const tournament: Scenario = {
       budget: 150,
       complexityCap: 11,
       thriftyCost: 145,
-      answers: [
-        { scaling: 1, cache: 1, queue: 1, retention: 1 },
-        { autoscaling: 3, cache: 1, queue: 1, retention: 1 },
-      ],
+      // Un trafic plat : l'autoscaling n'y était qu'une instance permanente déguisée, et depuis
+      // M9b l'instance à la demande coûte plus cher que la fixe. La leçon est la capacité de la file.
+      singleStrategy: true,
+      answers: [{ scaling: 1, cache: 1, queue: 1, retention: 1 }],
       consumers: ['mail'],
       incidents: [{ id: 'mail-down', title: 'Le colombier est fermé', component: 'mail-provider', from: 15, until: 45, effect: { type: 'dependency-down' } }],
     },
@@ -104,15 +105,17 @@ export const tournament: Scenario = {
       profile: flat,
       sources: [fans(2000, 50), seats(300)],
       sla: SLA,
-      budget: 250,
+      // 255 : depuis la réponse autoscaling de la vague 3, garder ses deux réplicas et passer en
+      // instances fixes coûte 250, plus 5 pour couper l'autoscaling (M2, M9b).
+      budget: 255,
       complexityCap: 14,
       thriftyCost: 245,
       answers: [
-        { backoff: 1, scaling: 3, cache: 1, replicas: 1, leaderReads: 1, queue: 1 },
-        { autoscaling: 3, cache: 1, replicas: 1, leaderReads: 1, queue: 1 },
-        // Les deux réplicas de la vague 3 gardés : seule réponse sans retrait de réplica, et
-        // donc sans les 40 de migration qui rendaient la vague ingagnable après une vague 3 gagnée.
-        { autoscaling: 3, cache: 1, replicas: 2, leaderReads: 1, queue: 1 },
+        { backoff: 1, scaling: 2, cache: 1, replicas: 1, leaderReads: 1, queue: 1 },
+        { backoff: 1, scaling: 1, autoscaling: 3, cache: 1, replicas: 1, leaderReads: 1, queue: 1 },
+        // Les deux réplicas de la vague 3 gardés : sans les 40 de migration d'un réplica retiré,
+        // la vague reste gagnable après une vague 3 gagnée (B7).
+        { backoff: 1, scaling: 2, cache: 1, replicas: 2, leaderReads: 1, queue: 1 },
       ],
       consumers: ['mail'],
       incidents: [

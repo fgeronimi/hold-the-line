@@ -1,5 +1,5 @@
 import { addStream, isEvent, type Flow, type Stream } from './flow.ts';
-import { fail, tally } from './ledger.ts';
+import { fail, failStream, tally } from './ledger.ts';
 import type { NodeRoutes, RouteTable } from './routing.ts';
 import { REQUEST_KINDS, type ArchNode, type Catalog, type ComponentDef, type RequestKind, type TickMetrics } from './types.ts';
 import { hasEffect, type NodeUpgrades } from './upgrades.ts';
@@ -150,7 +150,7 @@ export function route(id: string, def: ComponentDef, passed: Flow, w: World, now
 
     const targets = routes.forward[s.kind];
     if (targets.length === 0) {
-      fail(ctx, id, 'no-route', remaining, isEvent(s) ? remaining : 0);
+      failStream(ctx, id, 'no-route', s, remaining);
       const key = `${id}|${s.kind}`;
       if (remaining > 0 && !out.reportedNoRoute.has(key)) {
         out.reportedNoRoute.add(key);
@@ -163,7 +163,7 @@ export function route(id: string, def: ComponentDef, passed: Flow, w: World, now
     const duplicated = s.kind === 'async' && !s.duplicate ? Math.min(1, now.incidents.share(type, 'duplicate-delivery')) : 0;
     for (const to of targets) {
       if (open?.has(to)) {
-        fail(ctx, id, 'circuit-open', each, isEvent(s) ? each : 0);
+        failStream(ctx, id, 'circuit-open', s, each);
         continue;
       }
       send(to, s, each);

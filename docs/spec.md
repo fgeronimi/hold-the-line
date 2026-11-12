@@ -116,7 +116,7 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 | Évolution | S'applique à | Résout | Compromis | Dans le jeu |
 | --- | --- | --- | --- | --- |
 | Scaling horizontal | Serveur, worker | Manque de capacité | Coût par instance ; le serveur exige un load balancer en amont, le worker une file ou un pub/sub (« Worker supplémentaire », M5, X8) | Oui |
-| Autoscaling | Serveur | Pics de trafic | Démarrage en 2 ticks (2 minutes) pendant lesquels des requêtes échouent, +2 de complexité (X2) | Oui |
+| Autoscaling | Serveur | Pics de trafic, surplus après une panne | Démarrage en 2 ticks (2 minutes) pendant lesquels des requêtes échouent, +2 de complexité (X2) ; l'instance à la demande coûte 25 % de plus qu'une fixe (X10) ; une panne la touche comme les autres (M9) | Oui |
 | Réplica en lecture | Base | Lectures saturées | Coût | Oui |
 | Rate limiting | Load balancer | Client abusif | Paliers par client (C1) : trop bas, il coupe des clients légitimes, et les événements de leurs requêtes rejetées avec eux (C6) | Oui |
 | Idempotence | Service métier | Message livré deux fois | Coût et complexité, les clés vivent dans le service (S5) | Oui |
@@ -169,7 +169,9 @@ elle compte lectures, écritures et événements async, sauf l'async qui passe p
 (S10). Un événement traité en direct compte entier, pas dilué dans les lectures (S17), et
 les lectures qui doivent être à jour comptent à part dès qu'elles pèsent plus de 5 % (S21).
 Une requête échouée que le client relance n'est pas un échec : sa relance compte à sa
-place (S19).
+place (S19). Chaque source ne relance que ses propres échecs, du même type, et une requête
+relancée réémet son événement ; un doublon, une copie non livrée ou une lecture périmée ne
+se relancent pas (M10).
 
 **Trois étoiles par vague** (E7) : tenir la vague, la tenir du premier coup, rester
 économe (facture sous le seuil de la stratégie gagnante la moins chère).
@@ -190,7 +192,7 @@ une vague à réponse unique le déclare dans ses données.
 | 1. Lancement | 100 req/s, 90 % de lectures | Serveur + base (tutoriel, réponse unique) |
 | 2. Les lectures explosent | 900 lectures/s ; le cache redémarre à froid | Cache, réplica, ou CDN (X9) |
 | 3. Campagne marketing | Pic à 5 fois le trafic, en rampe ; une instance tombe | CDN + cache, CDN + réplica, scaling + cache, scaling + autoscaling + cache |
-| 4. Un client trop gourmand | Un scraper, et des partenaires légitimes qui appellent une API non cachable en bordure (X7) | Rate limiting au bon palier, avec scaling, autoscaling ou CDN (une instance de plus derrière lui) |
+| 4. Un client trop gourmand | Un scraper, et des partenaires légitimes qui appellent une API non cachable en bordure (X7) | Rate limiting au bon palier, avec scaling ou CDN (une instance de plus derrière lui) ; sur ce trafic qui ne retombe pas, l'autoscaling coûte trop (X10) |
 | 5. Compter les clics | Chaque redirection émet un événement de clic ; le worker tombe dix minutes | File de messages et worker (réponse unique) ; la file garde les clics et se vide au rythme de la base ; le CDN y perd les clics servis en bordure |
 
 ### Le grand marché : la prise de commande d'une boutique
@@ -227,10 +229,10 @@ votre application, vous en écrivez le code, c'est pourquoi vous pouvez y régle
 
 | Vague | Information | Réponse attendue |
 | --- | --- | --- |
-| 1. L'ouverture des ventes | Un déploiement raté arrête tous les serveurs 3 minutes | Backoff sur les clients, ou autoscaling ; sinon la tempête dure jusqu'à la fin |
+| 1. L'ouverture des ventes | Un déploiement raté arrête tous les serveurs 3 minutes, instances à la demande comprises (M9) | Backoff sur les clients, ou autoscaling qui absorbe le surplus après la panne ; sinon la tempête dure jusqu'à la fin |
 | 2. Les pigeons restent au colombier | Le prestataire d'e-mail tombe une demi-heure (30 minutes), 8 000 alertes/s | Une file avec de la rétention |
 | 3. Le registre coupé en deux | Lectures non cachables et places restantes, partition des réplicas (un quart d'heure) | Réplicas, et lectures critiques sur le primaire |
-| 4. La joute finale | Les trois incidents | Backoff et scaling, ou autoscaling ; réplica et lecture sur le primaire |
+| 4. La joute finale | Les trois incidents | Backoff, et scaling ou autoscaling ; réplica et lecture sur le primaire |
 
 Les budgets, plafonds et seuils de chaque vague sont dans `docs/decisions.md` et verrouillés
 par les tests.
@@ -259,6 +261,10 @@ et déterministe, séparée de l'affichage.
 - **Trafic** : il monte au départ et retombe à la fin de chaque vague (S11), avec un profil
   propre à la vague (rampe de la campagne, X4).
 - **Pas d'aléa, donc pas de graine** (M2) : la même vague donne toujours le même résultat.
+- **Clients qui relancent** (S19, M10) : un nœud saturé travaille pour des requêtes déjà
+  abandonnées, mais seulement pour la part de son trafic venue de ces clients.
+- **Pannes d'instances** (X5, M9) : une panne retire d'abord des instances fixes, puis des
+  instances à la demande, y compris celles qui démarrent pendant la panne.
 - **Cascade par les fils d'exécution** (S14) : un serveur a des fils par instance, et un
   appel direct en garde un le temps de la réponse de l'aval (loi de Little). Une
   dépendance lente les épuise et le serveur sature pour tout le monde. Il n'y a pas

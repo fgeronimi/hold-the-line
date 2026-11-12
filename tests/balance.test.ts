@@ -167,18 +167,18 @@ describe('les réponses attendues (Wave.answers)', () => {
 
 describe('le contrôle d’enchaînement', () => {
   // Les deux dernières vagues du tournoi dans un espace réduit, qui contient leurs réponses.
-  const small = narrowed(tournamentSpace, { scaling: [0, 1, 3], retention: [0], replicas: [0, 1, 2] });
+  const small = narrowed(tournamentSpace, { scaling: [0, 1, 2, 3], retention: [0], replicas: [0, 1, 2] });
   const lastTwo = (finalBudget: number): typeof tournament => ({
     ...tournament,
     waves: tournament.waves.slice(2).map((w) => (w.id === 'final-joust' ? { ...w, budget: finalBudget } : w)),
   });
 
   it('trouve une gagnante depuis chaque réponse de la vague précédente', () => {
-    const { chaining } = runMassSim(lastTwo(250), catalog, small, scoring);
+    const { chaining } = runMassSim(lastTwo(255), catalog, small, scoring);
     expect(chaining).toHaveLength(1);
     expect(chaining[0]!.starts.map((s) => s.winners > 0)).toEqual([true, true]);
     const cheapest = chaining[0]!.starts[0]!.cheapest!;
-    expect(cheapest.cost).toBeLessThanOrEqual(250);
+    expect(cheapest.cost).toBeLessThanOrEqual(255);
     expect(cheapest.migration).toBeGreaterThan(0);
   });
 
@@ -193,7 +193,7 @@ describe('le contrôle d’enchaînement', () => {
   });
 
   it('une impasse (un seul départ sans gagnante) est listée sans KO', () => {
-        const scenario = lastTwo(250);
+        const scenario = lastTwo(255);
     const report = runMassSim(scenario, catalog, small, scoring);
     const [first, second] = report.chaining[0]!.starts;
     // Mise en forme seule : le départ 1 est rapporté sans gagnante, le départ 2 en garde.
@@ -206,7 +206,7 @@ describe('le contrôle d’enchaînement', () => {
   });
 
   it('ne rejoue pas les vagues sans réponse déclarée en amont', () => {
-    const noAnswers = { ...tournament, waves: lastTwo(250).waves.map(({ answers: _, ...w }) => w) };
+    const noAnswers = { ...tournament, waves: lastTwo(255).waves.map(({ answers: _, ...w }) => w) };
     expect(runMassSim(noAnswers, catalog, small, scoring).chaining).toEqual([]);
   });
 });

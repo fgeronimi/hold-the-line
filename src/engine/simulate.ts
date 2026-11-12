@@ -8,7 +8,7 @@ import { lossMessages } from './messages.ts';
 import { factorAt } from './profile.ts';
 import { processNode, type NodeOutcome } from './nodes/index.ts';
 import { settleQueues } from './nodes/queue.ts';
-import { planRetries, retryPlan, syncOf, type RetryPlan } from './retries.ts';
+import { planRetries, retriesAt, retryPlan, sumKinds, type RetryPlan } from './retries.ts';
 import { linkTraffic, messagingRoles, route, type Delivery } from './route.ts';
 import { routeTable } from './routing.ts';
 import type {
@@ -23,7 +23,7 @@ import type {
   Wave,
   WaveResult,
 } from './types.ts';
-import { REQUEST_KINDS, SYNC_KINDS } from './types.ts';
+import { REQUEST_KINDS } from './types.ts';
 import { hasEffect, instancesOf, resolveUpgrades } from './upgrades.ts';
 import { validateArchitecture } from './validate.ts';
 import { gauge, invalidResult, lossesFor } from './verdict.ts';
@@ -60,7 +60,7 @@ export function simulateWave(
     roles: new Map(arch.nodes.map((n) => [n.id, messagingRoles(n, nodes, catalog, routes, upgrades)])),
     sourcesById: new Map(wave.sources.map((s) => [s.id, s])),
     consumers: new Set(wave.consumers ?? []),
-    timeouts: retries.retrying.length > 0,
+    retrying: new Set(retries.retrying.map((s) => s.id)),
     backlogs: new Map(),
     requeued: new Map(),
     autoscalers: new Map(),
@@ -95,12 +95,10 @@ export function simulateWave(
     active = activeAt(wave.incidents, tick);
     for (const i of active) if (!was.has(i.id)) events.push({ type: 'incident-start', tick, incident: i.id });
     for (const id of was) if (!active.some((i) => i.id === id)) events.push({ type: 'incident-end', tick, incident: id });
-    const ledger: Ledger = { tick, failures, nodeFailed: new Map(), nodeShed: new Map(), nodeTally: new Map(), events, shed, asyncTally };
+    const ledger: Ledger = { tick, failures, nodeFailed: new Map(), nodeShed: new Map(), nodeTally: new Map(), events, shed, asyncTally, clientFailed: new Map() };
     const failedBefore = sumFailures(failures);
 
     const { injected, retried } = inject(wave, retries, tick, factor);
-    const asyncFailedBefore = asyncTally.failed;
-    const staleBefore = failures['stale-read'];
     const delivery: Delivery = {
       inbound: new Map<string, Flow>([...nodes.keys()].map((id) => [id, new Map()])),
       routed: new Map(),
@@ -164,11 +162,8 @@ export function simulateWave(
       undeliveredSoFar = Math.max(undeliveredSoFar, missing);
     }
 
-    if (retries.retrying.length > 0) {
-      // Une lecture périmée n'est pas une erreur pour le client : il ne la relance pas.
-      const syncFailed = Math.max(0, sumFailures(failures) - failedBefore - (asyncTally.failed - asyncFailedBefore) - (failures['stale-read'] - staleBefore));
-      planRetries(retries, wave.ticks, tick, factor, syncFailed);
-    }
+    // Chaque source relance ses propres échecs, ceux que le client voit (M10).
+    if (retries.retrying.length > 0) planRetries(retries, wave.ticks, tick, factor, ledger.clientFailed);
 
     const failedNow = sumFailures(failures) - failedBefore;
     const shedNow = Object.values(nodeTicks).reduce((a, n) => a + (n.shed ?? 0), 0);
@@ -233,13 +228,11 @@ function inject(wave: Wave, retries: RetryPlan, tick: number, factor: number): {
   const injected: Flow = new Map();
   let retried = 0;
   for (const src of wave.sources) {
-    // Une relance refait la même requête : elle suit la répartition lectures / écritures de sa source.
-    const again = retries.at.get(src.id)?.[tick] ?? 0;
-    retried += again;
-    const sync = syncOf(src);
+    // Une relance refait la même requête, du même type, avec son événement (M10).
+    const again = retriesAt(retries, src.id, tick);
+    retried += sumKinds(again);
     for (const kind of REQUEST_KINDS) {
-      const share = SYNC_KINDS.includes(kind) && sync > 0 ? (src.rps[kind] ?? 0) / sync : 0;
-      addStream(injected, { kind, source: src.id, batch: 1, rps: (src.rps[kind] ?? 0) * factor + again * share });
+      addStream(injected, { kind, source: src.id, batch: 1, rps: (src.rps[kind] ?? 0) * factor + again[kind] });
     }
   }
   return { injected, retried };
@@ -259,8 +252,9 @@ function nodeTickOf(w: World, now: Now, node: ArchNode, def: ComponentDef, incom
     ...(outcome.instances !== undefined ? { instances: outcome.instances } : {}),
     ...(outcome.starting ? { starting: outcome.starting } : {}),
     ...(ledger.nodeShed.has(id) ? { shed: ledger.nodeShed.get(id)! } : {}),
-    // Une dépendance fermée a toutes ses instances hors service, pas une infinité.
-    ...(down > 0 ? { down: Math.min(down, instancesOf(ups)) } : {}),
+    // Une dépendance fermée a toutes ses instances hors service, pas une infinité ; celles de
+    // l'autoscaling tombent aussi (M2).
+    ...(down > 0 ? { down: Math.min(down, instancesOf(ups) + (w.autoscalers.get(id)?.active ?? 0)) } : {}),
     ...nonZero(ledger.nodeTally.get(id)),
     ...(outcome.threads !== undefined ? { threads: outcome.threads } : {}),
     ...(outcome.blockedBy ? { waitingOn: outcome.blockedBy } : {}),
