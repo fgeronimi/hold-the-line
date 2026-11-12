@@ -5,11 +5,11 @@ const flat = [{ until: TICKS, factor: 1 }];
 /** Le trafic monte au départ et retombe à la fin (décision S11). */
 const RAMP = { up: 8, down: 8 };
 /**
- * Les paiements sont jugés à part (M4) : 30 commandes sur 330 requêtes, et un banquier qui
- * traîne cinq minutes, ne pèseraient pas 5 % des réponses de la vague. Le client qui paie,
- * lui, attend la banque.
+ * Les commandes payées ont leur propre objectif (M15, SC6) : 500 ms, pour un prestataire qui
+ * répond en 300. Payées en direct, elles attendent la banque ; 30 commandes sur 330 requêtes,
+ * et un banquier qui traîne cinq minutes, ne pèseraient pas 5 % des réponses de la vague.
  */
-const SLA = { maxFailureRate: 0.01, maxP95LatencyMs: 60, maxP95LatencyMsByKind: { async: 60 } };
+const SLA = { maxFailureRate: 0.01, maxP95LatencyMs: 60, maxP95LatencyMsByKind: { async: 500 } };
 
 /**
  * Les clients consultent leurs commandes (lectures) et en passent (écritures) ; chaque
@@ -33,7 +33,7 @@ export const resilience: Scenario = {
       id: 'checkout',
       title: 'Le paiement en ligne',
       briefing:
-        'La boutique encaisse : 300 consultations de commandes et 30 commandes par seconde. Chaque commande est écrite en base et payée auprès du prestataire de paiement, déjà en place, qui répond en 30 ms.',
+        'La boutique encaisse : 300 consultations de commandes et 30 commandes par seconde. Chaque commande est écrite en base et payée auprès du prestataire de paiement, déjà en place, qui répond en 300 ms. La commande payée doit être validée en moins de 500 ms ; le reste, en moins de 60 ms.',
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,

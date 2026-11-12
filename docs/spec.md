@@ -104,7 +104,7 @@ incidents que le scénario envoie. Chaque incident a au moins une parade, et cha
 | Pub/sub | Copie chaque événement vers chacun de ses abonnés (S4) | Oui |
 | CDN | Sert les lectures en bordure, devant le load balancer (X1) | Oui |
 | Service métier | Service d'une autre équipe, déjà en place : il termine l'événement lui-même, sans base partagée (S10) | Oui, hors palette |
-| Prestataire de paiement | Dépendance externe, déjà en place : on l'appelle, on ne la dimensionne pas ; elle peut ralentir ou tomber (S13) | Oui, hors palette |
+| Prestataire de paiement | Dépendance externe, déjà en place, qui répond en 300 ms : on l'appelle, on ne la dimensionne pas ; elle peut ralentir ou tomber (S13, S24) | Oui, hors palette |
 | Prestataire d'e-mail | Dépendance externe, déjà en place, avec un quota de messages par seconde, regroupés ou non (S20) | Oui, hors palette |
 | Stockage objet | Fichiers volumineux hors base | Non |
 
@@ -124,7 +124,7 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 | Circuit breaker | Serveur | Dépendance lente ou en panne qui bloque le serveur | Les appels coupés échouent : réponse dégradée (S15) | Oui |
 | Request coalescing | Cache | Ruée vers le cache | Coût et complexité ; ne sert qu'à l'expiration (S15) | Oui |
 | Backoff exponentiel et jitter | Clients (la source) | Tempête de relances | Coût et complexité ; ne sert qu'après une panne ; suppose d'écrire le client ; étale les relances sur 15 minutes (S19, X11) | Oui |
-| Délai d'attente | Serveur | Dépendance lente ou muette qui retient les fils | Le client attend tout le délai, puis l'appel échoue (M12) | Oui |
+| Délai d'attente | Serveur | Dépendance lente ou muette qui retient les fils | Le client attend tout le délai (1 s), puis l'appel échoue (M12, S24) | Oui |
 | Délestage | Load balancer | Tempête de relances, surcharge | Les refus restent des échecs, relancés ; la porte garde 25 % de marge (M11) | Oui |
 | Capacité de la file | File | Débordement pendant une longue panne de l'aval | Coût par niveau ; n'aide pas si les consommateurs ne suivent pas en moyenne (S20) | Oui |
 | Lecture sur le primaire | Base | Lectures périmées pendant une partition | Le primaire porte ces lectures en plus des écritures (S21) | Oui |
@@ -224,7 +224,7 @@ y est payée.
 
 | Vague | Information | Réponse attendue |
 | --- | --- | --- |
-| 1. Le paiement en ligne | Le prestataire répond en 30 ms | L'appeler en direct suffit (réponse unique) |
+| 1. Le paiement en ligne | Le prestataire répond en 300 ms ; la commande payée a 500 ms, le reste 60 ms (SC6) | L'appeler en direct suffit (réponse unique) |
 | 2. Le banquier traîne | Pendant 5 minutes, 4 s par paiement | Circuit breaker, ou une file ; sans eux, la cascade fait tomber tout le serveur |
 | 3. Minuit, tout expire | 750 lectures/s, tout le cache expire d'un coup | Cache + verrou de recalcul, ou un réplica |
 | 4. Le banquier ferme | Le prestataire tombe 25 minutes (25 ticks) | Une file : les paiements attendent et partent à la réouverture |

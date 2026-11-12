@@ -103,7 +103,8 @@ export const catalog: Catalog = {
       prePlaced: true,
     },
     // Le prestataire de paiement d'une banque, hors de la cité : on l'appelle, on ne le
-    // dimensionne pas. Rapide d'habitude, il peut ralentir ou fermer (S13).
+    // dimensionne pas. Il répond en quelques centaines de millisecondes, comme en vrai (SC6),
+    // et peut ralentir ou fermer (S13).
     'payment-provider': {
       id: 'payment-provider',
       behavior: 'service',
@@ -112,7 +113,7 @@ export const catalog: Catalog = {
       cost: 0,
       complexity: 0,
       capacity: 5000,
-      latencyMs: 30,
+      latencyMs: 300,
       workPerRequest: { async: 1 },
       terminalFor: ['async'],
       accepts: ['async'],
@@ -301,7 +302,8 @@ export const catalog: Catalog = {
       removalCost: 'on-disable',
       // La première protection d'un appel direct, et la moins chère : ne pas attendre plus que
       // ce que le client peut attendre lui-même (M12). Le disjoncteur va plus loin : il n'attend plus.
-      effect: { type: 'callTimeout', timeoutMs: 300 },
+      // Une seconde : au-dessus des 300 ms d'un prestataire de paiement normal (SC6).
+      effect: { type: 'callTimeout', timeoutMs: 1000 },
     },
     'request-coalescing': {
       id: 'request-coalescing',

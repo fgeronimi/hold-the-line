@@ -64,6 +64,20 @@ describe('cascade de pannes et circuit breaker', () => {
     expect(r.ticks[during]!.avgLatencyMs).toBeLessThan(60);
   });
 
+  it('la commande payée a son objectif : 500 ms pour un prestataire à 300, 60 ms pour le reste (SC6)', () => {
+    const r = play(checkout(), 'checkout');
+    expect(r.won).toBe(true);
+    expect(r.latencyByKind!.async!.value).toBeGreaterThan(300);
+    expect(r.latencyByKind!.async!.limit).toBe(500);
+  });
+
+  it('le délai d’attente seul arrête la cascade, mais la commande attend tout le délai (M12, SC6)', () => {
+    const r = play(checkout({ timeout: true }), 'slow-banker');
+    expect(r.events.some((e) => e.type === 'threads-exhausted')).toBe(false);
+    expect(r.losses).toEqual([{ kind: 'latency', p95Ms: r.latencyByKind!.async!.value, limitMs: 500, requestKind: 'async' }]);
+    expect(r.latencyByKind!.async!.value).toBeGreaterThan(1000);
+  });
+
   it('plus d’instances, c’est plus de fils, mais le client attend toujours la banque', () => {
     const r = play(checkout({ extraInstances: 1 }), 'slow-banker');
     expect(r.events.some((e) => e.type === 'threads-exhausted')).toBe(false);
