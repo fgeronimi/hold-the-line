@@ -47,6 +47,8 @@ export interface FanOutOptions {
   replicas?: number;
   /** Instances en plus du serveur de façade, derrière un load balancer. */
   extraInstances?: number;
+  /** Une file des lettres mortes sur chaque file (S25). */
+  deadLetter?: boolean;
 }
 
 /** Le schéma de référence du marché, toutes variantes de livraison confondues. */
@@ -90,7 +92,8 @@ export function ordering(delivery: Delivery, o: FanOutOptions = {}): Architectur
     nodes.push({ id: 'cache', type: 'cache' });
     links.push(link('app', 'cache'));
   }
-  return { nodes, links };
+  const dlq = o.deadLetter ? 1 : 0;
+  return { nodes: nodes.map((n) => (n.type === 'message-queue' ? { ...n, upgrades: { 'dead-letter-queue': dlq } } : n)), links };
 }
 
 /** Le crieur public annonce chaque commande à trois files, une par service. */

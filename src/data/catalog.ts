@@ -341,6 +341,19 @@ export const catalog: Catalog = {
       removalCost: 'free',
       effect: { type: 'retention', perLevel: 100000 },
     },
+    // Un message que son consommateur échoue toujours à traiter bloquerait la file : on le met
+    // de côté après quelques essais, pour l'examiner plus tard (S25).
+    'dead-letter-queue': {
+      id: 'dead-letter-queue',
+      label: 'File des lettres mortes',
+      techName: 'Dead-letter queue',
+      appliesTo: 'message-queue',
+      maxLevel: 1,
+      cost: { base: 5, perLevel: 0 },
+      complexity: { base: 1, perLevel: 0 },
+      removalCost: 'on-disable',
+      effect: { type: 'deadLetter', maxReceives: 3 },
+    },
     'leader-reads': {
       id: 'leader-reads',
       label: 'Lectures critiques au registre',

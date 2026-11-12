@@ -64,8 +64,31 @@ describe('le grand marché', () => {
     expect(play(M.fannedOut({ idempotence: true, outbox: true }), 'lost-orders').won).toBe(false);
   });
 
-  it('vague 5 — les soldes : tout ce qui précède, plus une instance derrière un load balancer', () => {
-    const answer = { idempotence: true, outbox: true, cache: true, extraInstances: 1 };
+  it('vague 5 — un message empoisonné bloque sa file, sauf derrière une file des lettres mortes (S25)', () => {
+    const blocked = play(M.fannedOut(), 'poison-order');
+    expect(blocked.won).toBe(false);
+    // Rien de ce qui attend derrière le message empoisonné n'arrivera : la file est bloquée pour de bon.
+    expect(blocked.failuresByReason.undelivered).toBeGreaterThan(0);
+    expect(blocked.failuresByReason['dead-lettered']).toBe(0);
+    const held = play(M.fannedOut({ deadLetter: true }), 'poison-order');
+    expect(held.won).toBe(true);
+    expect(held.failuresByReason.undelivered).toBe(0);
+    expect(held.failuresByReason['dead-lettered']).toBeGreaterThan(0);
+    // Mis de côté après trois essais : la file ne prend que quelques minutes de retard.
+    const oldest = Math.max(...held.ticks.map((t) => t.nodes.queue!.backlogAge ?? 0));
+    expect(oldest).toBeLessThan(10);
+    // Une seule file sans parade suffit à perdre : un tiers des copies n'arrive plus.
+    const partial = M.fannedOut({ deadLetter: true });
+    const naked = { ...partial, nodes: partial.nodes.map((n) => (n.id === 'q-stock' ? { ...n, upgrades: {} } : n)) };
+    expect(play(naked, 'poison-order').won).toBe(false);
+    // Sur-dimensionnée, elle dépasse le budget.
+    expect(play(M.fannedOut({ deadLetter: true, idempotence: true, outbox: true, replicas: 1, extraInstances: 1 }), 'poison-order').won).toBe(false);
+  });
+
+  it('vague 6 — les soldes : tout ce qui précède, plus une instance derrière un load balancer', () => {
+    const answer = { idempotence: true, outbox: true, cache: true, replicas: 1, deadLetter: true, extraInstances: 1 };
+    expect(play(M.fannedOut(answer), 'sales').won).toBe(true);
+    expect(play(M.fannedOut({ ...answer, deadLetter: false }), 'sales').won).toBe(false);
     expect(play(M.fannedOut({ ...answer, extraInstances: 0 }), 'sales').won).toBe(false);
     expect(play(M.fannedOut({ ...answer, idempotence: false }), 'sales').won).toBe(false);
     expect(play(M.fannedOut({ ...answer, outbox: false }), 'sales').won).toBe(false);
@@ -92,7 +115,7 @@ describe('le grand marché', () => {
 });
 
 describe('ce que le rendu montre des incidents du marché', () => {
-  const sum = (arch: Architecture, id: string, key: 'duplicates' | 'deduplicated' | 'lost') =>
+  const sum = (arch: Architecture, id: string, key: 'duplicates' | 'deduplicated' | 'lost' | 'poisoned' | 'deadLettered') =>
     play(arch, id).ticks.reduce((a, t) => a + Object.values(t.nodes).reduce((b, n) => b + (n[key] ?? 0), 0), 0);
 
   it('compte les doublons traités deux fois, ou écartés par l’idempotence', () => {
@@ -105,5 +128,13 @@ describe('ce que le rendu montre des incidents du marché', () => {
   it('compte les événements perdus avant publication, sauf avec l’outbox', () => {
     expect(sum(M.fannedOut({ idempotence: true }), 'lost-orders', 'lost')).toBeGreaterThan(0);
     expect(sum(M.fannedOut({ idempotence: true, outbox: true }), 'lost-orders', 'lost')).toBe(0);
+  });
+
+  it('compte les essais ratés sur un message empoisonné, et ceux que la file des lettres mortes met de côté', () => {
+    expect(sum(M.fannedOut(), 'poison-order', 'poisoned')).toBeGreaterThan(0);
+    expect(sum(M.fannedOut(), 'poison-order', 'deadLettered')).toBe(0);
+    expect(sum(M.fannedOut({ deadLetter: true }), 'poison-order', 'deadLettered')).toBeGreaterThan(0);
+    const last = play(M.fannedOut({ deadLetter: true }), 'poison-order').ticks.at(-1)!;
+    expect(last.nodes.queue!.deadLetters).toBeGreaterThan(0);
   });
 });

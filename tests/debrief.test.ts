@@ -22,6 +22,27 @@ describe('analyzeWave', () => {
     expect(finding.tech).toContain('200 ms');
   });
 
+  it('raconte le message empoisonné : la file bloquée sans parade, les lettres mises de côté avec (S25)', async () => {
+    const { market } = await import('../src/data/scenarios/market.ts');
+    const M = await import('../src/data/scenarios/market.archetypes.ts');
+    const poison = market.waves.find((w) => w.id === 'poison-order')!;
+    const tellOf = (arch: Architecture) => analyzeWave(simulateWave(arch, poison, catalog), arch, poison, catalog, fortifiedCity);
+    const concept = 'Message empoisonné, file des lettres mortes';
+
+    const blocked = tellOf(M.fannedOut());
+    expect(blocked.find((f) => f.concept === concept)).toMatchObject({ tone: 'bad' });
+    expect(blocked.find((f) => f.concept === concept)!.remedy).toContain('file des lettres mortes');
+    // Ce qui manque aux services vient du message empoisonné, pas d'un abonnement oublié.
+    expect(blocked.some((f) => f.concept === 'Pub/sub' && f.tone === 'bad')).toBe(false);
+
+    const held = tellOf(M.fannedOut({ deadLetter: true }));
+    const told = held.find((f) => f.concept === concept)!;
+    expect(told.tone).toBe('warn');
+    expect(told.says).toMatch(/\d+ plis attendent/);
+    expect(told.signal).toContain('Taille de la file des lettres mortes');
+    expect(held.find((f) => f.concept === 'Compromis des parades')?.tech).toContain('lettres mortes');
+  });
+
   it('ouvre sur la défaite, puis le lien manquant', () => {
     const findings = analyze(A.noDatabase, 'launch');
     expect(findings[0]).toMatchObject({ tone: 'bad' });

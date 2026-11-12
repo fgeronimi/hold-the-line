@@ -340,6 +340,8 @@ const ARCHETYPES: Record<string, Architecture[]> = {
     M.fannedOut({ idempotence: true, outbox: true }),
     M.fannedOut({ idempotence: true, outbox: true, cache: true, replicas: 2, extraInstances: 2 }),
     M.ordering('pubsub-direct', { idempotence: true, outbox: true }),
+    M.fannedOut({ deadLetter: true }),
+    M.ordering('shared-queue', { deadLetter: true }),
   ],
   resilience: [
     checkout(),

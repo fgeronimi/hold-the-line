@@ -100,6 +100,7 @@ export const fortifiedCity: Theme = {
     'load-shedding': '🚧',
     'queue-retention': '📦',
     'leader-reads': '👑',
+    'dead-letter-queue': '📭',
   },
   hints: {
     place: 'Sire, il manque encore un bâtiment à la cité : {name}.',
@@ -174,8 +175,10 @@ export const fortifiedCity: Theme = {
       'Les annonces se répètent parfois : il arrive qu’une même commande soit criée deux fois. Gare à ne pas la servir deux fois, ni à faire payer deux fois le client.',
     'lost-orders':
       'Les scribes consignent la commande, puis courent l’annoncer. Mais certains tombent en chemin : la commande est au grand livre, et personne n’en a rien su.',
+    'poison-order':
+      'Un bon de commande mal écrit circule, Sire : chaque maître de métier qui le lit s’effondre sur son établi. Le relais de poste, fidèle, le lui rapporte encore et encore, et tant qu’il le garde en tête de sa tournée, il ne livre plus rien d’autre.',
     sales:
-      'Les soldes, Sire ! Toute la ville vient voir où en sont ses commandes, les annonces se répètent et des scribes tombent en chemin. Tout ce que vous avez appris, il faudra le tenir ensemble.',
+      'Les soldes, Sire ! Toute la ville vient voir où en sont ses commandes, les annonces se répètent, des scribes tombent en chemin et des bons mal écrits circulent. Tout ce que vous avez appris, il faudra le tenir ensemble.',
     // Les portes de la cité.
     launch:
       'Sire, le bureau des raccourcis ouvre ses portes. Une centaine de voyageurs par seconde : presque tous demandent leur chemin, quelques-uns déposent un nouveau raccourci. Une tour de scribes et les archives devraient suffire… à condition de les relier.',

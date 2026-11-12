@@ -85,6 +85,10 @@ export const realWorldUpgrades: Record<string, RealWorld> = {
   idempotence: {
     text: 'Obligatoire avec toute file qui livre au moins une fois : les doublons arrivent en temps normal. On garde les clés déjà vues assez longtemps pour couvrir les relivraisons, et on les purge.',
   },
+  'dead-letter-queue': {
+    text: 'Amazon SQS met un message de côté dans la file des lettres mortes après maxReceiveCount réceptions sans suppression (sa redrive policy) : trop bas, une erreur passagère y envoie un message sain ; quelques essais suffisent. On alerte dès qu’un message y tombe, on garde cette file plus longtemps que la file d’origine, et on rejoue ses messages (redrive) une fois la cause corrigée. Le jeu prend trois essais, et une file qui sert dans l’ordre : en vrai, une file standard continue de livrer les autres messages, c’est une file ordonnée (FIFO, partition Kafka) que le message bloque.',
+    source: { label: 'files des lettres mortes Amazon SQS', url: 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html' },
+  },
   outbox: {
     text: 'Une ligne de plus dans la même transaction que la commande, et un relais qui la publie : il faut le faire tourner et surveiller son retard.',
   },

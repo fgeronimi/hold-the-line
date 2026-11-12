@@ -50,7 +50,7 @@ Tout au maximum, marketing-peak : perd (ok) — Budget dépassé : 610 / 170 ; T
 Tout au maximum, noisy-client : perd (ok) — Budget dépassé : 610 / 180 ; Trop complexe : 21 / 10 points
 Tout au maximum, click-tracking : perd (ok) — Budget dépassé : 610 / 225 ; Trop complexe : 21 / 12 points ; SLA rompu : 25.53 % d'échecs (max 1.00 %)
 
-## Prise de commande — 768 architectures × 5 vagues
+## Prise de commande — 1408 architectures × 6 vagues
 [ok] market-open (réponse unique assumée) — 1 stratégie(s) : file
      file                                                1 gagnantes | meilleure : delivery 2 | score 39.8 | coût 95/100 | marges coût 5 %, cx 0 %, échecs 100 %, p95 54 %
 [ok] three-trades (réponse unique assumée) — 1 stratégie(s) : pub/sub
@@ -66,19 +66,70 @@ Tout au maximum, click-tracking : perd (ok) — Budget dépassé : 610 / 225 ; T
        ↳ dominée par « pub/sub + outbox + cache »
      pub/sub + scaling + outbox + réplica                1 gagnantes | meilleure : delivery 4, scaling 1, réplica 1 | score 37.1 | coût 260/260 | marges coût 0 %, cx 11 %, échecs 100 %, p95 38 %
        ↳ dominée par « pub/sub + outbox + réplica »
+     pub/sub + outbox + cache + lettres mortes           1 gagnantes | meilleure : delivery 4 | score 37.0 | coût 220/260 | marges coût 15 %, cx 0 %, échecs 100 %, p95 33 %
+       ↳ dominée par « pub/sub + outbox + cache »
+     pub/sub + outbox + réplica + lettres mortes         1 gagnantes | meilleure : delivery 4, réplica 1 | score 36.9 | coût 245/260 | marges coût 6 %, cx 5 %, échecs 100 %, p95 36 %
+       ↳ dominée par « pub/sub + outbox + réplica »
      pub/sub + idempotence + outbox + cache              1 gagnantes | meilleure : delivery 4 | score 35.6 | coût 235/260 | marges coût 10 %, cx 0 %, échecs 100 %, p95 33 %
        ↳ dominée par « pub/sub + outbox + cache »
      pub/sub + idempotence + outbox + réplica            1 gagnantes | meilleure : delivery 4, réplica 1 | score 35.4 | coût 260/260 | marges coût 0 %, cx 5 %, échecs 100 %, p95 36 %
        ↳ dominée par « pub/sub + outbox + réplica »
-[ok] sales (réponse unique assumée) — 1 stratégie(s) : pub/sub + scaling + idempotence + outbox + cache + réplica
-     pub/sub + scaling + idempotence + outbox + cache + réplica    1 gagnantes | meilleure : delivery 4, scaling 1, réplica 1 | score 30.2 | coût 305/310 | marges coût 2 %, cx 0 %, échecs 100 %, p95 19 %
+[ok] poison-order (réponse unique assumée) — 1 stratégie(s) : pub/sub + lettres mortes
+     pub/sub + cache + lettres mortes                    1 gagnantes | meilleure : delivery 4 | score 50.4 | coût 205/275 | marges coût 25 %, cx 23 %, échecs 90 %, p95 64 %
+       ↳ dominée par « pub/sub + lettres mortes »
+     pub/sub + lettres mortes                            1 gagnantes | meilleure : delivery 4 | score 49.8 | coût 190/275 | marges coût 31 %, cx 32 %, échecs 90 %, p95 47 %
+     pub/sub + réplica + lettres mortes                  2 gagnantes | meilleure : delivery 4, réplica 1 | score 49.4 | coût 230/275 | marges coût 16 %, cx 27 %, échecs 90 %, p95 64 %
+       ↳ dominée par « pub/sub + lettres mortes »
+     pub/sub + scaling + cache + lettres mortes          3 gagnantes | meilleure : delivery 4, scaling 1 | score 45.8 | coût 235/275 | marges coût 15 %, cx 14 %, échecs 90 %, p95 65 %
+       ↳ dominée par « pub/sub + cache + lettres mortes »
+     pub/sub + cache + réplica + lettres mortes          1 gagnantes | meilleure : delivery 4, réplica 1 | score 45.8 | coût 245/275 | marges coût 11 %, cx 18 %, échecs 90 %, p95 64 %
+       ↳ dominée par « pub/sub + réplica + lettres mortes »
+     pub/sub + scaling + lettres mortes                  3 gagnantes | meilleure : delivery 4, scaling 1 | score 45.2 | coût 220/275 | marges coût 20 %, cx 23 %, échecs 90 %, p95 48 %
+       ↳ dominée par « pub/sub + lettres mortes »
+     pub/sub + scaling + réplica + lettres mortes        1 gagnantes | meilleure : delivery 4, scaling 1, réplica 1 | score 44.7 | coût 260/275 | marges coût 5 %, cx 18 %, échecs 90 %, p95 65 %
+       ↳ dominée par « pub/sub + réplica + lettres mortes »
+     pub/sub + idempotence + cache + lettres mortes      1 gagnantes | meilleure : delivery 4 | score 44.3 | coût 235/275 | marges coût 15 %, cx 9 %, échecs 90 %, p95 64 %
+       ↳ dominée par « pub/sub + cache + lettres mortes »
+     pub/sub + idempotence + lettres mortes              1 gagnantes | meilleure : delivery 4 | score 43.7 | coût 220/275 | marges coût 20 %, cx 18 %, échecs 90 %, p95 47 %
+       ↳ dominée par « pub/sub + lettres mortes »
+     pub/sub + idempotence + réplica + lettres mortes    1 gagnantes | meilleure : delivery 4, réplica 1 | score 43.3 | coût 260/275 | marges coût 5 %, cx 14 %, échecs 90 %, p95 64 %
+       ↳ dominée par « pub/sub + réplica + lettres mortes »
+     pub/sub + scaling + cache + réplica + lettres mortes    1 gagnantes | meilleure : delivery 4, scaling 1, réplica 1 | score 41.1 | coût 275/275 | marges coût 0 %, cx 9 %, échecs 90 %, p95 65 %
+       ↳ dominée par « pub/sub + cache + réplica + lettres mortes »
+     pub/sub + scaling + idempotence + cache + lettres mortes    1 gagnantes | meilleure : delivery 4, scaling 1 | score 39.6 | coût 265/275 | marges coût 4 %, cx 0 %, échecs 90 %, p95 65 %
+       ↳ dominée par « pub/sub + idempotence + cache + lettres mortes »
+     pub/sub + idempotence + cache + réplica + lettres mortes    1 gagnantes | meilleure : delivery 4, réplica 1 | score 39.6 | coût 275/275 | marges coût 0 %, cx 5 %, échecs 90 %, p95 64 %
+       ↳ dominée par « pub/sub + cache + réplica + lettres mortes »
+     pub/sub + scaling + idempotence + lettres mortes    2 gagnantes | meilleure : delivery 4, scaling 1 | score 39.0 | coût 250/275 | marges coût 9 %, cx 9 %, échecs 90 %, p95 48 %
+       ↳ dominée par « pub/sub + idempotence + lettres mortes »
+     pub/sub + outbox + cache + lettres mortes           1 gagnantes | meilleure : delivery 4 | score 39.0 | coût 220/275 | marges coût 20 %, cx 14 %, échecs 90 %, p95 33 %
+       ↳ dominée par « pub/sub + cache + lettres mortes »
+     pub/sub + outbox + réplica + lettres mortes         1 gagnantes | meilleure : delivery 4, réplica 1 | score 38.8 | coût 245/275 | marges coût 11 %, cx 18 %, échecs 90 %, p95 36 %
+       ↳ dominée par « pub/sub + réplica + lettres mortes »
+     pub/sub + outbox + cache + réplica + lettres mortes    1 gagnantes | meilleure : delivery 4, réplica 1 | score 35.2 | coût 260/275 | marges coût 5 %, cx 9 %, échecs 90 %, p95 36 %
+       ↳ dominée par « pub/sub + cache + réplica + lettres mortes »
+     pub/sub + scaling + outbox + cache + lettres mortes    2 gagnantes | meilleure : delivery 4, scaling 1 | score 34.3 | coût 250/275 | marges coût 9 %, cx 5 %, échecs 90 %, p95 34 %
+       ↳ dominée par « pub/sub + outbox + cache + lettres mortes »
+     pub/sub + scaling + outbox + réplica + lettres mortes    1 gagnantes | meilleure : delivery 4, scaling 1, réplica 1 | score 34.2 | coût 275/275 | marges coût 0 %, cx 9 %, échecs 90 %, p95 38 %
+       ↳ dominée par « pub/sub + outbox + réplica + lettres mortes »
+     pub/sub + idempotence + outbox + cache + lettres mortes    1 gagnantes | meilleure : delivery 4 | score 32.9 | coût 250/275 | marges coût 9 %, cx 0 %, échecs 90 %, p95 33 %
+       ↳ dominée par « pub/sub + outbox + cache + lettres mortes »
+     pub/sub + idempotence + outbox + réplica + lettres mortes    1 gagnantes | meilleure : delivery 4, réplica 1 | score 32.7 | coût 275/275 | marges coût 0 %, cx 5 %, échecs 90 %, p95 36 %
+       ↳ dominée par « pub/sub + outbox + réplica + lettres mortes »
+[ok] sales (réponse unique assumée) — 1 stratégie(s) : pub/sub + scaling + idempotence + outbox + cache + réplica + lettres mortes
+     pub/sub + scaling + idempotence + outbox + cache + réplica + lettres mortes    1 gagnantes | meilleure : delivery 4, scaling 1, réplica 1 | score 29.6 | coût 320/325 | marges coût 2 %, cx 0 %, échecs 98 %, p95 19 %
 [ok] Enchaînement three-trades, depuis la réponse 1 de market-open : 1 gagnante(s) | moins chère : delivery 4 | coût 175/180, dont 0 de migration
 [ok] Enchaînement double-delivery, depuis la réponse 1 de three-trades : 1 gagnante(s) | moins chère : delivery 4 | coût 205/210, dont 0 de migration
-[ok] Enchaînement lost-orders, depuis la réponse 1 de double-delivery : 4 gagnante(s) | moins chère : delivery 4 | coût 235/260, dont 30 de migration
-[ok] Enchaînement sales, depuis la réponse 1 de lost-orders : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 305/310, dont 0 de migration
-[ok] Enchaînement sales, depuis la réponse 2 de lost-orders : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 305/310, dont 0 de migration
-[ok] Enchaînement sales, depuis la réponse 3 de lost-orders : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 305/310, dont 0 de migration
-[ok] Enchaînement sales, depuis la réponse 4 de lost-orders : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 305/310, dont 0 de migration
+[ok] Enchaînement lost-orders, depuis la réponse 1 de double-delivery : 5 gagnante(s) | moins chère : delivery 4 | coût 235/260, dont 30 de migration
+[ok] Enchaînement poison-order, depuis la réponse 1 de lost-orders : 6 gagnante(s) | moins chère : delivery 4 | coût 250/275, dont 60 de migration
+[ok] Enchaînement poison-order, depuis la réponse 2 de lost-orders : 6 gagnante(s) | moins chère : delivery 4 | coût 275/275, dont 85 de migration
+[ok] Enchaînement poison-order, depuis la réponse 3 de lost-orders : 16 gagnante(s) | moins chère : delivery 4 | coût 220/275, dont 30 de migration
+[ok] Enchaînement poison-order, depuis la réponse 4 de lost-orders : 13 gagnante(s) | moins chère : delivery 4 | coût 245/275, dont 55 de migration
+[ok] Enchaînement sales, depuis la réponse 1 de poison-order : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 320/325, dont 0 de migration
+[ok] Enchaînement sales, depuis la réponse 2 de poison-order : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 320/325, dont 0 de migration
+[ok] Enchaînement sales, depuis la réponse 3 de poison-order : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 320/325, dont 0 de migration
+[ok] Enchaînement sales, depuis la réponse 4 de poison-order : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 320/325, dont 0 de migration
+[ok] Enchaînement sales, depuis la réponse 5 de poison-order : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 320/325, dont 0 de migration
 
 Architecture gagnant toutes les vagues : aucune (ok)
 Deux stratégies sur la majorité des vagues : non
@@ -86,7 +137,8 @@ Tout au maximum, market-open : perd (ok) — Budget dépassé : 350 / 100 ; Trop
 Tout au maximum, three-trades : perd (ok) — Budget dépassé : 350 / 180 ; Trop complexe : 18 / 12 points ; SLA rompu : latence p95 111.7 ms (max 60 ms) ; SLA rompu : latence p95 des événements 236.0 ms (max 60 ms)
 Tout au maximum, double-delivery : perd (ok) — Budget dépassé : 350 / 210 ; Trop complexe : 18 / 15 points ; SLA rompu : latence p95 111.7 ms (max 60 ms) ; SLA rompu : latence p95 des événements 241.0 ms (max 60 ms)
 Tout au maximum, lost-orders : perd (ok) — Budget dépassé : 350 / 260 ; SLA rompu : latence p95 des événements 231.1 ms (max 60 ms)
-Tout au maximum, sales : perd (ok) — Budget dépassé : 350 / 310 ; SLA rompu : latence p95 des événements 240.1 ms (max 60 ms)
+Tout au maximum, poison-order : perd (ok) — Budget dépassé : 350 / 275 ; SLA rompu : latence p95 des événements 231.1 ms (max 60 ms)
+Tout au maximum, sales : perd (ok) — Budget dépassé : 350 / 325 ; SLA rompu : latence p95 des événements 240.1 ms (max 60 ms)
 
 ## Le comptoir des paiements — 384 architectures × 5 vagues
 [ok] checkout (réponse unique assumée) — 1 stratégie(s) : serveur + base

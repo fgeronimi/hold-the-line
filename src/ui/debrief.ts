@@ -119,9 +119,23 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
   // raconte alors la panne qui l'a amorcée : la leçon de l'incident seul serait trompeuse.
   const storm = result.ticks.find((t) => (t.retries ?? 0) > 0.5 * (t.offered - (t.retries ?? 0)));
 
+  // Un message empoisonné qu'une file garde encore au dernier tick la bloque pour de bon (S25) :
+  // ce qui manque aux services vient de lui, pas d'un abonnement oublié.
+  const lastTick = result.ticks.at(-1);
+  const stillPoisoned = !!lastTick && Object.values(lastTick.nodes).some((t) => (t.poisoned ?? 0) > 0);
+  const deadLetters = sum(Object.values(lastTick?.nodes ?? {}).map((t) => t.deadLetters ?? 0));
+
   // Incidents : ce qu'ils ont coûté, ou comment la cité les a encaissés.
   for (const incident of incidents) {
     if (storm && incident.from <= storm.tick && incident.effect.type === 'instance-down') continue;
+    if (incident.effect.type === 'poison-message') {
+      const lesson = incidentLessons['poison-message'];
+      const vars = { title: incident.title, failed: fmtCount(result.failuresByReason.undelivered), dead: fmtCount(deadLetters) };
+      // Mis de côté, le message n'est pas traité : une alerte, même quand la file a tenu.
+      if (stillPoisoned) tell(incident.from, fromLesson(problem, lesson.hurt, vars));
+      else if (deadLetters >= 1) tell(incident.from, fromLesson(won ? 'warn' : problem, lesson.held, vars));
+      continue;
+    }
     const failed = Math.round(sum(result.ticks.slice(incident.from, incident.until).map((t) => t.failed)));
     const lesson = incidentLessons[incident.effect.type];
     const vars = { title: incident.title, failed: String(failed) };
@@ -167,7 +181,7 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
   }
   const expected = wave.consumers?.length ?? 0;
   // Un reste d'arrondi n'est pas un service oublié : au moins un message entier.
-  if (result.failuresByReason.undelivered >= 1 && result.delivery && expected > 0) {
+  if (result.failuresByReason.undelivered >= 1 && result.delivery && expected > 0 && !stillPoisoned) {
     const reached = (result.delivery.delivered / result.delivery.expected) * expected;
     tell(0, fromLesson(problem, reasonLessons.undelivered, { fanOut: String(expected), reached: reached.toFixed(1).replace('.', ',') }));
   }

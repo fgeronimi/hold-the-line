@@ -89,9 +89,12 @@ export const marketSpace: BalanceSpace = {
     { id: 'outbox', levels: [0, 1], label: 'outbox' },
     { id: 'cache', levels: [0, 1], label: 'cache' },
     { id: 'replicas', levels: upTo(3), label: 'réplica' },
+    // Sur chaque file : sans livraison, il n'y a pas de file à protéger.
+    { id: 'deadLetter', levels: [0, 1], label: 'lettres mortes', requires: 'delivery' },
   ],
   build: (c) =>
     ordering(DELIVERIES[c.delivery ?? 0]!, {
+      deadLetter: on(c, 'deadLetter'),
       extraInstances: c.scaling ?? 0,
       idempotence: on(c, 'idempotence'),
       outbox: on(c, 'outbox'),
