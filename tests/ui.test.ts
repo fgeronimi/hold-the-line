@@ -4,7 +4,8 @@ import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
 import { calibrationGroups, changedSettings, getAt, parseField, setAt } from '../src/ui/calibration.ts';
 import { addLink, addNode, nextNodeId, removeLink, removeNode, setUpgrade } from '../src/ui/editor.ts';
-import { renderBuildMenu, renderDialog, renderToolbar, upgradePips, type ViewState } from '../src/ui/views.ts';
+import { renderCard, renderDialog, renderHand, renderToolbar, upgradePips, type ViewState } from '../src/ui/views.ts';
+import { fan } from '../src/ui/hand.ts';
 import { newGame } from '../src/engine/game.ts';
 
 describe('editor', () => {
@@ -131,22 +132,88 @@ describe('pastilles déplacer et retirer', () => {
   });
 });
 
-describe('construire sur une case vide', () => {
-  const view = (draft = A.minimal): ViewState =>
-    ({ catalog, scenario: urlShortener, game: newGame(), draft, attempts: [], tool: { kind: 'select' }, phase: 'build', history: { undo: 0, redo: 0 } }) as unknown as ViewState;
+describe('l’éventail de la main', () => {
+  it('symétrique, centré, ses bords tombent et penchent vers l’extérieur', () => {
+    const slots = fan(5);
+    expect(slots.map((x) => x.offset)).toEqual([-2, -1, 0, 1, 2]);
+    expect(slots[2]).toEqual({ offset: 0, tilt: 0, drop: 0 });
+    expect(slots[0]!.tilt).toBe(-slots[4]!.tilt);
+    expect(slots[0]!.tilt).toBeLessThan(0);
+    expect(slots[0]!.drop).toBe(1);
+    expect(slots[1]!.drop).toBeLessThan(slots[0]!.drop);
+  });
 
-  it('une fiche par bâtiment de la palette, avec ses chiffres et ses évolutions', () => {
-    const html = renderBuildMenu(view(), { q: 5, r: 3 });
-    const palette = Object.values(catalog.components).filter((d) => d.behavior !== 'source' && !d.prePlaced);
-    expect(html.match(/data-action="build-at"/g)).toHaveLength(palette.length);
+  it('une grande main ne s’ouvre pas plus qu’une moyenne', () => {
+    const spread = (n: number) => fan(n).at(-1)!.tilt - fan(n)[0]!.tilt;
+    expect(spread(3)).toBeLessThan(spread(6));
+    expect(spread(11)).toBeCloseTo(spread(20));
+    expect(spread(11)).toBeLessThanOrEqual(24);
+  });
+
+  it('une carte seule est droite, et une main vide n’a pas de carte', () => {
+    expect(fan(1)).toEqual([{ offset: 0, tilt: 0, drop: 0 }]);
+    expect(fan(0)).toEqual([]);
+  });
+});
+
+describe('la main de cartes', () => {
+  const view = (extra: Partial<ViewState> = {}, draft = A.minimal): ViewState =>
+    ({ catalog, scenario: urlShortener, game: newGame(), draft, attempts: [], tool: { kind: 'select' }, phase: 'build', history: { undo: 0, redo: 0 }, ...extra }) as unknown as ViewState;
+  const palette = Object.values(catalog.components).filter((d) => d.behavior !== 'source' && !d.prePlaced);
+
+  it('fermée tant qu’aucune case ni « Bâtir » ne l’ouvre, et hors de la construction', () => {
+    expect(renderHand(view())).toBe('');
+    expect(renderHand(view({ showHand: true, phase: 'debrief' }))).toBe('');
+  });
+
+  it('une carte par bâtiment constructible, avec son prix, ses chiffres et ses évolutions', () => {
+    const html = renderHand(view({ buildAt: { q: 5, r: 3 } }));
+    expect(html.match(/data-action="pick-card"/g)).toHaveLength(palette.length);
     expect(html).not.toContain('data-type="domain-service"');
     expect(html).toContain('Autoscaling');
+    expect(html).toContain(`💰 ${catalog.components['app-server']!.cost}`);
+    expect(html).toContain('Choisir un bâtiment pour cette case.');
+  });
+
+  it('ouverte par « Bâtir », elle demande de désigner la case ensuite', () => {
+    expect(renderHand(view({ showHand: true }))).toContain('puis cliquer sa case');
   });
 
   it('sur un chemin, dit que le bâtiment s’insère dans le lien', () => {
     const draft = { ...A.minimal, links: A.minimal.links.map((l, i) => (i === 0 ? { ...l, path: [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: 2, r: 0 }] } : l)) };
-    expect(renderBuildMenu(view(draft), { q: 1, r: 0 })).toContain('s’insère dans le lien');
-    expect(renderBuildMenu(view(draft), { q: 7, r: 2 })).not.toContain('s’insère');
+    expect(renderHand(view({ buildAt: { q: 1, r: 0 } }, draft))).toContain('s’insère dans le lien');
+    expect(renderHand(view({ buildAt: { q: 7, r: 2 } }, draft))).not.toContain('s’insère');
+  });
+
+  it('la miniature du plateau remplace l’icône du thème dès qu’elle existe', () => {
+    const card = (html: string) => html.match(/<button class="hcard[^"]*" data-action="pick-card" data-type="cache"[\s\S]*?<\/button>/)![0];
+    expect(card(renderHand(view({ showHand: true })))).toContain('class="emoji"');
+    const drawn = card(renderHand(view({ showHand: true, thumbnails: { cache: 'data:image/png;base64,AAAA' } })));
+    expect(drawn).toContain('<img src="data:image/png;base64,AAAA"');
+    expect(drawn).not.toContain('class="emoji"');
+  });
+
+  it('un bâtiment au-delà du budget le dit, et reste jouable', () => {
+    const tight = { ...urlShortener, waves: urlShortener.waves.map((w) => ({ ...w, budget: 0 })) };
+    const html = renderHand(view({ showHand: true, scenario: tight }));
+    expect(html.match(/Au-delà du budget/g)).toHaveLength(palette.length);
+    expect(html).not.toContain('disabled');
+    expect(renderHand(view({ showHand: true }))).toContain('✓ Constructible');
+  });
+
+  it('la carte soulevée au doigt annonce le second contact', () => {
+    const html = renderHand(view({ buildAt: { q: 5, r: 3 }, liftedCard: 'cache' }));
+    expect(html).toMatch(/class="hcard lifted" data-action="pick-card" data-type="cache"/);
+    expect(html.match(/class="hcard lifted"/g)).toHaveLength(1);
+    expect(html).toContain('Toucher encore pour bâtir');
+    expect(renderHand(view({ showHand: true, liftedCard: 'cache' }))).toContain('Toucher encore pour choisir');
+  });
+
+  it('la main passe devant la carte du bâtiment sélectionné', () => {
+    expect(renderCard(view({ selectedNode: 'db' }))).toContain('detail-card');
+    const both = renderCard(view({ selectedNode: 'db', showHand: true }));
+    expect(both).toContain('class="hand"');
+    expect(both).not.toContain('detail-card');
   });
 });
 
@@ -179,7 +246,12 @@ describe('le bouton « Un indice »', () => {
     expect(button(html)).toContain('disabled');
     expect(html).toContain('Un indice de plus après le prochain essai perdu.');
     expect(html).toContain('CDN (Avant-poste)');
-    expect(html).toMatch(/class="tool build hint" data-action="tool" data-tool="place" data-type="cdn"/);
+    // L'indice « poser un CDN » fait clignoter « Bâtir », puis la carte du CDN une fois la main ouverte.
+    expect(html).toMatch(/class="tool build hint" data-action="open-hand"/);
+    const open = { ...s, showHand: true, game: { ...s.game, hints: ['place|cdn|1'] } };
+    expect(renderToolbar(open)).toMatch(/class="tool build active" data-action="open-hand"/);
+    expect(renderHand(open)).toMatch(/class="hcard hint" data-action="pick-card" data-type="cdn"/);
+    expect(renderHand(open).match(/class="hcard hint"/g)).toHaveLength(1);
   });
 
   it('la pastille de l’évolution désignée clignote', () => {

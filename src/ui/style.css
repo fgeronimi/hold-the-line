@@ -8,6 +8,12 @@
   --ok: #2b9348;
   --ko: #c0392b;
   --shadow: 0 4px 14px rgba(40, 25, 10, 0.35);
+  /* Les teintes du plateau KayKit : laiton, forêt, terre cuite. */
+  --brass: #c9a35a;
+  --forest: #4f7a35;
+  --clay: #b5652b;
+  /* Un grain de papier discret, posé sur les cartes. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .24 0 0 0 0 .12 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 html, body { height: 100%; margin: 0; overflow: hidden; }
 body { font: 14px/1.4 system-ui, sans-serif; color: var(--ink); background: #6f9b4a; }
@@ -27,7 +33,6 @@ button.primary:hover { background: var(--wood-dark); }
 .layer { position: fixed; z-index: 3; pointer-events: none; }
 .layer > * { pointer-events: auto; }
 .layer.top { top: 10px; left: 10px; right: 10px; }
-.layer.right { top: 74px; right: 10px; width: 290px; }
 .layer.bottom { bottom: 10px; left: 10px; right: 10px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .layer.center { inset: 0; display: grid; place-items: center; }
 .layer.center:empty { display: none; }
@@ -145,7 +150,6 @@ button.primary:hover { background: var(--wood-dark); }
 .debug textarea { width: 100%; height: 160px; font-family: monospace; }
 
 @media (max-width: 760px) {
-  .layer.right { top: auto; bottom: 120px; width: auto; left: 10px; }
   .hud-gauges { display: none; }
 }
 
@@ -245,16 +249,111 @@ button.pip { cursor: pointer; }
 .pip.act.ko:hover .icon { border-color: #d62828; background: #fbe4e4; }
 .pip.act:not(.ko):hover .icon { border-color: #9b5de5; background: #f1e8fb; }
 
-/* Les fiches des bâtiments à construire sur une case vide. */
-.build-menu { max-height: calc(100vh - 220px); overflow-y: auto; }
-.build-cards { display: grid; gap: 8px; margin-top: 6px; }
-.build-card { border: 1px solid #0002; border-radius: 8px; padding: 6px 8px; background: #fffdf7; }
-.build-card header { display: flex; gap: 8px; align-items: center; }
-.build-card header .icon { font-size: 22px; }
-.build-card header b { display: block; }
-.build-card header small { color: #666; }
-.build-card p { margin: 4px 0; font-size: 12px; line-height: 1.4; }
-.build-card .figures { color: #444; }
-.build-card .ups { color: #555; }
-.build-card footer { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-top: 4px; }
-.build-card footer button[title] { opacity: .75; }
+/*
+ * La main de cartes : un bâtiment par carte, en éventail au centre de l'écran. La géométrie
+ * vient de `hand.ts` (--k, --tilt, --drop) ; le pas entre deux cartes se resserre avec la
+ * largeur de l'écran, ici, sans rendu.
+ */
+/* Au-dessus de la barre du bas : une carte soulevée passe devant elle. */
+.hand-layer { inset: 0; z-index: 4; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; }
+.hand-layer:empty { display: none; }
+/* Le plateau reste cliquable entre les cartes et autour d'elles. */
+.hand-layer > .hand { pointer-events: none; }
+.hand {
+  --card-w: 168px; --card-h: 252px;
+  --step: min(calc(var(--card-w) * .8), calc((min(100vw, 1500px) - var(--card-w) - 56px) / max(1, var(--n) - 1)));
+  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 2vh;
+}
+.hand-cards { position: relative; width: 100%; height: calc(var(--card-h) + 28px); }
+.hand-head { pointer-events: auto; display: flex; align-items: center; gap: 8px; margin: 0; padding: 3px 4px 3px 12px; max-width: calc(100vw - 32px);
+  font-size: 13px; color: #f8ecd0; background: linear-gradient(#6f4c2c, #563a20); border: 2px solid #3d2812; border-radius: 999px;
+  box-shadow: inset 0 1px 0 #ffffff2e, 0 3px 8px rgba(30, 20, 8, .35); }
+.hand-head .close { padding: 0 7px; border-radius: 999px; background: #f6ecd2; border-color: #3d2812; line-height: 20px; }
+
+.hcard, .hcard:hover:not(:disabled) { background: none; border: 0; }
+.hcard {
+  position: absolute; left: 50%; top: 0; width: var(--card-w); height: var(--card-h); margin-left: calc(var(--card-w) / -2); padding: 0;
+  border-radius: 12px; pointer-events: auto; text-align: left; color: var(--ink); font: 11px/1.3 system-ui, sans-serif;
+  transform: translate(calc(var(--k) * var(--step)), calc(var(--drop) * 26px)) rotate(var(--tilt));
+  z-index: calc(var(--i) + 1); touch-action: pan-x; -webkit-tap-highlight-color: transparent;
+  animation: deal .42s cubic-bezier(.2, .9, .3, 1.15) backwards; animation-delay: calc(var(--i) * 28ms);
+}
+@keyframes deal { from { opacity: 0; transform: translate(0, 70px) rotate(0) scale(.7); } }
+/* Une main déjà ouverte qui change (carte soulevée, autre case) ne se redistribue pas. */
+.settled .hcard { animation: none; }
+.hcard:focus-visible { outline: none; }
+.hcard-face {
+  position: absolute; left: 0; right: 0; bottom: 0; min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+  border: 3px solid #5a3a1e; border-radius: 12px;
+  background: var(--grain), linear-gradient(170deg, #fbf3dc, #ecd9ad);
+  box-shadow: inset 0 0 0 2px var(--brass), inset 0 3px 0 2px #fff7, 0 3px 0 #3d2812, 0 10px 18px rgba(30, 20, 8, .38);
+  transform-origin: 50% 100%; transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s;
+}
+.hcard-face > span { display: block; }
+.hcard-title { padding: 6px 8px 5px; text-align: center; color: #f8ecd0; background: linear-gradient(#7d5735, #5f3f24); border-bottom: 2px solid var(--brass); text-shadow: 0 1px 0 #2a1a0b; }
+.hcard-title b { display: block; font: bold 13px/1.15 Georgia, 'Times New Roman', serif; }
+.hcard-title small { display: block; font-size: 10.5px; color: #ecd9ad; }
+.hcard-art { --art-h: 108px; display: grid; place-items: center; height: var(--art-h); overflow: hidden; margin: 6px 7px 0; border-radius: 8px; border: 1px solid #b9965a;
+  background: radial-gradient(120% 90% at 50% 100%, #b7cf8e 0 38%, transparent 39%), linear-gradient(#cfe6ee, #eaf3ea);
+  box-shadow: inset 0 2px 5px rgba(60, 40, 15, .28); }
+.hcard-face > .hcard-art { display: grid; }
+.hcard-art img { height: var(--art-h); width: var(--art-h); object-fit: contain; filter: drop-shadow(0 3px 2px rgba(40, 30, 10, .3)); pointer-events: none; }
+.hcard-art .emoji { font-size: 52px; line-height: 1; }
+.hcard-text { flex: 1; margin: 5px 9px 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+.hcard-face > .hcard-text { display: -webkit-box; }
+.hcard-face > .hcard-more { display: none; margin: 4px 9px 0; padding-top: 4px; border-top: 1px dashed #b9965a; color: #4a3d2c; font-size: 10.5px; }
+.hcard-more span { display: block; }
+.hcard-face > .hcard-cost { display: flex; justify-content: center; gap: 8px; margin: 5px 0; font-weight: bold; font-size: 12px; }
+.hcard-cost span { padding: 1px 8px; border-radius: 999px; background: #fff8e6; border: 1px solid #c9a35a; box-shadow: inset 0 -1px 0 #e3cf9b; }
+.hcard-ribbon { padding: 4px 6px; text-align: center; font-weight: bold; font-size: 11px; color: #fff; background: linear-gradient(#63913f, var(--forest)); border-top: 2px solid #3c5f27; text-shadow: 0 1px 0 #2c4a1b; }
+.hcard-ribbon.dear { background: linear-gradient(#c7773a, var(--clay)); border-top-color: #8a4a1c; text-shadow: 0 1px 0 #6e3a14; }
+
+/* Soulevée : au survol, au clavier, ou par un premier contact du doigt. */
+.hcard.lifted, .hcard:focus-visible { z-index: 100; }
+.hcard.lifted .hcard-face, .hcard:focus-visible .hcard-face {
+  transform: translateY(-14px) rotate(calc(var(--tilt) * -1)) scale(1.2);
+  box-shadow: inset 0 0 0 2px #e6c77c, inset 0 3px 0 2px #fff7, 0 3px 0 #3d2812, 0 26px 34px rgba(30, 20, 8, .45), 0 0 0 3px #ffe6a36e;
+}
+.hcard.lifted .hcard-more, .hcard:focus-visible .hcard-more { display: block; }
+.hcard.lifted .hcard-text, .hcard:focus-visible .hcard-text { -webkit-line-clamp: unset; line-clamp: unset; }
+@media (hover: hover) {
+  .hcard:hover { z-index: 100; }
+  .hcard:hover .hcard-face {
+    transform: translateY(-14px) rotate(calc(var(--tilt) * -1)) scale(1.2);
+    box-shadow: inset 0 0 0 2px #e6c77c, inset 0 3px 0 2px #fff7, 0 3px 0 #3d2812, 0 26px 34px rgba(30, 20, 8, .45), 0 0 0 3px #ffe6a36e;
+  }
+  .hcard:hover .hcard-more { display: block; }
+  .hcard:hover .hcard-text { -webkit-line-clamp: unset; line-clamp: unset; }
+}
+.hcard:active .hcard-face { transition-duration: .06s; transform: translateY(-10px) rotate(calc(var(--tilt) * -1)) scale(1.17); }
+/* La carte que désigne le guide : l'anneau est sur sa face, la distribution reste sur la carte. */
+.hcard.hint { animation: deal .42s cubic-bezier(.2, .9, .3, 1.15) backwards; animation-delay: calc(var(--i) * 28ms); box-shadow: none; }
+.settled .hcard.hint { animation: none; }
+.hcard.hint .hcard-face { outline: 3px solid #e9a23b; outline-offset: 2px; animation: hint-ring 1.1s ease-in-out infinite; }
+@keyframes hint-ring { 50% { outline-color: rgba(233, 162, 59, .35); outline-offset: 5px; } }
+
+/* La carte du bâtiment sélectionné : même facture, posée au bord pour laisser voir le bâtiment et ses pastilles. */
+.detail-card { justify-self: end; width: 272px; max-height: calc(100vh - 230px); overflow-y: auto; margin-right: 14px; padding: 10px 12px; box-sizing: border-box;
+  border: 3px solid #5a3a1e; border-radius: 12px; background: var(--grain), linear-gradient(170deg, #fbf3dc, #ecd9ad);
+  box-shadow: inset 0 0 0 2px var(--brass), 0 3px 0 #3d2812, 0 12px 22px rgba(30, 20, 8, .38); animation: detail-in .26s cubic-bezier(.2, .8, .2, 1); }
+.settled .detail-card { animation: none; }
+@keyframes detail-in { from { opacity: 0; transform: translateX(24px) rotate(2deg); } }
+.detail-card h3 { font-size: 16px; }
+.detail-card h3 small { display: block; font: 12px system-ui, sans-serif; color: #7a6a55; }
+.detail-card .hcard-art { --art-h: 120px; margin: 6px 0; }
+
+@media (max-width: 760px), (pointer: coarse) and (max-width: 1000px) {
+  /* Petit écran : plus d'éventail, une rangée qui défile ; la carte touchée se soulève sur place. */
+  .hand { --card-w: 150px; --card-h: 236px; margin-bottom: 0; }
+  .hand-cards { height: auto; display: flex; gap: 10px; overflow-x: auto; box-sizing: border-box; padding: 150px 16px 14px; scroll-snap-type: x proximity; scrollbar-width: none; }
+  .hcard { position: relative; left: auto; margin: 0; flex: none; transform: none; scroll-snap-align: center; }
+  /* La rangée qui défile coupe ce qui dépasse : la carte grandit dans la marge du haut, sans en sortir. */
+  .hcard.lifted .hcard-face, .hcard:focus-visible .hcard-face { transform: translateY(-6px) scale(1.04); }
+  .hand-head { white-space: normal; border-radius: 14px; }
+  .detail-card { justify-self: stretch; align-self: end; width: auto; margin: 0 10px 132px; max-height: 46vh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hcard, .hcard.hint, .detail-card { animation: none; }
+  .hcard-face { transition: none; }
+  .hcard.hint .hcard-face { animation: none; }
+}

@@ -4,7 +4,9 @@ import type { Architecture, BoardCell, Catalog, Scenario, Wave, WaveResult } fro
 import { fortifiedCity as theme } from '../../data/themes/fortified-city.ts';
 import { escapeHtml, percentPrecise } from '../../render/html.ts';
 import { analysisOf, type Analysis, type Finding } from '../debrief.ts';
+import { SCENARIOS } from '../../data/scenarios/index.ts';
 import { hintPanel, type HintPanel } from '../hints.ts';
+import { guideStep, type TutorialStep } from '../tutorial.ts';
 
 /**
  * Ce que partagent les calques de l'interface : l'état qu'ils rendent, l'échappement, les
@@ -53,6 +55,12 @@ export interface ViewState {
   selectedNode?: string | undefined;
   /** Case vide cliquée : les fiches des bâtiments qu'on peut y construire sont ouvertes. */
   buildAt?: BoardCell | undefined;
+  /** La main ouverte par « Bâtir », sans case : la carte choisie arme l'outil qui pose. */
+  showHand?: boolean | undefined;
+  /** Au toucher, la carte soulevée par un premier contact : le second la joue. */
+  liftedCard?: string | undefined;
+  /** Les miniatures des bâtiments, rendues par le plateau une fois chargé ; sans elles, l'icône du thème. */
+  thumbnails?: Record<string, string> | undefined;
   /** Dernier refus ou conseil du plateau (case occupée, chemin impossible…). */
   boardMessage?: string | undefined;
   phase: Phase;
@@ -107,6 +115,20 @@ export function nameOf(type: string, catalog: Catalog): string {
 
 /** L'aide de la vague en cours (décision I14) : indices donnés, bouton, ce qui clignote. */
 export const hintsOf = (s: ViewState): HintPanel => hintPanel({ game: s.game, scenario: s.scenario, catalog: s.catalog, draft: s.draft }, theme);
+
+/** Le pas-à-pas de la vague en cours, ou rien hors de la construction. */
+export function guideOf(s: ViewState): TutorialStep | undefined {
+  const wave = s.scenario.waves[s.game.waveIndex];
+  if (s.phase !== 'build' || !wave) return undefined;
+  const firstWaveOfGame = s.game.waveIndex === 0 && s.scenario.id === SCENARIOS[0]!.scenario.id;
+  return guideStep(s.draft, s.catalog, wave, s.game.waveIndex, s.game.committed, firstWaveOfGame);
+}
+
+/** Ce qui clignote : le dernier indice demandé, tant qu'il reste à faire, passe avant le pas-à-pas. */
+export const blinkOf = (s: ViewState): TutorialStep['highlight'] => hintsOf(s).highlight ?? guideOf(s)?.highlight;
+
+/** Les bâtiments que le joueur peut construire : ni la source, ni les services déjà en place. */
+export const buildable = (catalog: Catalog) => Object.values(catalog.components).filter((d) => d.behavior !== 'source' && !d.prePlaced);
 
 /**
  * Refaites après un calibrage du mode debug, les analyses sont gardées à côté de la

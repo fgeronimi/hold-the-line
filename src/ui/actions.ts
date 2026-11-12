@@ -51,6 +51,8 @@ export interface ActionArgs {
   newNode?: string;
   linkFrom?: string;
   linkTo?: string;
+  /** Le geste vient d'un doigt : pas de survol, une carte se soulève avant de se jouer. */
+  touch?: boolean;
 }
 
 export interface ActionContext {
@@ -62,6 +64,8 @@ export interface ActionContext {
 export type Action = (s: ViewState, args: ActionArgs, ctx: ActionContext) => Outcome | undefined;
 
 const select: Tool = { kind: 'select' };
+/** La main de cartes refermée, sous toutes ses formes. */
+const noHand = { buildAt: undefined, showHand: false, liftedCard: undefined } as const;
 const patch = (p: Partial<ViewState>, ...effects: Effect[]): Outcome => (effects.length > 0 ? { patch: p, effects } : { patch: p });
 
 /** La source et les services déjà en place ne se démolissent pas. */
@@ -123,14 +127,28 @@ export const actions: Record<string, Action> = {
   retry: () => patch({ phase: 'build' }, { kind: 'leave-wave' }),
   // Un indice par essai perdu (I14) : la partie le garde, la fenêtre « que faire » le montre.
   hint: (s) => patch({ game: askHint({ game: s.game, scenario: s.scenario, catalog: s.catalog, draft: s.draft }) }),
-  deselect: () => patch({ selectedNode: undefined, buildAt: undefined }),
+  deselect: () => patch({ selectedNode: undefined, ...noHand }),
   undo: () => ({ effects: [{ kind: 'travel', direction: 'undo' }] }),
   redo: () => ({ effects: [{ kind: 'travel', direction: 'redo' }] }),
 
   tool: (_, { data }) => {
     const kind = data.tool as Tool['kind'];
     const tool: Tool = kind === 'place' ? { kind, type: data.type! } : kind === 'move' ? { kind, id: data.node! } : { kind };
-    return patch({ tool, buildAt: undefined, boardMessage: undefined, showMenu: false });
+    return patch({ tool, ...noHand, boardMessage: undefined, showMenu: false });
+  },
+  // « Bâtir » : la main s'ouvre sans case, et se referme au second clic.
+  'open-hand': (s) =>
+    patch({ ...noHand, showHand: !(s.showHand || s.buildAt), selectedNode: undefined, tool: select, boardMessage: undefined, showMenu: false }),
+  /**
+   * Une carte de la main. Au doigt, le premier contact la soulève et le second la joue. Sur
+   * une case déjà désignée elle y bâtit ; sinon elle arme l'outil qui pose, et la main se
+   * referme pour laisser voir le plateau.
+   */
+  'pick-card': (s, args, ctx) => {
+    const type = args.data.type!;
+    if (args.touch && s.liftedCard !== type) return patch({ liftedCard: type });
+    if (s.buildAt) return actions['build-at']!(s, args, ctx);
+    return patch({ tool: { kind: 'place', type }, ...noHand, selectedNode: undefined, boardMessage: undefined });
   },
   'build-at': (s, { data }) => {
     const cell = s.buildAt;
@@ -138,9 +156,9 @@ export const actions: Record<string, Action> = {
     const result = placeNode(s.draft, data.type!, cell, s.catalog);
     // Le bâtiment posé est sélectionné : ses pastilles d'évolution apparaissent aussitôt.
     const placed = result.ok ? result.arch.nodes.find((n) => !s.draft.nodes.some((o) => o.id === n.id))?.id : undefined;
-    return applied(result, { buildAt: undefined, selectedNode: placed });
+    return applied(result, { ...noHand, selectedNode: placed });
   },
-  'close-build': () => patch({ buildAt: undefined }),
+  'close-build': () => patch({ ...noHand }),
 
   'add-node': (s, { newNode }) => patch({ draft: addNode(s.draft, newNode!) }),
   'remove-node': (s, { data }) => {
@@ -260,9 +278,12 @@ export function drop(s: ViewState, cell: BoardCell | undefined): Outcome | undef
   return patch(result.ok ? { draft: result.arch, boardMessage: undefined, ...back } : { boardMessage: result.reason, ...back });
 }
 
-/** Un bâtiment de la palette glissé jusqu'au plateau y est posé, comme avec l'outil Poser. */
-export const paletteDragged = (type: string): Outcome => patch({ tool: { kind: 'place', type }, boardMessage: undefined });
-export const paletteDropped = (s: ViewState, type: string, cell: BoardCell): Outcome =>
+/**
+ * Une carte glissée hors de la main jusqu'au plateau y est posée, comme avec l'outil qui pose.
+ * La main se referme dès que la carte part : c'est le plateau qui doit recevoir le lâcher.
+ */
+export const cardDragged = (type: string): Outcome => patch({ tool: { kind: 'place', type }, ...noHand, selectedNode: undefined, boardMessage: undefined });
+export const cardDropped = (s: ViewState, type: string, cell: BoardCell): Outcome =>
   applied(placeNode(s.draft, type, cell, s.catalog), { tool: select });
 
 export function boardClick(s: ViewState, cell: BoardCell): Outcome | undefined {
@@ -274,6 +295,7 @@ export function boardClick(s: ViewState, cell: BoardCell): Outcome | undefined {
       // Une case vide où l'on peut bâtir ouvre les fiches des bâtiments à y construire.
       return patch({
         selectedNode: here?.id,
+        ...noHand,
         buildAt: !here && insideBoard(cell) && !isRiver(cell) ? cell : undefined,
         boardMessage: undefined,
         showMenu: false,
@@ -297,7 +319,7 @@ export function boardClick(s: ViewState, cell: BoardCell): Outcome | undefined {
 /** Les raccourcis : Échap revient à la sélection, ⌘Z / ⇧⌘Z / ⌘Y annulent et rétablissent, D ouvre le debug. */
 export function keyPressed(s: ViewState, key: string, mods: { meta: boolean; ctrl: boolean; shift: boolean }): { outcome?: Outcome; preventDefault: boolean } {
   if (key === 'Escape' && s.phase === 'build') {
-    return { outcome: patch({ tool: select, buildAt: undefined, boardMessage: undefined, showMenu: false }), preventDefault: false };
+    return { outcome: patch({ tool: select, ...noHand, boardMessage: undefined, showMenu: false }), preventDefault: false };
   }
   if ((mods.meta || mods.ctrl) && (key === 'z' || key === 'Z' || key === 'y')) {
     return { outcome: { effects: [{ kind: 'travel', direction: key === 'y' || mods.shift ? 'redo' : 'undo' }] }, preventDefault: true };

@@ -69,7 +69,7 @@ Une partie est une suite de vagues. Chacune passe par quatre phases (I5) :
    briefing de chaque scénario annonce la règle du temps (M7) : une vague montre une heure,
    chaque minute passe en un tick, les débits restent par seconde.
 2. **Construction** : le jeu est en pause. Le joueur pose, déplace, relie et retire des
-   bâtiments sur le plateau, et achète des évolutions par les pastilles au pied du bâtiment sélectionné (I12), ou dans sa fiche ; cliquer une case vide ouvre les fiches des bâtiments à y construire.
+   bâtiments sur le plateau, et achète des évolutions par les pastilles au pied du bâtiment sélectionné (I12), ou dans sa carte ; cliquer une case vide, ou « Bâtir », ouvre la main de cartes des bâtiments à construire (I15).
 3. **Vague** : le trafic est simulé, puis rejoué sur le même plateau. Les jauges et les
    incidents se lisent en direct.
 4. **Debrief** : ce qui a marché, ce qui a failli casser, ce qu'on pourrait alléger, avec
@@ -285,12 +285,15 @@ et déterministe, séparée de l'affichage.
 - **Plateau** (R5, R11, R12) : un grand hexagone de cases KayKit, les clients à sa pointe
   gauche, une rivière qu'on ne franchit que par un pont. Vue isométrique en Three.js, on se
   déplace et on zoome, on ne tourne pas.
-- **Construction** (I4, I10) : palette de bâtiments, outils Sélection, Relier, Retirer.
-  On pose en cliquant ou en glissant depuis la palette ; posé sur un chemin, un bâtiment
+- **Construction** (I4, I10, I15) : outils Sélection, Relier, Retirer, et une **main de cartes**,
+  un bâtiment par carte, en éventail au centre de l'écran. Cliquer une case vide l'ouvre pour
+  cette case ; « Bâtir » l'ouvre sans case, et la carte choisie se pose ensuite d'un clic. On
+  peut aussi glisser une carte sur le plateau. Au survol une carte se soulève et montre ses
+  chiffres ; au doigt, un premier contact la soulève, le second la joue. L'illustration est
+  le bâtiment tel que le plateau le rend. Posé sur un chemin, un bâtiment
   s'insère dans le lien quand c'est sensé (I11) ; on déplace un bâtiment en le
   glissant ; on relie en cliquant A puis B, et le plus court chemin de cases se trace seul.
-  Annuler et rétablir (⌘Z, ⇧⌘Z). Cliquer une case vide ouvre les fiches des bâtiments à y
-  construire ; au pied du bâtiment sélectionné, des pastilles pour le déplacer, le retirer et
+  Annuler et rétablir (⌘Z, ⇧⌘Z). Le bâtiment sélectionné a sa carte, au bord droit ; à son pied, des pastilles pour le déplacer, le retirer et
   acheter ses évolutions (I12). Les évolutions se voient : fondations et chantier de
   l'autoscaling sur une case voisine, guérite du disjoncteur, icônes sous le nom. Des
   panneaux au bord des chemins donnent le sens des liens (I13). Les chemins sont de la mise

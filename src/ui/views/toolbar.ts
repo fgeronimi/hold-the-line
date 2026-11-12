@@ -1,8 +1,6 @@
-import type { ComponentDef } from '../../engine/types.ts';
-import { SCENARIOS } from '../../data/scenarios/index.ts';
 import { draftInfo } from '../draft.ts';
-import { guideStep, type TutorialStep } from '../tutorial.ts';
-import { esc, hintClass as hint, hintsOf, nameOf, renderHints, speech, theme, type Tool, type ViewState } from './common.ts';
+import type { TutorialStep } from '../tutorial.ts';
+import { esc, guideOf, hintClass as hint, hintsOf, nameOf, renderHints, speech, type Tool, type ViewState } from './common.ts';
 
 type Blink = TutorialStep['highlight'];
 
@@ -25,49 +23,42 @@ function toolButtons(s: ViewState, tool: Tool, blink: Blink): string {
   return tools + undo + redo;
 }
 
-/** Un bâtiment de la palette : cliquer puis poser, ou glisser sur le plateau. */
-function paletteButton(d: ComponentDef, tool: Tool, blink: Blink): string {
-  const style = theme.buildings[d.id];
-  const on = tool.kind === 'place' && tool.type === d.id;
-  const guided = blink?.tool === 'place' && blink.type === d.id;
-  const title = `${d.techName}${style ? ` — ${style.metaphor}` : ''}. ${style?.role.real ?? ''} Coût ${d.cost}, complexité ${d.complexity}. Cliquer puis poser, ou glisser sur le plateau.`;
-  return `<button class="tool build${active(on)}${hint(guided)}" data-action="tool" data-tool="place" data-type="${esc(d.id)}"
-        title="${esc(title)}">
-        <span class="icon">${style?.icon ?? '🏠'}</span><span>${esc(d.techName)}</span><small>${esc(style?.metaphor ?? '')}</small><small>💰 ${d.cost}</small></button>`;
+/** Ouvre la main de cartes ; reste enfoncé tant qu'une carte choisie attend sa case. */
+function buildButton(s: ViewState, blink: Blink): string {
+  const on = !!s.showHand || s.tool.kind === 'place';
+  return `<button class="tool build${active(on)}${hint(blink?.tool === 'place' && !s.showHand && !s.buildAt)}" data-action="open-hand" title="Choisir un bâtiment, puis cliquer sa case. On peut aussi cliquer une case vide d’abord.">
+        <span class="icon">🔨</span><span>Bâtir</span></button>`;
 }
 
 /** Le refus du plateau, ou à défaut le départ du lien en cours de tracé. */
 function toast(s: ViewState): string {
   if (s.boardMessage) return `<div class="toast panel ko">${esc(s.boardMessage)}</div>`;
   const { tool, draft } = s;
+  if (tool.kind === 'place') return `<div class="toast panel">${esc(nameOf(tool.type, s.catalog))} — cliquer la case où bâtir (Échap pour renoncer)</div>`;
   const from = tool.kind === 'link' && tool.from ? draft.nodes.find((n) => n.id === tool.from) : undefined;
   return from ? `<div class="toast panel">Départ : ${esc(nameOf(from.type, s.catalog))} — cliquer l’arrivée</div>` : '';
 }
 
-/** La barre du bas : outils, bâtiments à poser, et le lancement de la vague. */
+/** La barre du bas : outils, la main de cartes, et le lancement de la vague. */
 export function renderToolbar(s: ViewState): string {
-  const wave = s.scenario.waves[s.game.waveIndex];
-  if (s.phase !== 'build' || !wave) return '';
+  const guide = guideOf(s);
+  if (!guide) return '';
   const { catalog, draft, tool } = s;
-  const firstWaveOfGame = s.game.waveIndex === 0 && s.scenario.id === SCENARIOS[0]!.scenario.id;
-  const guide = guideStep(draft, catalog, wave, s.game.waveIndex, s.game.committed, firstWaveOfGame);
   const help = hintsOf(s);
   // Le dernier indice demandé, tant qu'il reste à faire, passe avant le pas-à-pas.
   const blink: Blink = help.highlight ?? guide.highlight;
-  const palette = Object.values(catalog.components)
-    .filter((d) => d.behavior !== 'source' && !d.prePlaced)
-    .map((d) => paletteButton(d, tool, blink))
-    .join('');
   const validation = draftInfo(draft, catalog).validation;
   const why = validation.ok ? 'Lancer la vague' : validation.errors.join('\n');
-  const tutorial = `<div class="tutorial panel">${speech(guide.says, guide.real)}${renderHints(help)}</div>`;
+  // La main ouverte, la bulle se retire : la carte que désigne le guide clignote à sa place.
+  const handOpen = !!s.showHand || !!s.buildAt;
+  const tutorial = handOpen ? '' : `<div class="tutorial panel">${speech(guide.says, guide.real)}${renderHints(help)}</div>`;
   const errors = validation.ok ? '' : `<div class="errors panel">${validation.errors.map((e) => `<p>⚠ ${esc(e)}</p>`).join('')}</div>`;
   return `
     ${tutorial}
     ${toast(s)}
     <div class="toolbar panel">
       <div class="group">${toolButtons(s, tool, blink)}</div>
-      <div class="group palette">${palette}</div>
+      <div class="group">${buildButton(s, blink)}</div>
       <button class="launch${hint(blink?.tool === 'launch')}" data-action="play" ${validation.ok ? '' : 'disabled'} title="${esc(why)}">⚔️ Lancer la vague</button>
     </div>
     ${errors}`;

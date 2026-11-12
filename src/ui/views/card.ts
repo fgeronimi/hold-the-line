@@ -1,65 +1,18 @@
-import type { ArchNode, BoardCell, Catalog, ComponentDef, UpgradeDef } from '../../engine/types.ts';
+import type { ArchNode, Catalog, ComponentDef, UpgradeDef } from '../../engine/types.ts';
 import { resolveUpgrades, withEffect } from '../../engine/upgrades.ts';
 import { nodeNames } from '../../render/theme.ts';
 import { draftInfo } from '../draft.ts';
 import { minutes } from '../time.ts';
 import type { TutorialStep } from '../tutorial.ts';
-import { decimal as fmt, esc, hintClass as blink, hintsOf, nameOf, speech, theme, type ViewState } from './common.ts';
+import { decimal as fmt, esc, hintClass as blink, hintsOf, speech, theme, type ViewState } from './common.ts';
+import { cardArt, renderHand } from './hand.ts';
 
 const KIND_NAMES: Record<string, string> = { read: 'une lecture', write: 'une écriture', async: 'un événement' };
-const KINDS_TEXT: Record<string, string> = { read: 'lectures', write: 'écritures', async: 'événements' };
 
-/** La fiche du bâtiment sélectionné, ou les fiches de ce qu'on peut bâtir sur la case cliquée. */
+/** Ce qui flotte sur le plateau pendant la construction : la main de cartes, sinon la carte du bâtiment sélectionné. */
 export function renderCard(s: ViewState): string {
   if (s.phase !== 'build') return '';
-  return s.buildAt ? renderBuildMenu(s, s.buildAt) : renderNodeCard(s);
-}
-
-// ——— Construire sur une case vide ———
-
-/** Une fiche du menu de construction : le rôle du bâtiment, ses chiffres, ses évolutions. */
-function buildCard(s: ViewState, d: ComponentDef): string {
-  const style = theme.buildings[d.id];
-  const accepts = d.accepts.map((k) => KINDS_TEXT[k] ?? k).join(', ');
-  const ups = Object.values(s.catalog.upgrades)
-    .filter((u) => u.appliesTo === d.id)
-    .map((u) => `${theme.upgradeIcons[u.id] ?? '✦'} ${esc(u.techName)}`)
-    .join(' · ');
-  const budget = s.scenario.waves[s.game.waveIndex]?.budget ?? Infinity;
-  const affordable = d.cost <= Math.max(0, budget - draftInfo(s.draft, s.catalog).cost);
-  return `<article class="build-card">
-        <header><span class="icon">${style?.icon ?? '🏠'}</span><div><b>${esc(d.techName)}</b><small>${esc(style?.metaphor ?? '')}</small></div></header>
-        ${style ? `<p>${esc(style.role.real)}</p>` : ''}
-        <p class="figures">${fmt(d.capacity)} unités de travail/s · ${d.latencyMs} ms${accepts ? ` · reçoit ${accepts}` : ''}</p>
-        ${ups ? `<p class="ups">Évolutions : ${ups}</p>` : ''}
-        <footer><span>💰 ${d.cost} · ⚙ ${d.complexity}</span>
-          <button data-action="build-at" data-type="${esc(d.id)}" ${affordable ? '' : 'title="Au-delà du budget restant de la vague"'}>Construire ici</button></footer>
-      </article>`;
-}
-
-/**
- * Les fiches des bâtiments à construire sur une case vide : ce que fait chacun, dans la
- * métaphore et en vrai, ses chiffres, et un bouton pour le poser là. Sur un chemin, le
- * bâtiment s'insère dans le lien quand c'est sensé (I11) : la fiche le dit.
- */
-export function renderBuildMenu(s: ViewState, cell: BoardCell): string {
-  const road = s.draft.links.find((l) => l.path?.some((c) => c.q === cell.q && c.r === cell.r));
-  const ends = road ? [road.from, road.to].map((id) => nameOf(s.draft.nodes.find((n) => n.id === id)?.type ?? id, s.catalog)) : undefined;
-  const cards = Object.values(s.catalog.components)
-    .filter((d) => d.behavior !== 'source' && !d.prePlaced)
-    .map((d) => buildCard(s, d))
-    .join('');
-  const where =
-    road && ends
-      ? `<p class="muted">Sur le chemin ${esc(ends[0]!)} → ${esc(ends[1]!)} : le bâtiment s’insère dans le lien quand c’est sensé.</p>`
-      : '<p class="muted">Choisir un bâtiment pour cette case.</p>';
-  return `
-    <section class="card panel build-menu">
-      <button class="close" data-action="close-build" title="Fermer (Échap)">✕</button>
-      <h3>Construire ici</h3>
-      ${where}
-      <div class="build-cards">${cards}</div>
-    </section>`;
+  return renderHand(s) || renderNodeCard(s);
 }
 
 // ——— La fiche d'un bâtiment ———
@@ -119,9 +72,10 @@ function renderNodeCard(s: ViewState): string {
   const removeHinted = hinted?.tool === 'remove' && hinted.node === node.id;
   const remove = permanent ? '' : `<button data-action="remove-node" data-node="${esc(node.id)}"${removeHinted ? ' class="hint"' : ''}>Retirer</button>`;
   return `
-    <section class="card panel">
-      <button class="close" data-action="deselect" title="Fermer">✕</button>
+    <section class="card detail-card">
+      <button class="close" data-action="deselect" title="Fermer" aria-label="Fermer">✕</button>
       <h3>${esc(own.tech)} <small>${esc(own.metaphor)}</small></h3>
+      <div class="hcard-art">${cardArt(s, node.type)}</div>
       ${fixedNote}
       ${role ? speech(role.says, role.real) : ''}
       ${def && def.behavior !== 'source' ? `<p class="figures">${capacityText(node, def, s.catalog)}</p>` : ''}

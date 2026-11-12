@@ -22,6 +22,7 @@ import {
   Vector2,
   Vector3,
   WebGLRenderer,
+  WebGLRenderTarget,
   type Material,
 } from 'three';
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js';
@@ -68,6 +69,11 @@ const SIGN_OFFSET = 0.5;
 const CLICK_TOLERANCE_PX = 5;
 
 const K = (name: string): ModelId => `kaykit/${name}`;
+/** La courbe sRGB, d'une valeur linéaire sur 8 bits à sa valeur affichée. */
+const SRGB = Uint8Array.from({ length: 256 }, (_, i) => {
+  const v = i / 255;
+  return Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055));
+});
 
 /** Les modèles KayKit dont chaque forme a besoin. */
 const SHAPE_MODELS: Record<Shape, ModelId[]> = {
@@ -177,6 +183,8 @@ export class CityScene {
   private readonly pips: CSS2DObject;
   private pipsHtml = '';
   private pipsFor: string | undefined;
+  /** Les portraits déjà rendus, par type de bâtiment. */
+  private readonly portraits: Record<string, string> = {};
   /** Réserve d'étiquettes +1 / −1, réutilisées d'une image à l'autre. */
   private readonly pops: CSS2DObject[] = [];
   private hovered: Hex | undefined;
@@ -357,6 +365,86 @@ export class CityScene {
     }
     // La caméra regarde depuis +x, +z : le pied du bâtiment de ce côté reste dans sa case.
     this.pips.position.set(at.x - 0.25, 0.35, at.z + 0.65);
+  }
+
+  /**
+   * Le portrait de chaque bâtiment sur sa tuile d'herbe, pour les cartes de l'interface.
+   * Rendu une fois hors écran par le renderer du plateau, sous le même angle et la même
+   * lumière : pas de second contexte WebGL, et la carte montre ce que le plateau posera.
+   */
+  thumbnails(types: string[], size = 320): Record<string, string> {
+    for (const type of types) {
+      const style = this.theme.buildings[type];
+      if (!style || this.portraits[type]) continue;
+      const stage = new Group();
+      const b = this.newBuilding({ id: '__portrait__', type });
+      this.build(b, style);
+      this.fitToCell(b.group);
+      // Les colis du relais sont cachés tant que la file est vide : le portrait en montre quelques-uns.
+      b.parked.slice(0, 5).forEach((o) => (o.visible = true));
+      stage.add(b.group);
+      this.put(stage, K('hex_grass'), { scale: TILE_SCALE });
+      this.portraits[type] = this.portrait(stage, size);
+      stage.traverse((o) => {
+        if (o instanceof Mesh) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: Material) => m.dispose());
+      });
+    }
+    this.invalidate();
+    return { ...this.portraits };
+  }
+
+  /** Rend un objet seul, cadré serré sur fond transparent, et le renvoie en image. */
+  private portrait(subject: Object3D, size: number): string {
+    const stage = new Scene();
+    stage.add(new HemisphereLight('#ffffff', '#6f8f5a', 0.8), new AmbientLight('#ffffff', 0.25));
+    const sun = new DirectionalLight('#ffffff', 1.7);
+    sun.position.set(-10, 25, 18);
+    stage.add(sun, subject);
+
+    const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+    camera.position.set(40, 40 * 0.82, 40);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+    // L'emprise du sujet vue par la caméra : les huit coins de sa boîte, dans le repère de la caméra.
+    const box = new Box3().setFromObject(subject);
+    const seen = new Box3();
+    for (const x of [box.min.x, box.max.x])
+      for (const y of [box.min.y, box.max.y])
+        for (const z of [box.min.z, box.max.z]) seen.expandByPoint(new Vector3(x, y, z).applyMatrix4(camera.matrixWorldInverse));
+    const centre = seen.getCenter(new Vector3());
+    const half = (Math.max(seen.max.x - seen.min.x, seen.max.y - seen.min.y) / 2) * 1.04;
+    Object.assign(camera, { left: centre.x - half, right: centre.x + half, top: centre.y + half, bottom: centre.y - half });
+    camera.updateProjectionMatrix();
+
+    const target = new WebGLRenderTarget(size, size, { samples: 4 });
+    const alpha = this.renderer.getClearAlpha();
+    this.renderer.setClearAlpha(0);
+    this.renderer.setRenderTarget(target);
+    this.renderer.render(stage, camera);
+    const pixels = new Uint8Array(size * size * 4);
+    this.renderer.readRenderTargetPixels(target, 0, 0, size, size, pixels);
+    this.renderer.setRenderTarget(null);
+    this.renderer.setClearAlpha(alpha);
+    target.dispose();
+    stage.remove(subject);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const context = canvas.getContext('2d')!;
+    const image = context.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+      // La cible se lit de bas en haut, l'image s'écrit de haut en bas.
+      const from = (size - 1 - y) * size * 4;
+      const to = y * size * 4;
+      for (let x = 0; x < size * 4; x += 4) {
+        const opacity = pixels[from + x + 3]! / 255;
+        // Une cible hors écran reste en lumière linéaire et prémultipliée : l'image attend du sRGB droit.
+        for (let c = 0; c < 3; c++) image.data[to + x + c] = opacity > 0 ? SRGB[Math.min(255, Math.round(pixels[from + x + c]! / opacity))]! : 0;
+        image.data[to + x + 3] = pixels[from + x + 3]!;
+      }
+    }
+    context.putImageData(image, 0, 0);
+    return canvas.toDataURL('image/png');
   }
 
   /** Recentre doucement la vue sur un bâtiment (zoom avant), ou sur tout le plateau. */

@@ -58,6 +58,11 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   est une fonction pure de `actions.ts` qui renvoie `{ patch, effects }` ; la partie gardée
   passe par `session.ts` (`readStore` valide le magasin, `withGame` n'y copie le calibrage
   que s'il a eu lieu) ; annuler / rétablir est dans `history.ts`.
+- La main de cartes (I15) : `src/ui/hand.ts` donne la géométrie de l'éventail, sans unité (la
+  feuille de style la multiplie par un pas qui dépend de la largeur) ; `views/hand.ts` rend
+  une carte par bâtiment constructible ; `CityScene.thumbnails` rend leurs illustrations une
+  fois, hors écran, avec le renderer du plateau (`ViewState.thumbnails`). Le calque `#hand`
+  porte la main ou la carte du bâtiment sélectionné, et n'est réécrit que si son HTML change.
 - `src/ui/draft.ts` : `draftInfo(arch, catalog)` donne validation, ordre, flux et facture d'un
   brouillon, mémorisés par identité de référence. Vues, guide, aide et plateau le lisent au
   lieu de rappeler `validateArchitecture` ou `linkFlows`.
@@ -66,7 +71,7 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   viennent pas d'une leçon sont dans `Theme.debrief` ; le debrief reconnaît les évolutions
   par leur effet, jamais par leur identifiant.
 - `src/ui/views.ts` ré-exporte les calques de `src/ui/views/` (`hud.ts`, `toolbar.ts`,
-  `card.ts`, `dialog.ts`, `debug.ts`, et `common.ts` pour les types, `esc` et les formats).
+  `hand.ts`, `card.ts`, `dialog.ts`, `debug.ts`, et `common.ts` pour les types, `esc` et les formats).
 - Mode debug : `?debug` dans l'URL ou la touche D. Essais hors partie, vue tableau et
   calibrage n'existent que là.
 - Le plateau 3D (`CityScene`) est créé une fois dans `#board`, **hors** des zones
@@ -78,7 +83,7 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   `effects.ts` dessine les incidents (fumée, feu, lettres, bouclier) sans état ; les
   pastilles d'évolution (`upgradePips` dans `views.ts`) sont posées par `setPips` au pied du
   bâtiment sélectionné, et leurs clics passent par la délégation de `main.ts` ; une case vide
-  cliquée ouvre `renderBuildMenu` ; l'autoscaling a ses fondations sur une case voisine
+  cliquée, ou « Bâtir », ouvre la main de cartes (`renderHand`, I15) ; l'autoscaling a ses fondations sur une case voisine
   (`findAnnexes`, décorative, non réservée) ; `fleet.ts`
   range les personnages, une géométrie instanciée par pose de marche. `vitrine.html`
   (`npm run dev`, puis `/vitrine.html`) les montre un par un sur des îlots de démonstration
@@ -144,6 +149,10 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   de la clé dès que la forme de la partie change. Catalogue et scénario n'y sont copiés que
   si le joueur a calibré en debug ; sinon ils viennent du code, et une modification des
   données atteint les parties en cours sans changer la clé.
+- Une carte de la main est un `<button>` : dedans, que des `<span>`. Son survol est en CSS
+  pur ; ne pas réécrire `#hand` sans changement (`renderHandLayer`), la distribution
+  rejouerait et la carte survolée retomberait. Au doigt, pas de survol : `ActionArgs.touch`
+  fait soulever la carte au premier contact (`liftedCard`), jouer au second.
 - Tout texte venant de l'état passe par `esc()` (interface) ou `escapeHtml()` (rendu)
   avant d'entrer dans le HTML.
 - Le rendu ne simule rien : s'il faut une donnée de plus pour animer, elle s'ajoute aux

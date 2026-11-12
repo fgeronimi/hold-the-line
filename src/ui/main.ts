@@ -8,11 +8,11 @@ import {
   boardClick,
   canDrag,
   canUse,
+  cardDragged,
+  cardDropped,
   dragStart,
   drop,
   keyPressed,
-  paletteDragged,
-  paletteDropped,
   permanent,
   type ActionArgs,
   type Effect,
@@ -59,14 +59,14 @@ const root = document.getElementById('app')!;
 root.innerHTML = `
   <div id="board" class="board"><p class="replay-loading">Chargement de la cité…</p></div>
   <div id="hud" class="layer top"></div>
-  <div id="card" class="layer right"></div>
+  <div id="hand" class="layer hand-layer"></div>
   <div id="toolbar" class="layer bottom"></div>
   <div id="dialog" class="layer center"></div>
   <div id="debug" class="layer debug-layer"></div>`;
 const regions = {
   board: document.getElementById('board')!,
   hud: document.getElementById('hud')!,
-  card: document.getElementById('card')!,
+  hand: document.getElementById('hand')!,
   toolbar: document.getElementById('toolbar')!,
   dialog: document.getElementById('dialog')!,
   debug: document.getElementById('debug')!,
@@ -81,6 +81,10 @@ let shown: { draft: ViewState['draft']; catalog: ViewState['catalog'] } | undefi
 let history: History = emptyHistory;
 /** Un retour dans l'historique ne s'y inscrit pas lui-même. */
 let restoring = false;
+/** Ce que le calque de la main affiche déjà : le réécrire rejouerait la distribution et ferait retomber la carte survolée. */
+let handHtml = '';
+/** Le dernier contact venait d'un doigt : les cartes se soulèvent avant de se jouer. */
+let touching = false;
 
 function update(patch: Partial<ViewState>): void {
   // Tout brouillon passe par le plateau : un bâtiment ajouté sans case (vue tableau) en reçoit une.
@@ -97,13 +101,22 @@ function update(patch: Partial<ViewState>): void {
 
 function render(): void {
   regions.hud.innerHTML = renderHud(state);
-  regions.card.innerHTML = renderCard(state);
+  renderHandLayer();
   regions.toolbar.innerHTML = renderToolbar(state);
   regions.dialog.innerHTML = renderDialog(state);
   regions.debug.innerHTML = renderDebug(state);
   document.body.classList.toggle('debug-open', state.debug);
   attachDebriefChart();
   syncBoard();
+}
+
+/** La main et la carte du bâtiment : réécrites seulement si elles changent, distribuées seulement à l'ouverture. */
+function renderHandLayer(): void {
+  const html = renderCard(state);
+  if (html === handHtml) return;
+  regions.hand.classList.toggle('settled', handHtml !== '' && html !== '');
+  regions.hand.innerHTML = html;
+  handHtml = html;
 }
 
 /** Le survol des courbes du debrief : le HTML est réécrit à chaque rendu, on le rebranche. */
@@ -160,7 +173,7 @@ async function playOnBoard(attempt: Attempt): Promise<void> {
   const { startReplay } = await import('../render/replay.ts');
   stopWave?.();
   const wave = state.scenario.waves[attempt.waveIndex]!;
-  update({ phase: 'wave', debriefTab: 'analysis', current: attempt.id, selectedNode: undefined, buildAt: undefined, tool: { kind: 'select' }, showMenu: false });
+  update({ phase: 'wave', debriefTab: 'analysis', current: attempt.id, selectedNode: undefined, buildAt: undefined, showHand: false, liftedCard: undefined, tool: { kind: 'select' }, showMenu: false });
   stopWave = startReplay(scene, regions.board, {
     title: `Vague ${attempt.waveIndex + 1} — ${wave.title}`,
     arch: attempt.arch,
@@ -221,30 +234,32 @@ function run(outcome: Outcome | undefined): void {
   }
 }
 
-/** Un bâtiment de la palette glissé jusqu'au plateau y est posé, comme avec l'outil Poser. */
-let paletteDrag: { type: string; x: number; y: number; moved: boolean } | undefined;
+/** Une carte glissée hors de la main jusqu'au plateau y est posée, comme avec l'outil qui pose. */
+let cardDrag: { type: string; x: number; y: number; moved: boolean } | undefined;
 root.addEventListener('pointerdown', (e) => {
-  const button = (e.target as Element).closest<HTMLElement>('[data-tool="place"][data-type]');
-  if (!button || state.phase !== 'build') return;
-  paletteDrag = { type: button.dataset.type!, x: e.clientX, y: e.clientY, moved: false };
+  touching = e.pointerType === 'touch';
+  const card = (e.target as Element).closest<HTMLElement>('.hcard[data-type]');
+  // Au doigt, glisser fait défiler la main : la carte se joue en deux contacts.
+  if (!card || touching || state.phase !== 'build') return;
+  cardDrag = { type: card.dataset.type!, x: e.clientX, y: e.clientY, moved: false };
 });
 window.addEventListener('pointermove', (e) => {
-  if (!paletteDrag || paletteDrag.moved || Math.hypot(e.clientX - paletteDrag.x, e.clientY - paletteDrag.y) < 6) return;
-  paletteDrag.moved = true;
-  run(paletteDragged(paletteDrag.type));
+  if (!cardDrag || cardDrag.moved || Math.hypot(e.clientX - cardDrag.x, e.clientY - cardDrag.y) < 6) return;
+  cardDrag.moved = true;
+  run(cardDragged(cardDrag.type));
 });
 window.addEventListener('pointerup', (e) => {
-  const drag = paletteDrag;
-  paletteDrag = undefined;
+  const drag = cardDrag;
+  cardDrag = undefined;
   if (!drag?.moved || !scene || !(e.target instanceof HTMLCanvasElement)) return;
   const cell = scene.cellAt(e.clientX, e.clientY);
-  if (cell) run(paletteDropped(state, drag.type, cell));
+  if (cell) run(cardDropped(state, drag.type, cell));
 });
 
 /** Ce que désigne l'élément : la vue tableau a trois champs, lus seulement pour ses deux boutons. */
 function argsOf(el: HTMLElement, action: string): ActionArgs {
   const value = (id: string) => (document.getElementById(id) as HTMLSelectElement).value;
-  const args: ActionArgs = { data: { ...el.dataset } };
+  const args: ActionArgs = { data: { ...el.dataset }, touch: touching };
   if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) args.value = el.value;
   if (action === 'add-node') args.newNode = value('new-node');
   if (action === 'add-link') {
@@ -290,6 +305,7 @@ void (async () => {
       onDrop: (cell: BoardCell | undefined) => run(drop(state, cell)),
     };
     syncBoard();
+    update({ thumbnails: scene.thumbnails(Object.keys(theme.buildings)) });
   } catch (e) {
     regions.board.querySelector('.replay-loading')!.textContent = `Impossible de charger le plateau : ${String(e)}`;
   }
