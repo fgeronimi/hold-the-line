@@ -1,8 +1,8 @@
-import { addStream, isEvent, sumRps, type Flow, type Stream } from '../flow.ts';
+import { addStream, isEvent, isPoisoned, sumRps, type Flow, type Stream } from '../flow.ts';
 import { fail, tally } from '../ledger.ts';
 import { consumersOf } from '../route.ts';
 import { REQUEST_KINDS, type ArchNode, type ComponentDef, type RequestKind } from '../types.ts';
-import { withEffect } from '../upgrades.ts';
+import { activeEffect, withEffect } from '../upgrades.ts';
 import { defOf, instancesNow, type Now, type World } from '../world.ts';
 import { ratio, serveShared, type NodeOutcome } from './common.ts';
 
@@ -16,16 +16,25 @@ export function processQueue(node: ArchNode, def: ComponentDef, incoming: Flow, 
 
   // Un message accepté ici est acquitté par la file d'où il venait : il n'appartient plus qu'à celle-ci.
   const backlog = w.backlogs.get(node.id) ?? new Map<string, Stream>();
-  for (const s of accepted.values()) addStream(backlog, stored(s, 1));
+  const poison = Math.min(1, now.incidents.share(node.type, 'poison-message'));
+  for (const s of accepted.values()) {
+    const bad = isEvent(s) ? s.rps * poison : 0;
+    addStream(backlog, stored({ ...s, rps: s.rps - bad }, 1));
+    if (bad > 0) addStream(backlog, stored({ ...s, rps: bad, poisoned: 0 }, 1));
+  }
 
   const batch = def.batchSize ?? 1;
   const passed: Flow = new Map();
   for (const kind of REQUEST_KINDS) {
-    const pending = sumRps(backlog, (s) => s.kind === kind);
+    // La file sert dans l'ordre : tant qu'un message empoisonné revient en tête, son
+    // consommateur plante dessus et rien de ce qui attend derrière ne part (S25).
+    const blocked = [...backlog.values()].some((s) => s.kind === kind && isPoisoned(s));
+    const releasable = (s: Stream) => s.kind === kind && (!blocked || isPoisoned(s));
+    const pending = sumRps(backlog, releasable);
     if (pending === 0) continue;
     const drain = Math.min(pending, drainCapacity(node.id, kind, batch, w, now));
     const share = drain / pending;
-    for (const s of [...backlog.values()].filter((x) => x.kind === kind)) {
+    for (const s of [...backlog.values()].filter(releasable)) {
       const out = s.rps * share;
       addStream(passed, { ...s, batch: s.batch * batch, rps: out, queue: node.id });
       s.rps -= out;
@@ -41,7 +50,24 @@ export function processQueue(node: ArchNode, def: ComponentDef, incoming: Flow, 
 
 /** Le message tel que la file le garde : sans marque d'origine, avant son regroupement en lots. */
 function stored(s: Stream, batch: number): Stream {
-  return { kind: s.kind, source: s.source, batch: s.batch / batch, rps: s.rps, ...(s.duplicate ? { duplicate: true } : {}) };
+  return {
+    kind: s.kind,
+    source: s.source,
+    batch: s.batch / batch,
+    rps: s.rps,
+    ...(s.duplicate ? { duplicate: true } : {}),
+    ...(isPoisoned(s) ? { poisoned: s.poisoned } : {}),
+  };
+}
+
+/**
+ * Une file qui garde un message empoisonné sans file des lettres mortes ne relâchera plus
+ * jamais rien (S25) : ce qui y attend n'arrivera pas, comme dans une file sans consommateur.
+ */
+export function blockedForGood(w: World, id: string): boolean {
+  const backlog = w.backlogs.get(id);
+  if (!backlog || activeEffect(w.upgrades.get(id)!, 'deadLetter')) return false;
+  return [...backlog.values()].some((s) => isPoisoned(s) && s.rps > 1e-9);
 }
 
 /**
@@ -53,9 +79,18 @@ export function settleQueues(w: World, now: Now): void {
   const ctx = now.ledger;
   for (const [id, backlog] of w.backlogs) {
     const def = defOf(w, id);
+    const deadLetter = activeEffect(w.upgrades.get(id)!, 'deadLetter');
     for (const s of w.requeued.get(id)?.values() ?? []) {
-      addStream(backlog, stored(s, def.batchSize ?? 1));
       tally(ctx, id, 'requeued', s.rps);
+      // Après `maxReceives` essais ratés, le message est mis de côté : il ne bloque plus la file,
+      // mais son travail n'est pas fait.
+      if (deadLetter && isPoisoned(s) && s.poisoned! >= deadLetter.maxReceives) {
+        fail(ctx, id, 'dead-lettered', s.rps, isEvent(s) ? s.rps : 0);
+        tally(ctx, id, 'deadLettered', s.rps);
+        w.deadLetters.set(id, (w.deadLetters.get(id) ?? 0) + s.rps);
+        continue;
+      }
+      addStream(backlog, stored(s, def.batchSize ?? 1));
     }
 
     let maxBacklog = def.maxBacklog ?? Infinity;

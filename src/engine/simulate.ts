@@ -7,7 +7,7 @@ import { noFailures, nonZero, sumFailures, type Ledger } from './ledger.ts';
 import { lossMessages } from './messages.ts';
 import { factorAt } from './profile.ts';
 import { processNode, type NodeOutcome } from './nodes/index.ts';
-import { settleQueues } from './nodes/queue.ts';
+import { blockedForGood, settleQueues } from './nodes/queue.ts';
 import { planRetries, retriesAt, retryPlan, sumKinds, type RetryPlan } from './retries.ts';
 import { linkTraffic, messagingRoles, route, type Delivery } from './route.ts';
 import { routeTable } from './routing.ts';
@@ -63,6 +63,7 @@ export function simulateWave(
     retrying: new Set(retries.retrying.map((s) => s.id)),
     backlogs: new Map(),
     requeued: new Map(),
+    deadLetters: new Map(),
     autoscalers: new Map(),
   };
 
@@ -177,9 +178,10 @@ export function simulateWave(
     // Ce qui manque aux abonnés attendus, une fois retirés les échecs déjà comptés et ce
     // qui attend encore en file : compté au fil des ticks, pour que le rejeu le montre.
     if (fanOut > 0) {
-      // Seul ce qui attend dans une file vidée par un consommateur arrivera un jour.
+      // Seul ce qui attend dans une file vidée par un consommateur arrivera un jour ; pas dans
+      // une file qu'un message empoisonné bloque pour de bon (S25).
       const waiting = [...w.backlogs]
-        .filter(([id]) => routes.get(id)!.forward.async.length > 0)
+        .filter(([id]) => routes.get(id)!.forward.async.length > 0 && !blockedForGood(w, id))
         .reduce((a, [, b]) => a + sumRps(b, isEvent), 0);
       const missing = Math.max(0, asyncInjected * fanOut - asyncTally.delivered - asyncTally.failed - waiting);
       if (missing > undeliveredSoFar) failures.undelivered += missing - undeliveredSoFar;
@@ -306,6 +308,7 @@ function nodeTickOf(w: World, now: Now, node: ArchNode, def: ComponentDef, incom
     failed: ledger.nodeFailed.get(id) ?? 0,
     ...(w.backlogs.has(id) ? { backlog: sumRps(w.backlogs.get(id)!) } : {}),
     ...(backlogAge ? { backlogAge } : {}),
+    ...(w.deadLetters.get(id) ? { deadLetters: w.deadLetters.get(id)! } : {}),
     ...(outcome.instances !== undefined ? { instances: outcome.instances } : {}),
     ...(outcome.starting ? { starting: outcome.starting } : {}),
     ...(ledger.nodeShed.has(id) ? { shed: ledger.nodeShed.get(id)! } : {}),

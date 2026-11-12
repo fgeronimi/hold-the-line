@@ -303,6 +303,22 @@ export const incidentLessons: Record<IncidentEffect['type'], { hurt: Lesson; hel
       signal: 'Retard de réplication, et réplicas déconnectés du primaire.',
     },
   },
+  'poison-message': {
+    hurt: {
+      says: '{title} : chaque fois qu’on la remettait au maître de métier, il s’effondrait dessus, et le relais de poste n’a plus rien livré d’autre. {failed} plis sont restés en souffrance derrière elle.',
+      tech: 'Un message empoisonné (mal formé, ou qui fait planter le consommateur) n’est jamais acquitté : la file le relivre sans fin, le consommateur plante à chaque essai, et une file qui sert dans l’ordre ne livre plus rien de ce qui attend derrière. L’arriéré et l’âge du plus vieux message montent jusqu’à la fin.',
+      remedy: 'Une file des lettres mortes : après quelques essais ratés (trois, ici), le message est mis de côté dans une file à part. La file repart ; le message, lui, attend qu’on l’examine.',
+      concept: 'Message empoisonné, file des lettres mortes',
+      signal: 'Âge du plus vieux message, et nombre d’essais par message : un message relivré plus de trois fois est suspect.',
+    },
+    held: {
+      says: '{title} : après trois essais, la commande a été mise de côté, et le relais de poste a repris sa tournée. {dead} plis attendent qu’on les examine.',
+      tech: 'La file des lettres mortes a écarté les messages empoisonnés après trois essais ratés : la file ne s’est bloquée que le temps de ces essais. Les messages mis de côté ne sont pas traités : ils comptent en échec, et quelqu’un doit les examiner, corriger, puis les rejouer.',
+      remedy: 'Alerter dès qu’un message tombe dans la file des lettres mortes : c’est un travail en attente, pas une poubelle. Les rejouer (redrive) une fois la cause corrigée.',
+      concept: 'Message empoisonné, file des lettres mortes',
+      signal: 'Taille de la file des lettres mortes : une alerte dès le premier message.',
+    },
+  },
   'publish-loss': {
     hurt: {
       says: '{title} : {failed} commandes payées sont restées sans suite.',
@@ -338,4 +354,5 @@ export const paradeCosts: Partial<Record<UpgradeEffect['type'] | 'queue', string
   autoscaling: 'L’autoscaling : des instances payées plus cher à l’heure, et quelques minutes de démarrage pendant lesquelles le pic n’est pas absorbé.',
   coalescing: 'Le verrou de recalcul : les requêtes qui attendent une entrée en cours de calcul attendent un peu plus.',
   rateLimit: 'La limite par client : un client légitime trop gourmand serait refusé lui aussi.',
+  deadLetter: 'La file des lettres mortes : les messages mis de côté ne sont pas traités. La commande a été confirmée au client, mais rien n’est fait tant que quelqu’un ne les a pas examinés et rejoués.',
 };

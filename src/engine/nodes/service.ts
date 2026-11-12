@@ -4,7 +4,7 @@ import { retryingShare, timedOut } from '../retries.ts';
 import { REQUEST_KINDS, type ArchNode, type ComponentDef } from '../types.ts';
 import { instancesOf, withEffect } from '../upgrades.ts';
 import { instancesNow, type Now, type World } from '../world.ts';
-import { deferExcess, fits, ratio, serveWithin, splitQueued, type NodeOutcome } from './common.ts';
+import { deferExcess, fits, ratio, rejectPoisoned, serveWithin, splitQueued, type NodeOutcome } from './common.ts';
 
 export function processService(node: ArchNode, def: ComponentDef, incoming: Flow, w: World, now: Now): NodeOutcome {
   const base = instancesNow(w, now.incidents, node);
@@ -28,7 +28,7 @@ export function processService(node: ArchNode, def: ComponentDef, incoming: Flow
     taken = pressure(node.id, def, mergeFlows(direct, served), instances, w, now);
     // Des fils tous pris par une dépendance lente laissent les messages en file : la cause reste à dire.
     if (share < 1 && all.blockedBy) taken = { ...taken, blockedBy: all.blockedBy };
-    passed = mergeFlows(passed, served);
+    passed = mergeFlows(passed, rejectPoisoned(node.id, served, w, now.ledger));
   }
   auto?.plan(taken.demand);
   return {

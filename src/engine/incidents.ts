@@ -7,7 +7,7 @@ import type { Incident } from './types.ts';
  */
 export const UNANSWERED_MS = 5000;
 
-export type MessagingIncident = 'duplicate-delivery' | 'publish-loss';
+export type MessagingIncident = 'duplicate-delivery' | 'publish-loss' | 'poison-message';
 
 /** Ce que les incidents en cours font à chaque type de composant, à un tick donné. */
 export interface IncidentState {

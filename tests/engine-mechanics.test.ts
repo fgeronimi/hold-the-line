@@ -47,6 +47,7 @@ const catalog: Catalog = {
     timeout: { id: 'timeout', label: 'Timeout', techName: 'Timeout', appliesTo: 'app', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'callTimeout', timeoutMs: 100 } },
     shed: { id: 'shed', label: 'Shed', techName: 'Shed', appliesTo: 'lb', maxLevel: 1, cost: { base: 10, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'loadShedding', targetUtilization: 0.9 } },
     outbox: { id: 'outbox', label: 'Outbox', techName: 'Outbox', appliesTo: 'db', maxLevel: 1, cost: { base: 10, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'outbox' } },
+    dlq: { id: 'dlq', label: 'DLQ', techName: 'DLQ', appliesTo: 'bq', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'deadLetter', maxReceives: 3 } },
   },
 };
 
@@ -682,6 +683,59 @@ describe('doublons et idempotence (S5)', () => {
   it('un doublon ne compte jamais comme livré', () => {
     const r = simulateWave(consumer(true), wave([users({ async: 20 })], { incidents: [dup], consumers: ['s1'] }), catalog);
     expect(r.delivery).toEqual({ expected: 200, delivered: 200 });
+  });
+});
+
+describe('message empoisonné et file des lettres mortes (S25)', () => {
+  // 20 événements par tick vers un service par une file ; au tick 2, un quart (5) est empoisonné.
+  const consumer = (dlq: boolean) =>
+    arch([n('s', 'src'), n('a', 'app'), n('q', 'bq', dlq ? { dlq: 1 } : undefined), n('s1', 'svc')], [['s', 'a'], ['a', 'q'], ['q', 's1']]);
+  const poison = incident('bq', 2, 3, { type: 'poison-message', share: 0.25 });
+  const play = (dlq: boolean) => simulateWave(consumer(dlq), wave([users({ async: 20 })], { incidents: [poison], consumers: ['s1'] }), catalog);
+
+  it('sans parade, le message revient à chaque tick et bloque la file pour de bon', () => {
+    const r = play(false);
+    // Tant qu'elle garde le message empoisonné, la file ne relâche que lui : le reste attend.
+    expect(r.ticks.slice(2).map((t) => t.links['q→s1']?.async)).toEqual(Array(8).fill(5));
+    expect(r.ticks.map((t) => t.nodes.q!.backlog ?? 0)).toEqual([0, 0, 20, 40, 60, 80, 100, 120, 140, 160]);
+    expect(r.ticks.map((t) => t.nodes.q!.backlogAge ?? 0)).toEqual([0, 0, 0, 1, 2, 3, 4, 5, 6, 7]);
+    // Le consommateur plante à chaque essai : le message lui coûte son travail, sans être acquitté.
+    expect(r.ticks[3]!.nodes.s1!).toMatchObject({ poisoned: 5, deferred: 5, failed: 0 });
+    expect(r.ticks[3]!.nodes.s1!.utilization).toBeCloseTo(0.5 / 1000, 12);
+    expect(r.ticks[3]!.nodes.q!.requeued).toBe(5);
+    // Rien de ce qui attend n'arrivera : compté non livré, au fil des ticks.
+    expect(r.delivery).toEqual({ expected: 200, delivered: 40 });
+    expect(r.failuresByReason.undelivered).toBeCloseTo(160, 9);
+    expect(r.ticks[2]!.failed).toBeCloseTo(20, 9);
+    expect(r.failuresByReason['dead-lettered']).toBe(0);
+  });
+
+  it('avec la file des lettres mortes, il est mis de côté après trois essais, et la file repart', () => {
+    const r = play(true);
+    // Essais aux ticks 2, 3 et 4 ; mis de côté à la fin du tick 4 ; au tick 5, tout part.
+    expect(r.ticks.map((t) => t.nodes.q!.backlog ?? 0)).toEqual([0, 0, 20, 40, 55, 0, 0, 0, 0, 0]);
+    expect(r.ticks.map((t) => t.nodes.q!.backlogAge ?? 0)).toEqual([0, 0, 0, 1, 2, 0, 0, 0, 0, 0]);
+    expect(r.ticks[4]!.nodes.q!).toMatchObject({ deadLettered: 5, deadLetters: 5, failed: 5, requeued: 5 });
+    expect(r.ticks[9]!.nodes.q!.deadLetters).toBe(5);
+    expect(r.ticks[5]!.links['q→s1']!.async).toBe(75);
+    // Le message mis de côté n'est pas traité : un échec à part, pas un « non livré ».
+    expect(r.failuresByReason['dead-lettered']).toBe(5);
+    expect(r.failuresByReason.undelivered).toBe(0);
+    expect(r.delivery).toEqual({ expected: 200, delivered: 195 });
+    expect(r.failed).toBe(5);
+  });
+
+  it('sans incident, la file des lettres mortes ne change rien', () => {
+    const calm = (dlq: boolean) => simulateWave(consumer(dlq), wave([users({ async: 20 })], { consumers: ['s1'] }), catalog);
+    expect(calm(true).ticks).toEqual(calm(false).ticks);
+    expect(calm(true).failed).toBe(0);
+  });
+
+  it('un message mis de côté n’est pas relancé : sa commande a été confirmée au client', () => {
+    const a = arch([n('s', 'src'), n('a', 'app'), n('q', 'bq', { dlq: 1 }), n('s1', 'svc')], [['s', 'a'], ['a', 'q'], ['q', 's1']]);
+    const r = simulateWave(a, wave([users({ async: 20 }, { retries: 3 })], { incidents: [poison] }), catalog);
+    expect(r.failuresByReason['dead-lettered']).toBe(5);
+    expect(r.ticks.every((t) => (t.retries ?? 0) === 0)).toBe(true);
   });
 });
 

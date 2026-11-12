@@ -1,4 +1,4 @@
-import { addStream, filterFlow, scaleFlow, work, type Flow, type Stream } from '../flow.ts';
+import { addStream, filterFlow, isPoisoned, scaleFlow, work, type Flow, type Stream } from '../flow.ts';
 import { failFlow, tally, type Ledger } from '../ledger.ts';
 import type { ComponentDef } from '../types.ts';
 import type { World } from '../world.ts';
@@ -54,17 +54,37 @@ export function fits(demand: number, left: number): number {
  * file et sera repris au tick suivant (M1). Seule la part `share` des messages de file est
  * servie ici ; le reste n'est ni servi ni en échec, il retourne d'où il vient.
  */
+function requeue(nodeId: string, s: Stream, w: World, ctx: Ledger): void {
+  const pending = w.requeued.get(s.queue!) ?? new Map<string, Stream>();
+  addStream(pending, s);
+  w.requeued.set(s.queue!, pending);
+  tally(ctx, nodeId, 'deferred', s.rps);
+}
+
+/**
+ * Un message empoisonné fait planter son consommateur (S25) : il a coûté son travail, mais il
+ * n'est pas acquitté et retourne dans sa file avec un essai raté de plus. Rend le reste.
+ */
+export function rejectPoisoned(nodeId: string, served: Flow, w: World, ctx: Ledger): Flow {
+  const healthy: Flow = new Map();
+  for (const s of served.values()) {
+    if (!isPoisoned(s) || s.queue === undefined) {
+      addStream(healthy, s);
+      continue;
+    }
+    requeue(nodeId, { ...s, poisoned: s.poisoned! + 1 }, w, ctx);
+    tally(ctx, nodeId, 'poisoned', s.rps);
+  }
+  return healthy;
+}
+
 export function deferExcess(nodeId: string, queued: Flow, share: number, w: World, ctx: Ledger): Flow {
   if (share >= 1) return queued;
   const served: Flow = new Map();
   for (const s of queued.values()) {
     addStream(served, { ...s, rps: s.rps * share });
     const back = s.rps * (1 - share);
-    if (back <= 0) continue;
-    const pending = w.requeued.get(s.queue!) ?? new Map<string, Stream>();
-    addStream(pending, { ...s, rps: back });
-    w.requeued.set(s.queue!, pending);
-    tally(ctx, nodeId, 'deferred', back);
+    if (back > 0) requeue(nodeId, { ...s, rps: back }, w, ctx);
   }
   return served;
 }

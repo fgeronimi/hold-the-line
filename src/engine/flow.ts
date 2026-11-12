@@ -22,6 +22,11 @@ export interface Stream {
    * base, pas une requête que le client attend.
    */
   internal?: boolean;
+  /**
+   * Message empoisonné (S25) : son consommateur échoue à chaque essai. La valeur compte les
+   * essais déjà ratés, ce que la file des lettres mortes lit pour le mettre de côté.
+   */
+  poisoned?: number;
 }
 
 /** Un événement async original : ce qu'un service attend de recevoir. */
@@ -37,9 +42,11 @@ export const classOf = (s: Stream): string | undefined =>
 
 export type Flow = Map<string, Stream>;
 
-function streamKey(s: Pick<Stream, 'kind' | 'source' | 'batch' | 'duplicate' | 'queue' | 'internal'>): string {
-  return `${s.kind}|${s.source}|${s.batch}${s.duplicate ? '|dup' : ''}${s.queue ? `|q:${s.queue}` : ''}${s.internal ? '|int' : ''}`;
+function streamKey(s: Pick<Stream, 'kind' | 'source' | 'batch' | 'duplicate' | 'queue' | 'internal' | 'poisoned'>): string {
+  return `${s.kind}|${s.source}|${s.batch}${s.duplicate ? '|dup' : ''}${s.queue ? `|q:${s.queue}` : ''}${s.internal ? '|int' : ''}${s.poisoned !== undefined ? `|p:${s.poisoned}` : ''}`;
 }
+
+export const isPoisoned = (s: Stream) => s.poisoned !== undefined;
 
 export function addStream(flow: Flow, s: Stream): void {
   if (s.rps <= 0) return;

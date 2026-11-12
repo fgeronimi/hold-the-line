@@ -11,6 +11,10 @@ export interface Tally {
   deferred: number;
   /** File : messages que l'aval lui a rendus ce tick. */
   requeued: number;
+  /** Consommateur : messages empoisonnés qu'il n'a pas pu traiter, rendus à leur file (S25). */
+  poisoned: number;
+  /** File : messages empoisonnés mis de côté dans sa file des lettres mortes (S25). */
+  deadLettered: number;
 }
 
 /** Les compteurs d'un tick : ce que les nœuds font échouer, écartent et signalent. */
@@ -57,6 +61,7 @@ export function noFailures(): Record<FailureReason, number> {
     'timed-out': 0,
     'stale-read': 0,
     'load-shed': 0,
+    'dead-lettered': 0,
   };
 }
 
@@ -98,7 +103,7 @@ export function failFlow(ctx: Ledger, nodeId: string, reason: FailureReason, flo
 }
 
 export function tally(ctx: Ledger, nodeId: string, key: keyof Tally, rps: number): void {
-  const t = ctx.nodeTally.get(nodeId) ?? { duplicates: 0, deduplicated: 0, lost: 0, stale: 0, deferred: 0, requeued: 0 };
+  const t = ctx.nodeTally.get(nodeId) ?? { duplicates: 0, deduplicated: 0, lost: 0, stale: 0, deferred: 0, requeued: 0, poisoned: 0, deadLettered: 0 };
   t[key] += rps;
   ctx.nodeTally.set(nodeId, t);
 }

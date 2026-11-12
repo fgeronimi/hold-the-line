@@ -108,7 +108,13 @@ export type UpgradeEffect =
    * garde un fil au plus ce temps-là, et compte en échec `timed-out` ; sans délai d'attente,
    * une dépendance qui ne répond plus retient ses fils jusqu'au délai du client.
    */
-  | { type: 'callTimeout'; timeoutMs: number };
+  | { type: 'callTimeout'; timeoutMs: number }
+  /**
+   * File : un message que son consommateur a échoué à traiter `maxReceives` fois est mis de
+   * côté dans une file des lettres mortes (S25). Il ne revient plus, ne bloque plus la file, et
+   * compte en échec `dead-lettered` : son travail n'est pas fait, quelqu'un devra l'examiner.
+   */
+  | { type: 'deadLetter'; maxReceives: number };
 
 /**
  * Ce que coûte une baisse de niveau (décision E2) :
@@ -229,7 +235,13 @@ export type IncidentEffect =
    */
   | { type: 'cache-stampede'; herd: number }
   /** Les réplicas de la base sont coupés du primaire : ils servent des données périmées (S21). */
-  | { type: 'partition' };
+  | { type: 'partition' }
+  /**
+   * Une part `share` des événements déposés dans la file pendant l'incident est empoisonnée
+   * (S25) : son consommateur plante à chaque essai, le message n'est jamais acquitté, et la
+   * file, qui sert dans l'ordre, ne relâche plus rien d'autre tant qu'elle le garde.
+   */
+  | { type: 'poison-message'; share: number };
 
 export interface Incident {
   id: string;
@@ -322,7 +334,12 @@ export type FailureReason =
   /** Lecture d'une donnée à jour servie périmée par un réplica coupé du primaire. */
   | 'stale-read'
   /** Requête rejetée d'emblée par le délestage du load balancer : un vrai échec, que le client peut relancer. */
-  | 'load-shed';
+  | 'load-shed'
+  /**
+   * Message empoisonné mis de côté par la file des lettres mortes (S25) : la file repart, mais
+   * son travail n'est pas fait. Pas un échec que le client voit : sa commande a été confirmée.
+   */
+  | 'dead-lettered';
 
 export type SimEvent =
   | { type: 'invalid'; message: string }
@@ -379,6 +396,18 @@ export interface NodeTick {
   requeued?: number;
   /** Base : ses réplicas sont coupés du primaire ce tick (partition, S21). */
   partitioned?: boolean;
+  /**
+   * Consommateur : messages empoisonnés qu'il a échoué à traiter ce tick (req/s), rendus à leur
+   * file (S25) : déjà comptés dans `deferred`.
+   */
+  poisoned?: number;
+  /** File : messages empoisonnés mis de côté ce tick dans sa file des lettres mortes (req/s) : déjà dans `failed`. */
+  deadLettered?: number;
+  /**
+   * File : taille de sa file des lettres mortes, cumulée depuis le début de la vague. C'est ce
+   * qu'on surveille : un message qui y tombe est un travail à examiner.
+   */
+  deadLetters?: number;
 }
 
 export interface TickMetrics {
