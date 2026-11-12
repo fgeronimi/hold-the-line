@@ -15,7 +15,8 @@ import {
 } from 'three';
 
 /**
- * Effets des incidents sur le plateau : vapeur, fumée, flammes, lettres perdues, boucliers.
+ * Effets des incidents sur le plateau : vapeur, fumée, flammes, lettres perdues, boucliers,
+ * vapeur du poison, pile des lettres mortes.
  * Sans état : chaque image, la scène redemande les effets du tick affiché, et la position de
  * chaque particule ne dépend que de l'heure et de sa place dans la boucle. Revenir en arrière
  * dans le rejeu ne laisse donc rien traîner.
@@ -31,6 +32,10 @@ const PUFF = new Color('#8d99a6');
 const FLAME_HOT = new Color('#ffd166');
 const FLAME_COOL = new Color('#e63900');
 const BLACK = new Color('#000000');
+const POISON = new Color('#7bc043');
+const POISON_DARK = new Color('#2d6a1f');
+/** Lettres mortes : un papier jauni, cerné de deuil. */
+const DEAD_LETTER = new Color('#8a8172');
 
 interface Pool {
   mesh: InstancedMesh;
@@ -141,6 +146,40 @@ export class Effects {
     this.rise(this.mist, at, 6, { period: 0.9, rise: 0.5, spread: 0.25, grow: 2 }, () => tint);
   }
 
+  /**
+   * Vapeur verte qui s'échappe d'un consommateur : il vient de planter sur un message
+   * empoisonné (S25). Plus courte et plus saccadée que la vapeur d'une saturation.
+   */
+  poison(at: Vector3): void {
+    this.rise(this.mist, at, 7, { period: 1.1, rise: 0.8, spread: 0.3, grow: 1.2 }, (f) => this.color.copy(POISON).lerp(POISON_DARK, f));
+  }
+
+  /**
+   * La pile des lettres mortes, au pied d'une file : des lettres posées à plat, d'autant plus
+   * haute que la file des lettres mortes est grosse (`count`, à l'échelle logarithmique). Une
+   * lettre qui vient d'y tomber (`fresh`) descend du toit sur la pile.
+   */
+  deadLetters(at: Vector3, count: number, fresh: boolean): void {
+    const height = Math.min(8, Math.ceil(Math.log10(1 + count) * 3));
+    const seed = seedOf(at);
+    for (let i = 0; i < height && this.letters.used < MAX_LETTERS; i++) {
+      this.dummy.position.set(at.x + Math.sin(i * 2.7 + seed) * 0.04, at.y + 0.02 + i * 0.035, at.z + Math.cos(i * 1.9 + seed) * 0.04);
+      this.dummy.rotation.set(-Math.PI / 2, 0, i * 0.7 + seed);
+      this.dummy.scale.setScalar(1);
+      this.dummy.updateMatrix();
+      this.letters.mesh.setMatrixAt(this.letters.used, this.dummy.matrix);
+      this.letters.mesh.setColorAt(this.letters.used++, DEAD_LETTER);
+    }
+    if (!fresh || this.letters.used >= MAX_LETTERS) return;
+    const f = phase(this.now, 1.4, seed);
+    this.dummy.position.set(at.x, at.y + 0.9 - f * (0.9 - height * 0.035), at.z);
+    this.dummy.rotation.set(-Math.PI / 2 + (1 - f) * 1.2, f * 4, 0);
+    this.dummy.scale.setScalar(1);
+    this.dummy.updateMatrix();
+    this.letters.mesh.setMatrixAt(this.letters.used, this.dummy.matrix);
+    this.letters.mesh.setColorAt(this.letters.used++, DEAD_LETTER);
+  }
+
   /** Une lettre qui tombe au bord du chemin et s'efface : un événement perdu. */
   letter(from: Vector3, along: Vector3): void {
     const seed = seedOf(from);
@@ -152,7 +191,8 @@ export class Effects {
       this.dummy.rotation.set(f * 5, f * 3 + i, f * 2);
       this.dummy.scale.setScalar(f > 0.8 ? (1 - f) / 0.2 : 1);
       this.dummy.updateMatrix();
-      this.letters.mesh.setMatrixAt(this.letters.used++, this.dummy.matrix);
+      this.letters.mesh.setMatrixAt(this.letters.used, this.dummy.matrix);
+      this.letters.mesh.setColorAt(this.letters.used++, STEAM);
     }
   }
 

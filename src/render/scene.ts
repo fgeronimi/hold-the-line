@@ -1058,6 +1058,9 @@ export class CityScene {
         fx.letter(b.home.clone().addScaledVector(along, 0.6), along);
         fx.puff(b.home.clone().addScaledVector(along, 0.9).setY(0.4));
       }
+      // Le consommateur plante sur un message empoisonné ; la file range à côté ce qu'elle a mis de côté (S25).
+      if ((n?.poisoned ?? 0) > 0) fx.poison(roof.clone().setY(b.top * 0.6));
+      if ((n?.deadLetters ?? 0) > 0) fx.deadLetters(new Vector3(b.home.x + 0.55, 0.05, b.home.z + 0.35), n!.deadLetters!, (n?.deadLettered ?? 0) > 0);
       if (shed > 0) fx.shield(b.home, 1.05, shed / Math.max(1, n?.rps ?? 1) + 0.3);
       // Circuit coupé : une barrière tombe en travers de la route, juste à la sortie du serveur.
       for (const cut of n?.open ?? []) {
@@ -1102,6 +1105,8 @@ export class CityScene {
         ((n?.duplicates ?? 0) > 0 ? em(`×2 ${rounded(n!.duplicates!)} req/s traitées deux fois`, true) : '') +
         ((n?.deduplicated ?? 0) > 0 ? em(`🔁 ${rounded(n!.deduplicated!)} doublons écartés`) : '') +
         ((n?.lost ?? 0) > 0 ? em(`✉ ${rounded(n!.lost!)} événements perdus`, true) : '') +
+        ((n?.poisoned ?? 0) > 0 ? em(`☠ ${rounded(n!.poisoned!)} messages empoisonnés rendus à la file`, true) : '') +
+        ((n?.deadLetters ?? 0) > 0 ? em(`📭 ${rounded(n!.deadLetters!)} lettres mortes à examiner`, (n?.deadLettered ?? 0) > 0) : '') +
         (failed > 0 ? em(`✕ ${rounded(failed)} req/s en échec`, true) : '') +
         (shed > 0 ? em(`🛡 ${rounded(shed)} req/s abusives repoussées`) : '');
     }

@@ -826,6 +826,42 @@ const ENTRIES: Entry[] = [
     },
   },
   {
+    title: 'Message empoisonné',
+    chip: { text: 'signal existant', kind: 'ok' },
+    text: 'Un mage porte un bon mal écrit : le maître de métier s’effondre dessus dans une vapeur verte, et le mage revient au relais, encore et encore, pendant que les autres attendent derrière lui. Au troisième essai, le bon part sur la pile des lettres mortes, et la file repart.',
+    trigger: '<code>poisoned</code> du consommateur, <code>deadLettered</code> et <code>deadLetters</code> de la file, incident <code>poison-message</code>',
+    setup: (v) => {
+      v.site(towers(v, 1));
+      const fx = new Effects(v.scene);
+      const bad = v.walker('async', true);
+      const line = Array.from({ length: 3 }, () => v.walker('async'));
+      const crashed = v.label('pop', '☠ rendu à la file', SITE.x, 1.6, SITE.z);
+      const pile = v.label('pop', '📭 lettres mortes', ROAD_START + 0.2, 1.1, 0.6);
+      const ATTEMPTS = 3;
+      return (t) => {
+        const p = phase(t, 8);
+        // Trois allers-retours du message empoisonné, puis la file repart.
+        const tries = p * (ATTEMPTS + 1);
+        const attempt = Math.floor(tries);
+        const f = tries - attempt;
+        const blocked = attempt < ATTEMPTS;
+        fx.begin(t);
+        if (blocked && f > 0.45 && f < 0.75) fx.poison(new Vector3(SITE.x, 0.9, SITE.z));
+        fx.deadLetters(new Vector3(ROAD_START + 0.2, 0.05, 0.6), blocked ? 0 : 3, !blocked && f < 0.4);
+        fx.end();
+        if (blocked) {
+          bad.at(f < 0.5 ? lerp(ROAD_START, DOOR, f / 0.5) : lerp(DOOR, ROAD_START, between(f, 0.5, 1)), 0, f < 0.5, t, true);
+          line.forEach((w, i) => w.at(ROAD_START - 0.3 - i * 0.4, 0.3, true, t, false));
+        } else {
+          bad.hide();
+          line.forEach((w, i) => w.at(lerp(ROAD_START - 0.3 - i * 0.4, DOOR, Math.min(1, f * 1.5)), 0.3, true, t));
+        }
+        crashed.style.opacity = blocked && f > 0.45 && f < 0.8 ? '1' : '0';
+        pile.style.opacity = blocked ? '0' : '1';
+      };
+    },
+  },
+  {
     title: 'Pastilles d’évolution',
     chip: { text: 'branché', kind: 'ok' },
     text: 'Au pied de la tour, une pastille par évolution. Le scaling et l’autoscaling ont leurs boutons − et + ; le circuit breaker se bascule d’un clic. Chaque achat prend corps : une tour de plus, des fondations sur la case voisine (une par instance à la demande), une guérite et sa barrière sur la route. Le prix au survol, la facture au-dessus.',
