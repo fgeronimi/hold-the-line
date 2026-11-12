@@ -87,14 +87,14 @@ export const reasonLessons = {
   legitLimited: {
     says: 'La garde refoule aussi d’honnêtes marchands.',
     tech: 'Le rate limiting est trop strict : il rejette du trafic légitime, comptés comme des échecs.',
-    remedy: 'Monter le palier au-dessus du débit du plus gros client légitime, tout en restant sous celui de l’abuseur.',
+    remedy: 'Monter le palier au-dessus du débit du plus gros client légitime, tout en restant sous celui de l’abuseur. En vrai, on ne choisit pas une seule limite pour tous : chaque classe de client a la sienne, une clé d’API pour les partenaires, une limite plus basse pour les anonymes.',
     concept: 'Rate Limiting',
     signal: 'Réponses 429 par client : un partenaire légitime refusé est une alerte, pas du bruit.',
   },
   lostAtEdge: {
     says: 'Des passages ne sont jamais comptés : l’avant-poste répond seul aux voyageurs.',
     tech: 'Le CDN sert la redirection sans que le serveur la voie : l’événement de clic n’est jamais émis (le débat 301 contre 302).',
-    remedy: 'Retirer le CDN du chemin des redirections comptées, ou compter les clics côté bordure.',
+    remedy: 'Retirer le CDN du chemin des redirections comptées. En vrai, on garde souvent le CDN : on répond en 302 (redirection temporaire, non mise en cache) ou avec une durée de cache courte, ou on compte les clics dans les journaux du CDN.',
     concept: 'CDN',
     signal: 'Écart entre redirections servies et clics comptés.',
   },
