@@ -3,3 +3,6 @@ dist/
 .env
 .env.*
 .DS_Store
+
+# Réglages locaux de Claude Code et worktrees de ses agents : jamais dans le dépôt.
+.claude/

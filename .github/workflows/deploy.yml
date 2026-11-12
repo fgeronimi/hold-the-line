@@ -34,20 +34,6 @@ jobs:
         with:
           path: dist
 
-  # Garde-fou d'équilibrage (~70 s). Hors de `deploy` : un KO ou un écart avec
-  # docs/balance-snapshot.txt se voit dans la CI sans bloquer la publication.
-  balance:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run balance:check
-
   deploy:
     if: github.ref == 'refs/heads/main'
     needs: build

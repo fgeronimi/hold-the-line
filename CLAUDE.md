@@ -17,7 +17,8 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   un KO
 - `npm run balance:snapshot` : réécrit `docs/balance-snapshot.txt` (rapport sans durées,
   coûts arrondis à 2 décimales) ; `npm run balance:check` le compare au rapport courant et
-  échoue sur un écart ou un KO (tous les scénarios, pas de filtre)
+  échoue sur un écart ou un KO (tous les scénarios, pas de filtre) ; en CI, il a son propre
+  workflow (`.github/workflows/balance.yml`), hors de la publication
 - `npm run dev` : interface de jeu et de calibrage ; `npm run build` : site statique
   dans `dist/`, chemins relatifs pour GitHub Pages
 

@@ -1,0 +1,39 @@
+name: Équilibrage
+
+# Le garde-fou d'équilibrage : `npm run balance:check` compare le rapport à
+# docs/balance-snapshot.txt. Il a son propre workflow, hors du groupe de déploiement :
+# dans celui de la publication, ses longues minutes bloquaient le déploiement suivant.
+# Il ne tourne que si le moteur, les données ou l'outillage changent, et une fois par semaine.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/engine/**'
+      - 'src/data/**'
+      - 'src/balance/**'
+      - 'scripts/**'
+      - 'docs/balance-snapshot.txt'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 1'
+
+permissions:
+  contents: read
+
+# Un nouveau calcul rend le précédent inutile.
+concurrency:
+  group: balance
+  cancel-in-progress: true
+
+jobs:
+  balance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run balance:check
