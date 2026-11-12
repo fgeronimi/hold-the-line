@@ -1094,6 +1094,8 @@ export class CityScene {
         ((n?.stale ?? 0) > 0 ? em(`≠ ${rounded(n!.stale!)} lectures périmées`, true) : '') +
         (n?.open ? em(`🔌 circuit coupé : ${n.open.map((t) => escapeHtml(this.buildings.get(t)?.techName ?? t)).join(', ')}`) : '') +
         (backlog > 0 ? em(`arriéré ${rounded(backlog)} <span class="gauge"><i style="width:${Math.min(100, (Math.log10(1 + backlog) / 4) * 100)}%"></i></span>`) : '') +
+        // L'âge du plus vieux message, ce qu'on surveille vraiment sur une file (M13).
+        ((n?.backlogAge ?? 0) > 0 ? em(`⌛ le plus vieux attend depuis ${n!.backlogAge} min`, (n!.backlogAge ?? 0) >= 10) : '') +
         ((n?.duplicates ?? 0) > 0 ? em(`×2 ${rounded(n!.duplicates!)} req/s traitées deux fois`, true) : '') +
         ((n?.deduplicated ?? 0) > 0 ? em(`🔁 ${rounded(n!.deduplicated!)} doublons écartés`) : '') +
         ((n?.lost ?? 0) > 0 ? em(`✉ ${rounded(n!.lost!)} événements perdus`, true) : '') +

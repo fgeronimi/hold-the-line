@@ -32,6 +32,8 @@ const KIND_NAMES: Record<RequestKind, string> = { read: 'lecture', write: 'écri
 
 /** Au-delà, un bâtiment est trop près de sa capacité pour encaisser la prochaine affluence. */
 const HOT = 0.8;
+/** Minutes d'attente du plus vieux message au-delà desquelles le debrief le raconte (M13). */
+const QUEUE_AGE_WARNING = 10;
 
 function fill(text: string, vars: Record<string, string>): string {
   return text.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? `{${k}}`);
@@ -123,7 +125,10 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     // Le disjoncteur a évité la cascade : ce qui a échoué, ce sont les appels qu'il a coupés.
     const cut = incident.effect.type === 'slow-dependency' && failed > 0 && !result.events.some((e) => e.type === 'threads-exhausted');
     const dependency = arch.nodes.find((n) => n.type === incident.component)?.id;
-    if (cut && dependency) {
+    const gaveUp = result.failuresByReason['timed-out'] > 0 && result.failuresByReason['circuit-open'] === 0;
+    if (cut && dependency && gaveUp) {
+      tell(incident.from, fromLesson(problem, reasonLessons.timedOut, { name: name(dependency), metaphor: metaphor(dependency).toLowerCase(), failed: String(failed) }, dependency));
+    } else if (cut && dependency) {
       tell(incident.from, fromLesson(problem, reasonLessons.circuitOpen, { name: name(dependency), metaphor: metaphor(dependency).toLowerCase(), failed: String(failed) }, dependency));
     } else {
       tell(incident.from, fromLesson(failed > 0 ? problem : 'good', failed > 0 ? lesson.hurt : lesson.held, vars));
@@ -174,6 +179,14 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
     if (e.type !== 'queue-overflow' || overflowed.has(e.node)) continue;
     overflowed.add(e.node);
     tell(e.tick, fromLesson(problem, reasonLessons.queueOverflow, { name: name(e.node) }, e.node));
+  }
+
+  // Rien n'est perdu, mais un message très en retard est un incident pour celui qui l'attend (M13).
+  for (const id of ofBehavior('queue')) {
+    const ages = result.ticks.map((t) => t.nodes[id]?.backlogAge ?? 0);
+    const oldest = Math.max(0, ...ages);
+    if (oldest < QUEUE_AGE_WARNING || overflowed.has(id)) continue;
+    tell(ages.indexOf(oldest), fromLesson('warn', reasonLessons.queueAge, { name: name(id), minutes: String(oldest) }, id));
   }
 
   const { cost, complexity, latency, failureRate } = result.gauges;

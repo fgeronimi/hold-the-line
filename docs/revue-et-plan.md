@@ -591,6 +591,13 @@ dans le tournoi. B2, B3, B10, B11, B12 corrigés.
 | M6 | **Retard de la file** : âge du plus vieux message par tick, affiché partout (plateau, courbes) | M | faible |
 | D2 | **Objectif de fraîcheur** sur banquier 4 et tournoi 2 | S | moyen : ces deux vagues |
 
+**État au 12 novembre 2026 : passe C faite** (branche `passe-banquier`), décisions M12
+et M13. Une dépendance muette retient les fils jusqu'au délai du client ; le délai d'attente
+(nouvelle évolution) borne l'attente ; la latence d'un nœud sans instance n'est plus
+l'artefact de 20 × sa base (B5) ; l'âge du plus vieux message de chaque file est mesuré,
+affiché et raconté. L'objectif de fraîcheur (D2) est écarté : sans parade dans le jeu, il
+punirait sans rien apprendre (M13). Aucune stratégie gagnante n'a bougé.
+
 **Passe D — tous les scénarios**
 
 | # | Action | Effort | Risque |

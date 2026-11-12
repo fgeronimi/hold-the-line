@@ -124,6 +124,7 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 | Circuit breaker | Serveur | Dépendance lente ou en panne qui bloque le serveur | Les appels coupés échouent : réponse dégradée (S15) | Oui |
 | Request coalescing | Cache | Ruée vers le cache | Coût et complexité ; ne sert qu'à l'expiration (S15) | Oui |
 | Backoff exponentiel et jitter | Clients (la source) | Tempête de relances | Coût et complexité ; ne sert qu'après une panne ; suppose d'écrire le client (S19) | Oui |
+| Délai d'attente | Serveur | Dépendance lente ou muette qui retient les fils | Le client attend tout le délai, puis l'appel échoue (M12) | Oui |
 | Délestage | Load balancer | Tempête de relances, surcharge | Les refus restent des échecs, relancés ; la porte garde 25 % de marge (M11) | Oui |
 | Capacité de la file | File | Débordement pendant une longue panne de l'aval | Coût par niveau ; n'aide pas si les consommateurs ne suivent pas en moyenne (S20) | Oui |
 | Lecture sur le primaire | Base | Lectures périmées pendant une partition | Le primaire porte ces lectures en plus des écritures (S21) | Oui |
@@ -264,6 +265,11 @@ et déterministe, séparée de l'affichage.
 - **Pas d'aléa, donc pas de graine** (M2) : la même vague donne toujours le même résultat.
 - **Clients qui relancent** (S19, M10) : un nœud saturé travaille pour des requêtes déjà
   abandonnées, mais seulement pour la part de son trafic venue de ces clients.
+- **Dépendance muette** (M12) : une dépendance fermée se tait, et chaque appel direct garde
+  un fil jusqu'au délai du client (5 s) ; des instances arrêtées, elles, refusent tout de
+  suite. Le délai d'attente borne cette attente, le disjoncteur la supprime.
+- **Âge des files** (M13) : chaque file dit depuis combien de minutes attend son plus vieux
+  message ; le debrief l'alerte au-delà de dix minutes.
 - **Pannes d'instances** (X5, M9) : une panne retire d'abord des instances fixes, puis des
   instances à la demande, y compris celles qui démarrent pendant la panne.
 - **Cascade par les fils d'exécution** (S14) : un serveur a des fils par instance, et un

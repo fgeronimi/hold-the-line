@@ -94,6 +94,7 @@ export const fortifiedCity: Theme = {
     idempotence: '🔏',
     outbox: '📒',
     'circuit-breaker': '🔌',
+    'call-timeout': '⏱️',
     'request-coalescing': '🔒',
     'client-backoff': '⏳',
     'load-shedding': '🚧',

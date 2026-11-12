@@ -290,6 +290,19 @@ export const catalog: Catalog = {
       removalCost: 'on-disable',
       effect: { type: 'circuitBreaker', timeoutMs: 500 },
     },
+    'call-timeout': {
+      id: 'call-timeout',
+      label: 'Délai d’attente sur les appels',
+      techName: 'Timeout',
+      appliesTo: 'app-server',
+      maxLevel: 1,
+      cost: { base: 5, perLevel: 0 },
+      complexity: { base: 1, perLevel: 0 },
+      removalCost: 'on-disable',
+      // La première protection d'un appel direct, et la moins chère : ne pas attendre plus que
+      // ce que le client peut attendre lui-même (M12). Le disjoncteur va plus loin : il n'attend plus.
+      effect: { type: 'callTimeout', timeoutMs: 300 },
+    },
     'request-coalescing': {
       id: 'request-coalescing',
       label: 'Verrou de recalcul',

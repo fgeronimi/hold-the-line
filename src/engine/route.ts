@@ -12,6 +12,8 @@ export type Routed = Map<string, Map<RequestKind, Map<string, number>>>;
 export interface Delivery {
   inbound: Map<string, Flow>;
   routed: Routed;
+  /** Appels abandonnés par un délai d'attente, par nœud, type et dépendance : ils ont attendu (M12). */
+  waited: Routed;
   /** Chaque nœud et type sans route n'est signalé qu'une fois par vague. */
   reportedNoRoute: Set<string>;
 }
@@ -92,6 +94,7 @@ export function route(id: string, def: ComponentDef, passed: Flow, w: World, now
   const consumer = w.consumers.has(id);
   /** Dépendances coupées par le circuit breaker de ce nœud : leurs appels échouent tout de suite. */
   const open = now.open.get(id);
+  const cut = now.timeouts.get(id)?.cut;
   const send = (to: string, s: Stream, rps: number) => {
     if (rps <= 0) return;
     addStream(out.inbound.get(to)!, { ...s, rps });
@@ -164,6 +167,16 @@ export function route(id: string, def: ComponentDef, passed: Flow, w: World, now
     for (const to of targets) {
       if (open?.has(to)) {
         failStream(ctx, id, 'circuit-open', s, each);
+        continue;
+      }
+      // Le délai d'attente abandonne l'appel : il a attendu, puis échoue chez l'appelant (M12).
+      if (cut?.has(to)) {
+        failStream(ctx, id, 'timed-out', s, each);
+        const byKind = out.waited.get(id) ?? new Map<RequestKind, Map<string, number>>();
+        const byTo = byKind.get(s.kind) ?? new Map<string, number>();
+        byTo.set(to, (byTo.get(to) ?? 0) + each);
+        byKind.set(s.kind, byTo);
+        out.waited.set(id, byKind);
         continue;
       }
       send(to, s, each);

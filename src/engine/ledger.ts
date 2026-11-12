@@ -35,7 +35,7 @@ export interface Ledger {
 }
 
 /** Raisons d'échec qui reviennent au client sous forme d'erreur : il peut relancer. */
-const CLIENT_VISIBLE: ReadonlySet<FailureReason> = new Set(['saturation', 'no-route', 'rate-limited', 'circuit-open', 'load-shed']);
+const CLIENT_VISIBLE: ReadonlySet<FailureReason> = new Set(['saturation', 'no-route', 'rate-limited', 'circuit-open', 'timed-out', 'load-shed']);
 
 export function noFailures(): Record<FailureReason, number> {
   return {
@@ -48,6 +48,7 @@ export function noFailures(): Record<FailureReason, number> {
     'lost-event': 0,
     undelivered: 0,
     'circuit-open': 0,
+    'timed-out': 0,
     'stale-read': 0,
     'load-shed': 0,
   };

@@ -103,6 +103,7 @@ export const marketSpace: BalanceSpace = {
 export const resilienceSpace: BalanceSpace = {
   dimensions: [
     { id: 'scaling', levels: upTo(3), label: 'scaling' },
+    { id: 'timeout', levels: [0, 1], label: 'délai d’attente' },
     { id: 'breaker', levels: [0, 1], label: 'circuit breaker' },
     { id: 'queue', levels: [0, 1], label: 'file' },
     { id: 'cache', levels: [0, 1], label: 'cache' },
@@ -112,6 +113,7 @@ export const resilienceSpace: BalanceSpace = {
   build: (c) =>
     checkout({
       extraInstances: c.scaling ?? 0,
+      timeout: on(c, 'timeout'),
       breaker: on(c, 'breaker'),
       queue: on(c, 'queue'),
       cache: on(c, 'cache'),

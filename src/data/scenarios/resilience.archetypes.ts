@@ -8,6 +8,8 @@ const link = (from: string, to: string): ArchLink => ({ from, to });
 export interface CheckoutOptions {
   /** Circuit breaker sur le serveur. */
   breaker?: boolean;
+  /** Délai d'attente sur les appels du serveur (M12). */
+  timeout?: boolean;
   /** Le paiement passe par une file : différé, hors du chemin du client. */
   queue?: boolean;
   cache?: boolean;
@@ -22,7 +24,7 @@ export interface CheckoutOptions {
 export function checkout(o: CheckoutOptions = {}): Architecture {
   const nodes: ArchNode[] = [
     { id: 'src', type: 'traffic-source' },
-    { id: 'app', type: 'app-server', upgrades: { 'horizontal-scaling': o.extraInstances ?? 0, 'circuit-breaker': o.breaker ? 1 : 0 } },
+    { id: 'app', type: 'app-server', upgrades: { 'horizontal-scaling': o.extraInstances ?? 0, 'circuit-breaker': o.breaker ? 1 : 0, 'call-timeout': o.timeout ? 1 : 0 } },
     { id: 'db', type: 'database', upgrades: { 'read-replica': o.replicas ?? 0 } },
     ...(resilience.fixtures ?? []),
   ];

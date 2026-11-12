@@ -27,6 +27,9 @@ export interface TickPaths {
   outcomes: Map<string, NodeOutcome>;
   nodeTicks: Record<string, NodeTick>;
   open: Map<string, Set<string>>;
+  /** Appels abandonnés par un délai d'attente : ils comptent pour ce délai (M12). */
+  waited?: Routed;
+  timeouts?: Map<string, { ms: number; cut: Set<string> }>;
 }
 
 /**
@@ -34,7 +37,7 @@ export interface TickPaths {
  * `skip` écarte des voisins : les caches, pour une lecture qui ne peut pas y tomber.
  */
 export function computePathLatencies(
-  { order, routes, routed, outcomes, nodeTicks, open }: TickPaths,
+  { order, routes, routed, outcomes, nodeTicks, open, waited, timeouts }: TickPaths,
   skip: (id: string) => boolean = () => false,
 ): (id: string, kind: RequestKind) => number {
   const memo = new Map<string, number>();
@@ -43,10 +46,13 @@ export function computePathLatencies(
       const own = nodeTicks[id]?.latencyMs ?? 0;
       const share = outcomes.get(id)?.syncForwardShare[kind] ?? 0;
       const sent = [...(routed.get(id)?.get(kind) ?? new Map<string, number>())].filter(([to]) => !skip(to));
-      const total = sent.reduce((a, [, x]) => a + x, 0);
+      const gaveUp = [...(waited?.get(id)?.get(kind) ?? new Map<string, number>())].filter(([to]) => !skip(to));
+      const total = [...sent, ...gaveUp].reduce((a, [, x]) => a + x, 0);
       let downstream = 0;
       if (total > 0) {
         for (const [to, rps] of sent) downstream += (rps / total) * (memo.get(`${to}|${kind}`) ?? 0);
+        // Un appel abandonné a attendu tout le délai, pas la réponse qu'il n'a jamais eue.
+        for (const [, rps] of gaveUp) downstream += (rps / total) * (timeouts?.get(id)?.ms ?? 0);
       } else {
         // Pas de trafic ce tick : on suppose une répartition égale, pour que la latence reste définie.
         // Un appel coupé par le disjoncteur échoue tout de suite : il n'attend pas l'aval.

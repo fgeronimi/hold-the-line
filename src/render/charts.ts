@@ -107,6 +107,7 @@ export function chartModel(
           ...(x.down ? [`⚡ ${x.down} instance${x.down > 1 ? 's' : ''} en panne`] : []),
           ...(x.instances !== undefined && x.instances > 1 ? [`${x.instances} instances`] : []),
           ...(x.backlog ? [`${twoDigits(x.backlog)} messages en attente`] : []),
+          ...(x.backlogAge ? [`le plus vieux attend depuis ${x.backlogAge} min`] : []),
           ...(x.failed > 0 ? [`${twoDigits(x.failed)} req/s en échec`] : []),
         ];
       }),

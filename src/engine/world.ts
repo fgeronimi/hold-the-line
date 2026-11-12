@@ -42,6 +42,8 @@ export interface Now {
   incidents: IncidentState;
   /** Dépendances coupées par le circuit breaker de chaque serveur. */
   open: Map<string, Set<string>>;
+  /** Délai d'attente de chaque serveur qui en a un, et les dépendances qui le dépassent ce tick (M12). */
+  timeouts: Map<string, { ms: number; cut: Set<string> }>;
 }
 
 export const defOf = (w: World, id: string): ComponentDef => w.catalog.components[w.nodes.get(id)!.type]!;

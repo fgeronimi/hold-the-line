@@ -1,5 +1,12 @@
 import type { Incident } from './types.ts';
 
+/**
+ * Ce qu'attend l'appelant d'une dépendance qui ne répond plus du tout (M12) : elle ne refuse
+ * pas, elle se tait, et chaque appel attend jusqu'au délai du client. Un ordre de grandeur de
+ * délai par défaut ; ceux des clients HTTP sont souvent plus longs encore.
+ */
+export const UNANSWERED_MS = 5000;
+
 export type MessagingIncident = 'duplicate-delivery' | 'publish-loss';
 
 /** Ce que les incidents en cours font à chaque type de composant, à un tick donné. */
@@ -42,7 +49,17 @@ export function incidentState(active: readonly Incident[], tick: number): Incide
       ),
     herd: (type) => active.reduce((h, i) => (i.component === type && i.effect.type === 'cache-stampede' ? Math.max(h, i.effect.herd) : h), 1),
     latencyMs: (type, baseMs) =>
-      active.reduce((l, i) => (i.component === type && i.effect.type === 'slow-dependency' ? Math.max(l, i.effect.latencyMs) : l), baseMs),
+      active.reduce(
+        (l, i) =>
+          i.component !== type
+            ? l
+            : i.effect.type === 'slow-dependency'
+              ? Math.max(l, i.effect.latencyMs)
+              : i.effect.type === 'dependency-down'
+                ? Math.max(l, UNANSWERED_MS)
+                : l,
+        baseMs,
+      ),
     partitioned: (type) => active.some((i) => i.component === type && i.effect.type === 'partition'),
     share: (type, effect) => active.reduce((a, i) => a + (i.component === type && i.effect.type === effect ? i.effect.share : 0), 0),
   };

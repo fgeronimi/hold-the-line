@@ -620,6 +620,7 @@ const UPGRADE_LESSONS: Partial<Record<UpgradeEffect['type'], Lesson | undefined>
   idempotence: reasonLessons.duplicate,
   outbox: reasonLessons.lostEvent,
   circuitBreaker: incidentLessons['slow-dependency'].hurt,
+  callTimeout: incidentLessons['slow-dependency'].hurt,
   coalescing: incidentLessons['cache-stampede'].hurt,
   backoff: reasonLessons.retryStorm,
   loadShedding: reasonLessons.retryStorm,

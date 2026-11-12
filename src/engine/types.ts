@@ -102,7 +102,13 @@ export type UpgradeEffect =
    * ne s'effondrent plus sous des requêtes déjà abandonnées (S19) et gardent la marge qui tient
    * leur latence ; les rejets restent des échecs, que les clients relancent.
    */
-  | { type: 'loadShedding'; targetUtilization: number };
+  | { type: 'loadShedding'; targetUtilization: number }
+  /**
+   * Serveur : un appel direct qui n'a pas répondu après `timeoutMs` est abandonné (M12). Il
+   * garde un fil au plus ce temps-là, et compte en échec `timed-out` ; sans délai d'attente,
+   * une dépendance qui ne répond plus retient ses fils jusqu'au délai du client.
+   */
+  | { type: 'callTimeout'; timeoutMs: number };
 
 /**
  * Ce que coûte une baisse de niveau (décision E2) :
@@ -302,6 +308,8 @@ export type FailureReason =
   | 'undelivered'
   /** Appel coupé par un circuit breaker ouvert : échec rapide, sans bloquer le serveur. */
   | 'circuit-open'
+  /** Appel direct abandonné par le délai d'attente du serveur : il a attendu, puis échoué. */
+  | 'timed-out'
   /** Lecture d'une donnée à jour servie périmée par un réplica coupé du primaire. */
   | 'stale-read'
   /** Requête rejetée d'emblée par le délestage du load balancer : un vrai échec, que le client peut relancer. */
@@ -326,6 +334,11 @@ export interface NodeTick {
   latencyMs: number;
   failed: number;
   backlog?: number;
+  /**
+   * File : depuis combien de ticks (de minutes, pour le joueur) attend son plus vieux message
+   * (M13). C'est ce qu'on surveille sur une vraie file, plus que sa longueur.
+   */
+  backlogAge?: number;
   /** Instances en service ce tick, pour un nœud qui en a plusieurs. */
   instances?: number;
   /** Instances demandées par l'autoscaling, encore en démarrage ce tick (le chantier). */

@@ -1,5 +1,5 @@
 import { migrationCost, totals } from './budget.ts';
-import { openCircuits } from './circuits.ts';
+import { callTimeouts, openCircuits } from './circuits.ts';
 import { addStream, isEvent, sumRps, type Flow } from './flow.ts';
 import { activeAt, incidentState } from './incidents.ts';
 import { breachTick, loadedLatency, P95, percentile, tickLatency } from './latency.ts';
@@ -27,7 +27,7 @@ import { REQUEST_KINDS } from './types.ts';
 import { hasEffect, instancesOf, resolveUpgrades } from './upgrades.ts';
 import { validateArchitecture } from './validate.ts';
 import { gauge, invalidResult, lossesFor } from './verdict.ts';
-import { defOf, latencyOf, type Now, type World } from './world.ts';
+import { defOf, isDown, latencyOf, type Now, type World } from './world.ts';
 
 export { envelopeAt } from './profile.ts';
 
@@ -86,6 +86,8 @@ export function simulateWave(
   let syncWeightedLatency = 0;
   let syncOffered = 0;
   let countedSoFar = 0;
+  /** Arrivées cumulées de chaque file, tick par tick : de quoi dater son plus vieux message (M13). */
+  const arrivals = new Map<string, number[]>();
   let clientFailedSoFar = 0;
   let active: Incident[] = [];
 
@@ -102,6 +104,7 @@ export function simulateWave(
     const delivery: Delivery = {
       inbound: new Map<string, Flow>([...nodes.keys()].map((id) => [id, new Map()])),
       routed: new Map(),
+      waited: new Map(),
       reportedNoRoute,
     };
     delivery.inbound.set(validation.sourceId, injected);
@@ -110,7 +113,8 @@ export function simulateWave(
     offeredTotal += offered;
 
     const incidents = incidentState(active, tick);
-    const now: Now = { ledger, incidents, open: openCircuits(w, incidents) };
+    const open = openCircuits(w, incidents);
+    const now: Now = { ledger, incidents, open, timeouts: callTimeouts(w, incidents, open) };
     const outcomes = new Map<string, NodeOutcome>();
     const nodeTicks: Record<string, NodeTick> = {};
 
@@ -143,10 +147,11 @@ export function simulateWave(
     settleQueues(w, now);
     for (const id of validation.order) {
       summaries.get(id)!.failed += ledger.nodeFailed.get(id) ?? 0;
-      nodeTicks[id] = nodeTickOf(w, now, nodes.get(id)!, defOf(w, id), delivery.inbound.get(id)!, outcomes.get(id)!);
+      const age = w.backlogs.has(id) ? oldestAge(arrivals, id, tick, sumRps(delivery.inbound.get(id)!), sumRps(w.backlogs.get(id)!)) : undefined;
+      nodeTicks[id] = nodeTickOf(w, now, nodes.get(id)!, defOf(w, id), delivery.inbound.get(id)!, outcomes.get(id)!, age);
     }
 
-    const latency = tickLatency(w, { order: validation.order, routes, routed: delivery.routed, outcomes, nodeTicks, open: now.open }, validation.sourceId, injected);
+    const latency = tickLatency(w, { order: validation.order, routes, routed: delivery.routed, waited: delivery.waited, timeouts: now.timeouts, outcomes, nodeTicks, open: now.open }, validation.sourceId, injected);
     syncWeightedLatency += latency.avg * latency.syncRps;
     syncOffered += latency.syncRps;
 
@@ -238,7 +243,23 @@ function inject(wave: Wave, retries: RetryPlan, tick: number, factor: number): {
   return { injected, retried };
 }
 
-function nodeTickOf(w: World, now: Now, node: ArchNode, def: ComponentDef, incoming: Flow, outcome: NodeOutcome): NodeTick {
+/**
+ * Âge du plus vieux message d'une file, en ticks (M13). La file est servie dans l'ordre :
+ * ce qui en est sorti, c'est le début de ses arrivées cumulées. Le plus vieux message encore
+ * là est donc arrivé au premier tick où les arrivées cumulées dépassent les sorties.
+ */
+function oldestAge(arrivals: Map<string, number[]>, id: string, tick: number, arrived: number, waiting: number): number {
+  const cumulative = arrivals.get(id) ?? [];
+  cumulative[tick] = (cumulative[tick - 1] ?? 0) + arrived;
+  arrivals.set(id, cumulative);
+  // Moins d'un message : la file est vide, à l'arrondi près.
+  if (waiting < 1) return 0;
+  const left = cumulative[tick]! - waiting;
+  const first = cumulative.findIndex((a) => a > left + 1e-9);
+  return first < 0 ? 0 : tick - first;
+}
+
+function nodeTickOf(w: World, now: Now, node: ArchNode, def: ComponentDef, incoming: Flow, outcome: NodeOutcome, backlogAge?: number): NodeTick {
   const id = node.id;
   const { ledger, incidents, open } = now;
   const down = incidents.down(node.type);
@@ -246,9 +267,11 @@ function nodeTickOf(w: World, now: Now, node: ArchNode, def: ComponentDef, incom
   return {
     rps: sumRps(incoming),
     utilization: outcome.utilization,
-    latencyMs: loadedLatency(latencyOf(w, incidents, id), outcome.utilization),
+    // Un composant sans instance en service ne fait pas la queue : il dit non, ou se tait (M12).
+    latencyMs: isDown(w, incidents, id) ? latencyOf(w, incidents, id) : loadedLatency(latencyOf(w, incidents, id), outcome.utilization),
     failed: ledger.nodeFailed.get(id) ?? 0,
     ...(w.backlogs.has(id) ? { backlog: sumRps(w.backlogs.get(id)!) } : {}),
+    ...(backlogAge ? { backlogAge } : {}),
     ...(outcome.instances !== undefined ? { instances: outcome.instances } : {}),
     ...(outcome.starting ? { starting: outcome.starting } : {}),
     ...(ledger.nodeShed.has(id) ? { shed: ledger.nodeShed.get(id)! } : {}),

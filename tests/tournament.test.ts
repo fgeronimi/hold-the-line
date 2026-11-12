@@ -129,4 +129,14 @@ describe('le chambellan raconte le tournoi', () => {
     expect(tellsOf(boxOffice({ extraInstances: 1, cache: true }), 'pigeons-grounded').some((f) => f.concept?.includes('dimensionner une file'))).toBe(true);
     expect(tellsOf(boxOffice({ extraInstances: 1, replicas: 2 }), 'split-registry').some((f) => f.concept?.includes('CAP') && f.tone === 'bad')).toBe(true);
   });
+
+  it('raconte le retard des billets restés en file, même quand rien n’est perdu (M13)', () => {
+    // La réponse attendue tient la vague 2, mais le quota du colombier ne laisse pas rattraper :
+    // les billets arrivent une demi-heure après l’achat. Une alerte, pas une défaite.
+    const [answer] = answersOf('tournament', 1);
+    const told = tellsOf(answer!, 'pigeons-grounded');
+    const late = told.find((f) => f.concept?.includes('âge du plus vieux message'));
+    expect(late?.tone).toBe('warn');
+    expect(late?.tech).toMatch(/2\d minutes/);
+  });
 });

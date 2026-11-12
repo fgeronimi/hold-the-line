@@ -85,6 +85,12 @@ export const reasonLessons = {
     remedy: 'Retirer le CDN du chemin des redirections comptées, ou compter les clics côté bordure.',
     concept: 'CDN',
   },
+  queueAge: {
+    says: 'Rien ne s’est perdu au relais de poste, mais le plus vieux pli y a attendu {minutes} minutes.',
+    tech: 'À {name}, le plus vieux message a attendu {minutes} minutes avant d’être traité. Une file ne perd rien, mais elle retarde : un billet reçu une demi-heure après l’achat, un paiement confirmé bien après la commande, c’est un incident pour le client, même sans perte.',
+    remedy: 'En vrai, on surveille l’âge du plus vieux message et on alerte dessus, plus que sur la longueur de la file. Pour rattraper plus vite : plus de consommateurs, si c’est eux qui limitent ; sinon, le retard dure tant que l’aval (un quota, une base) ne suit pas.',
+    concept: 'Observabilité d’une file, âge du plus vieux message',
+  },
   queueOverflow: {
     says: 'Débordement à {name} : des colis sont perdus.',
     tech: 'L’arriéré de la file dépasse sa capacité : les messages en trop sont perdus. Une file absorbe un pic, pas un excès qui dure : l’arriéré monte de (arrivées − départs) à chaque minute de jeu. Sa capacité se lit donc en minutes de trafic : arrivées par seconde × minutes d’attente, à l’échelle du jeu et non en volumes réels.',
@@ -138,6 +144,12 @@ export const reasonLessons = {
     tech: '{name} est tombé entre l’écriture de la commande en base et la publication de l’événement : la commande existe, l’événement est perdu.',
     remedy: 'Une outbox : écrire l’événement dans la même transaction que la commande, puis le relayer vers le bus.',
     concept: 'Transactional outbox',
+  },
+  timedOut: {
+    says: 'Les scribes n’ont plus attendu le {metaphor} au-delà de l’heure dite : {failed} paiements abandonnés, mais aucune tour n’est restée bloquée.',
+    tech: 'Le délai d’attente du serveur a abandonné les appels à {name} qui ne répondaient pas à temps : chacun a gardé un fil le temps du délai, puis a échoué. La cascade est évitée, mais le client a attendu tout le délai, et son paiement a échoué.',
+    remedy: 'Pour ne plus attendre du tout, un circuit breaker coupe la dépendance dès qu’elle dépasse son délai. Pour ne rien perdre, différer l’appel par une file (paiement différé). En vrai, tout appel réseau a un délai d’attente, plus court que celui de son propre client.',
+    concept: 'Délai d’attente, cascade de pannes',
   },
   circuitOpen: {
     says: 'Le guet a fermé la route du {metaphor} : {failed} paiements ont été refusés sur-le-champ, mais le reste de la cité a tourné.',

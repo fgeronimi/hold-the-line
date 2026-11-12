@@ -44,6 +44,7 @@ const catalog: Catalog = {
     retention: { id: 'retention', label: 'Retention', techName: 'Retention', appliesTo: 'queue', maxLevel: 3, cost: { base: 0, perLevel: 5 }, complexity: { base: 0, perLevel: 1 }, removalCost: 'per-level', effect: { type: 'retention', perLevel: 50 } },
     leader: { id: 'leader', label: 'Leader', techName: 'Leader', appliesTo: 'db', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'leaderReads' } },
     idem: { id: 'idem', label: 'Idem', techName: 'Idem', appliesTo: 'svc', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'idempotence' } },
+    timeout: { id: 'timeout', label: 'Timeout', techName: 'Timeout', appliesTo: 'app', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'callTimeout', timeoutMs: 100 } },
     shed: { id: 'shed', label: 'Shed', techName: 'Shed', appliesTo: 'lb', maxLevel: 1, cost: { base: 10, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'loadShedding', targetUtilization: 0.9 } },
     outbox: { id: 'outbox', label: 'Outbox', techName: 'Outbox', appliesTo: 'db', maxLevel: 1, cost: { base: 10, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'outbox' } },
   },
@@ -136,22 +137,67 @@ describe('fils d’exécution (S14)', () => {
     expect(r.failed).toBe(0);
   });
 
-  it('fige : une dépendance en panne appelée en direct ne retient aucun fil, et répond en 20 × sa base', () => {
-    // À changer par M5 (docs/revue-et-plan.md) : la panne doit retenir les fils jusqu'au délai
-    // du client, comme une lenteur ; le serveur sature (threads > 1, waitingOn 'p',
-    // threads-exhausted), et la latence de p n'est plus l'artefact de 800 ms (B5).
+  it('une dépendance qui ne répond plus retient les fils jusqu’au délai du client (M12)', () => {
+    // Elle se tait 5 000 ms : l'async garde 25 × 5 010 / 1000 = 125,25 fils, plus 0,5 pour les
+    // lectures, 12,575 fois les 10 fils. Le serveur sature pour tout le monde : la cascade, comme
+    // une lenteur. La latence de p est son silence, plus l'artefact de 20 × sa base (B5).
     const r = simulateWave(direct(), wave([half], { incidents: [closed] }), catalog);
     const t = r.ticks[3]!;
-    expect(t.nodes.a!.threads).toBeCloseTo(0.075, 9);
-    expect(t.nodes.a!.waitingOn).toBeUndefined();
-    expect(r.events.some((e) => e.type === 'threads-exhausted')).toBe(false);
-    // p n'a plus d'instance : tout ce qu'il reçoit échoue, à la charge d'affichage de 10.
+    expect(t.nodes.a!.threads).toBeCloseTo(12.575, 9);
+    expect(t.nodes.a!.waitingOn).toBe('p');
+    expect(r.events.some((e) => e.type === 'threads-exhausted')).toBe(true);
     expect(t.nodes.p!.down).toBe(1);
-    expect(t.nodes.p!.failed).toBe(25);
-    expect(t.nodes.p!.latencyMs).toBeCloseTo(40 * 20, 9);
-    // L'événement direct compte entier (S17) : 20 ms du serveur + 800 ms artefact.
-    expect(t.slaLatencyMs).toBeCloseTo(lat(10, 0.5) + 800, 9);
-    expect(r.failuresByReason.saturation).toBe(25 * 3);
+    expect(t.nodes.p!.latencyMs).toBe(5000);
+    // Les lectures, qui n'appellent pas p, échouent aussi : c'est la cascade.
+    expect(t.nodes.a!.failed).toBeGreaterThan(0);
+    expect(t.links['a→d']!.read).toBeLessThan(25);
+  });
+
+  it('une dépendance dont les instances refusent ne retient presque rien', () => {
+    // Un prestataire arrêté qui dit non tout de suite : l'appel attend sa latence de base, 40 ms.
+    const refused = incident('provider', 2, 5, { type: 'instance-down', count: 1 });
+    const r = simulateWave(direct(), wave([half], { incidents: [refused] }), catalog);
+    expect(r.ticks[3]!.nodes.a!.threads).toBeCloseTo(0.175, 9);
+    expect(r.ticks[3]!.nodes.p!.latencyMs).toBe(40);
+    expect(r.ticks[3]!.nodes.p!.failed).toBe(25);
+  });
+});
+
+describe('délai d’attente (M12)', () => {
+  it('abandonne un appel trop lent après son délai : le fil n’est retenu que ce temps-là', () => {
+    // 770 ms > 100 ms : chaque appel async attend 100 ms puis échoue. Fils : 25 × (10 + 100)
+    // / 1000 = 2,75, plus 0,5 pour les lectures : 0,325 sur 10. Pas de cascade.
+    const r = simulateWave(direct({ timeout: 1 }), wave([half], { incidents: [slow] }), catalog);
+    const t = r.ticks[3]!;
+    expect(t.nodes.a!.threads).toBeCloseTo(0.325, 9);
+    expect(t.nodes.a!.failed).toBe(25);
+    expect(r.failuresByReason['timed-out']).toBe(25 * 3);
+    expect(r.failuresByReason.saturation).toBe(0);
+    expect(t.links['a→p']).toBeUndefined();
+  });
+
+  it('le client attend tout le délai : l’événement direct compte 100 ms de plus (S17)', () => {
+    const r = simulateWave(direct({ timeout: 1 }), wave([half], { incidents: [slow] }), catalog);
+    expect(r.ticks[3]!.slaLatencyMs).toBeCloseTo(lat(10, 0.5) + 100, 9);
+  });
+
+  it('protège aussi d’une dépendance qui ne répond plus', () => {
+    const r = simulateWave(direct({ timeout: 1 }), wave([half], { incidents: [closed] }), catalog);
+    expect(r.ticks[3]!.nodes.a!.threads).toBeCloseTo(0.325, 9);
+    expect(r.failuresByReason['timed-out']).toBe(25 * 3);
+    expect(r.events.some((e) => e.type === 'threads-exhausted')).toBe(false);
+  });
+
+  it('sous son délai, il ne coupe rien', () => {
+    const r = simulateWave(direct({ timeout: 1 }), wave([half]), catalog);
+    expect(r.failed).toBe(0);
+  });
+
+  it('un disjoncteur ouvert passe avant : il coupe sans attendre', () => {
+    const r = simulateWave(direct({ timeout: 1, breaker: 1 }), wave([half], { incidents: [slow] }), catalog);
+    expect(r.failuresByReason['circuit-open']).toBe(25 * 3);
+    expect(r.failuresByReason['timed-out']).toBe(0);
+    expect(r.ticks[3]!.nodes.a!.threads).toBeCloseTo(0.075, 9);
   });
 });
 
@@ -179,14 +225,14 @@ describe('circuit breaker (S15)', () => {
     expect(r.ticks[3]!.slaLatencyMs).toBeCloseTo((25 * (a + d) + 25 * a) / 50, 9);
   });
 
-  it('s’ouvre aussi sur une dépendance en panne, avec autant d’échecs qu’un appel direct', () => {
+  it('s’ouvre aussi sur une dépendance qui ne répond plus, et évite la cascade', () => {
     const r = simulateWave(direct({ breaker: 1 }), wave([half], { incidents: [closed] }), catalog);
     expect(r.ticks[3]!.nodes.a!.open).toEqual(['p']);
     expect(r.failuresByReason['circuit-open']).toBe(25 * 3);
     expect(r.failuresByReason.saturation).toBe(0);
-    // Sans disjoncteur, les mêmes 75 échecs, en saturation chez p (voir 3.6).
+    // Sans disjoncteur, les fils attendent le silence de p et les lectures tombent avec (M12).
     const without = simulateWave(direct(), wave([half], { incidents: [closed] }), catalog);
-    expect(without.failed).toBe(r.failed);
+    expect(without.failed).toBeGreaterThan(r.failed);
   });
 
   it('ne s’ouvre pas sous son délai', () => {
@@ -245,12 +291,11 @@ describe('incidents de cache et d’instances', () => {
       expect(r.events).toContainEqual({ type: 'incident-end', tick: 4, incident: 'instance-down-app' });
     });
 
-    it('fige : à zéro instance, tout échoue et la latence affichée vaut 20 × la base', () => {
-      // À changer par M5 (docs/revue-et-plan.md, B5) : un serveur arrêté ne « répond » pas en
-      // 200 ms ; la latence d'un nœud sans instance doit cesser d'être cet artefact.
+    it('à zéro instance, tout échoue, et la latence affichée est celle d’un refus (M12, B5)', () => {
+      // Un serveur arrêté refuse : sa latence est sa base, plus l'artefact de 20 × la base.
       const r = simulateWave(scaled, wave([users({ read: 150 })], { incidents: [incident('app', 2, 3, { type: 'instance-down', count: 5 })] }), catalog);
       expect(r.ticks[2]!.nodes.a!).toMatchObject({ instances: 0, down: 2, failed: 150 });
-      expect(r.ticks[2]!.nodes.a!.latencyMs).toBeCloseTo(200, 9);
+      expect(r.ticks[2]!.nodes.a!.latencyMs).toBe(10);
     });
 
     const auto = (upgrades: Record<string, number>) =>
@@ -362,9 +407,10 @@ describe('relances des clients (S19)', () => {
   });
 
   it('un événement qui échoue seul, sa requête servie, n’est pas relancé (M10)', () => {
-    // Le prestataire ferme aux ticks 2 et 3 : les écritures passent, seuls les événements
+    // Le prestataire refuse aux ticks 2 à 4 : les écritures passent, seuls les événements
     // échouent. Le client a eu sa réponse : il ne relance rien.
-    const r = simulateWave(direct(), wave([retrying({ write: 20, async: 20 })], { incidents: [closed] }), catalog);
+    const refused = incident('provider', 2, 5, { type: 'instance-down', count: 1 });
+    const r = simulateWave(direct(), wave([retrying({ write: 20, async: 20 })], { incidents: [refused] }), catalog);
     expect(r.ticks.every((t) => (t.retries ?? 0) === 0)).toBe(true);
     expect(r.failed).toBe(60);
   });
@@ -470,6 +516,18 @@ describe('délestage à la porte (M11)', () => {
     const r = simulateWave(gate(1), wave([users({ read: 40 })], { ticks: 1, profile: [{ until: 1, factor: 1 }], incidents: [incident('app', 0, 1, { type: 'instance-down', count: 1 })] }), catalog);
     expect(r.failuresByReason['load-shed']).toBeCloseTo(40, 9);
     expect(r.ticks[0]!.nodes.a!.failed).toBe(0);
+  });
+});
+
+describe('âge du plus vieux message (M13)', () => {
+  it('une file dont l’aval se tait vieillit d’une minute par tick, puis rajeunit d’un coup au retour', () => {
+    // 20 événements par tick ; le prestataire se tait aux ticks 2 à 4. Au tick 2, le plus vieux
+    // vient d'arriver (0) ; aux ticks 3 et 4, il attend depuis le tick 2. Au tick 5, tout part.
+    const a = arch([n('s', 'src'), n('q', 'queue'), n('p', 'provider')], [['s', 'q'], ['q', 'p']]);
+    const r = simulateWave(a, wave([users({ async: 20 })], { incidents: [closed] }), catalog);
+    expect(r.ticks.map((t) => t.nodes.q!.backlogAge ?? 0)).toEqual([0, 0, 0, 1, 2, 0, 0, 0, 0, 0]);
+    expect(r.ticks[4]!.nodes.q!.backlog).toBe(60);
+    expect(r.failed).toBe(0);
   });
 });
 
