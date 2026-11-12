@@ -258,3 +258,8 @@ button.pip { cursor: pointer; }
 .build-card .ups { color: #555; }
 .build-card footer { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-top: 4px; }
 .build-card footer button[title] { opacity: .75; }
+
+/* Les lignes « en vrai » des fiches (D3b) : discrètes, sous les chiffres du jeu. */
+.real { font-size: 0.85em; color: var(--ink); opacity: 0.85; margin: 0.3em 0; }
+.real a { color: inherit; }
+.real-ups summary { cursor: pointer; font-size: 0.85em; }

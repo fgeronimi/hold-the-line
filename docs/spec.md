@@ -304,8 +304,11 @@ et déterministe, séparée de l'affichage.
   circuit coupé, et l'alarme quand le SLA est rompu, sur les échecs ou sur
   la latence. Capacités, coûts et débits restent chiffrés partout (C4). Tableau de bord,
   alertes à la première saturation, ralenti, courbes en direct.
-- **Debrief** (R9, I8) : l'analyse du chambellan en trois temps, et les courbes minute par
-  minute (R13).
+- **Debrief** (R9, I8, I15) : l'analyse du chambellan en trois temps, et les courbes minute par
+  minute (R13). Chaque constat dit ce qui l'aurait annoncé ; une ligne dit ce qu'ont coûté les
+  parades en place ; le serveur le plus chargé reçoit son calcul de capacité.
+- **Fiches** (I15) : chiffres du jeu, puis une ligne « en vrai » avec l'ordre de grandeur réel
+  et sa source quand un chiffre vient d'un fournisseur.
 - **Aide** : tutoriel de la vague 1 (I7), puis une fenêtre « que faire » à chaque vague,
   qui dit ce qui bloque sans souffler la parade (I9, S9). Un bouton « Un indice », dans cette
   fenêtre et dans le debrief d'une vague perdue, donne le prochain élément manquant (I14) :
