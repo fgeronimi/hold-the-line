@@ -6,6 +6,7 @@ import { escapeHtml, percentPrecise } from '../../render/html.ts';
 import { analysisOf, type Analysis, type Finding } from '../debrief.ts';
 import { SCENARIOS } from '../../data/scenarios/index.ts';
 import { hintPanel, type HintPanel } from '../hints.ts';
+import { icon } from '../icons.ts';
 import { guideStep, type TutorialStep } from '../tutorial.ts';
 
 /**
@@ -148,7 +149,7 @@ export function findingsOf(a: Attempt, wave: Wave, s: ViewState): Finding[] {
  * même chose en vrai, avec les termes techniques. La métaphore seule ne s'apprend pas.
  */
 export function speech(text: string, real?: string): string {
-  return `<div class="speech"><span class="speaker">${theme.narrator.icon}</span>
+  return `<div class="speech"><span class="speaker">${icon('hat')}</span>
     <div><p><b>${esc(theme.narrator.name)} :</b> « ${esc(text)} »</p>
     ${real ? `<p class="real">${esc(real)}</p>` : ''}</div></div>`;
 }
@@ -163,13 +164,13 @@ export function renderHints(panel: HintPanel): string {
   const note = panel.button.why ?? `${panel.left} indice${panel.left > 1 ? 's' : ''} disponible${panel.left > 1 ? 's' : ''}`;
   return `<div class="hints">
     ${items ? `<ol>${items}</ol>` : ''}
-    <p class="hint-ask"><button data-action="hint" ${panel.button.enabled ? '' : 'disabled'} title="${esc(note)}">💡 Un indice</button>
+    <p class="hint-ask"><button data-action="hint" ${panel.button.enabled ? '' : 'disabled'} title="${esc(note)}">${icon('bulb')} Un indice</button>
       <small class="muted">${esc(note)}</small></p>
   </div>`;
 }
 
 function givenHint({ text, done }: HintPanel['given'][number]): string {
   return `<li class="${done ? 'done' : 'todo'}">
-        <p class="says">${done ? '✓' : '💡'} « ${esc(text.says)} »${done ? ' <small>fait</small>' : ''}</p>
+        <p class="says">${icon(done ? 'check' : 'bulb')} « ${esc(text.says)} »${done ? ' <small>fait</small>' : ''}</p>
         <p class="real">${esc(text.real)}</p></li>`;
 }

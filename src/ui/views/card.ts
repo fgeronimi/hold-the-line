@@ -5,6 +5,7 @@ import { draftInfo } from '../draft.ts';
 import { minutes } from '../time.ts';
 import type { TutorialStep } from '../tutorial.ts';
 import { decimal as fmt, esc, hintClass as blink, hintsOf, speech, theme, type ViewState } from './common.ts';
+import { icon } from '../icons.ts';
 import { cardArt, renderHand } from './hand.ts';
 
 const KIND_NAMES: Record<string, string> = { read: 'une lecture', write: 'une écriture', async: 'un événement' };
@@ -73,7 +74,7 @@ function renderNodeCard(s: ViewState): string {
   const remove = permanent ? '' : `<button data-action="remove-node" data-node="${esc(node.id)}"${removeHinted ? ' class="hint"' : ''}>Retirer</button>`;
   return `
     <section class="card detail-card">
-      <button class="close" data-action="deselect" title="Fermer" aria-label="Fermer">✕</button>
+      <button class="close" data-action="deselect" title="Fermer" aria-label="Fermer">${icon('close')}</button>
       <h3>${esc(own.tech)} <small>${esc(own.metaphor)}</small></h3>
       <div class="hcard-art">${cardArt(s, node.type)}</div>
       ${fixedNote}
@@ -166,9 +167,9 @@ export function upgradePips(
   const id = esc(node.id);
   const actions = [
     can.move &&
-      `<button class="pip act" data-action="tool" data-tool="move" data-node="${id}" aria-label="Déplacer"><span class="icon">✥</span><i><em>Déplacer</em>Cliquer la case d’arrivée, ou glisser le bâtiment</i></button>`,
+      `<button class="pip act" data-action="tool" data-tool="move" data-node="${id}" aria-label="Déplacer"><span class="icon">${icon('move')}</span><i><em>Déplacer</em>Cliquer la case d’arrivée, ou glisser le bâtiment</i></button>`,
     can.remove &&
-      `<button class="pip act ko${blink(target?.tool === 'remove')}" data-action="remove-node" data-node="${id}" aria-label="Retirer"><span class="icon">🧨</span><i><em>Retirer</em>Démolir le bâtiment et ses chemins. S’il était déjà là à la vague précédente, sa valeur d’achat entre dans la facture (migration)</i></button>`,
+      `<button class="pip act ko${blink(target?.tool === 'remove')}" data-action="remove-node" data-node="${id}" aria-label="Retirer"><span class="icon">${icon('remove')}</span><i><em>Retirer</em>Démolir le bâtiment et ses chemins. S’il était déjà là à la vague précédente, sa valeur d’achat entre dans la facture (migration)</i></button>`,
   ].filter(Boolean);
   const pips = Object.values(catalog.upgrades)
     .filter((u) => u.appliesTo === node.type)

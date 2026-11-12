@@ -63,6 +63,11 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   une carte par bâtiment constructible ; `CityScene.thumbnails` rend leurs illustrations une
   fois, hors écran, avec le renderer du plateau (`ViewState.thumbnails`). Le calque `#hand`
   porte la main ou la carte du bâtiment sélectionné, et n'est réécrit que si son HTML change.
+- L'habillage (I16) est dans `src/ui/style.css` : matières (`--m-parchment`, `--m-wood`,
+  `--m-stone`, `--m-brass`) et relief (`--raise`, `--raise-low`, `--pressed`) en variables,
+  à réutiliser plutôt que de redéfinir une ombre. `src/ui/icons.ts` : les pictogrammes SVG
+  de l'interface (`icon('coin')`) ; pas d'emoji dans un calque. Titrage : `--display`
+  (Lilita One, `src/ui/fonts/`, OFL). Une infobulle se pose avec `data-tip` et un `aria-label`.
 - `src/ui/draft.ts` : `draftInfo(arch, catalog)` donne validation, ordre, flux et facture d'un
   brouillon, mémorisés par identité de référence. Vues, guide, aide et plateau le lisent au
   lieu de rappeler `validateArchitecture` ou `linkFlows`.
@@ -153,6 +158,9 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   pur ; ne pas réécrire `#hand` sans changement (`renderHandLayer`), la distribution
   rejouerait et la carte survolée retomberait. Au doigt, pas de survol : `ActionArgs.touch`
   fait soulever la carte au premier contact (`liftedCard`), jouer au second.
+- Le style de base des boutons exclut `.hcard` et `.pip` (`button:where(:not(...))`) : leur
+  enfoncement écraserait la transformation qui place la carte dans l'éventail. `.gauge` existe
+  deux fois (jauge du HUD, barre de charge d'une étiquette) : celle du HUD est sous `.hud-bar`.
 - Tout texte venant de l'état passe par `esc()` (interface) ou `escapeHtml()` (rendu)
   avant d'entrer dans le HTML.
 - Le rendu ne simule rien : s'il faut une donnée de plus pour animer, elle s'ajoute aux

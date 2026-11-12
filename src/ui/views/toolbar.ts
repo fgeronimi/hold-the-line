@@ -1,42 +1,50 @@
 import { draftInfo } from '../draft.ts';
 import type { TutorialStep } from '../tutorial.ts';
+import { icon, type IconName } from '../icons.ts';
 import { esc, guideOf, hintClass as hint, hintsOf, nameOf, renderHints, speech, type Tool, type ViewState } from './common.ts';
 
 type Blink = TutorialStep['highlight'];
 
 const active = (on: boolean) => (on ? ' active' : '');
 
-const TOOLS = [
-  { kind: 'select', icon: '👆', label: 'Sélection', hint: 'Cliquer un bâtiment pour ouvrir sa fiche, le glisser pour le déplacer' },
-  { kind: 'link', icon: '🛤️', label: 'Relier', hint: 'Cliquer le départ, puis l’arrivée' },
-  { kind: 'remove', icon: '🧨', label: 'Retirer', hint: 'Cliquer un bâtiment pour le démolir' },
-] as const;
+const TOOLS: { kind: 'select' | 'link' | 'remove'; icon: IconName; label: string; hint: string }[] = [
+  { kind: 'select', icon: 'select', label: 'Sélection', hint: 'cliquer un bâtiment pour ouvrir sa carte, le glisser pour le déplacer' },
+  { kind: 'link', icon: 'link', label: 'Relier', hint: 'cliquer le départ, puis l’arrivée' },
+  { kind: 'remove', icon: 'remove', label: 'Retirer', hint: 'cliquer un bâtiment pour le démolir' },
+];
 
-/** Sélection, Relier, Retirer, puis annuler et rétablir. */
-function toolButtons(s: ViewState, tool: Tool, blink: Blink): string {
-  const tools = TOOLS.map(
-    (t) => `<button class="tool${active(tool.kind === t.kind)}${hint(blink?.tool === t.kind)}" data-action="tool" data-tool="${t.kind}" title="${esc(t.hint)}">
-        <span class="icon">${t.icon}</span><span>${t.label}</span></button>`,
+/** Un médaillon de la barre : une icône seule, son nom et son mode d'emploi au survol. */
+const medal = (classes: string, attrs: string, name: IconName, label: string, tip: string) =>
+  `<button class="${classes}" ${attrs} data-tip="${esc(tip)}" aria-label="${esc(label)}">${icon(name)}</button>`;
+
+/** Sélection, Relier, Retirer : l'outil en main reste enfoncé. */
+function toolButtons(tool: Tool, blink: Blink): string {
+  return TOOLS.map((t) =>
+    medal(`tool${active(tool.kind === t.kind)}${hint(blink?.tool === t.kind)}`, `data-action="tool" data-tool="${t.kind}"`, t.icon, t.label, `${t.label} : ${t.hint}`),
   ).join('');
-  const undo = `<button class="tool" data-action="undo" ${s.history.undo ? '' : 'disabled'} title="Annuler (⌘Z)"><span class="icon">↶</span><span>Annuler</span></button>`;
-  const redo = `<button class="tool" data-action="redo" ${s.history.redo ? '' : 'disabled'} title="Rétablir (⇧⌘Z)"><span class="icon">↷</span><span>Rétablir</span></button>`;
-  return tools + undo + redo;
+}
+
+/** Annuler et rétablir : plus petits, on y revient moins souvent. */
+function historyButtons(s: ViewState): string {
+  const undo = medal('tool small', `data-action="undo" ${s.history.undo ? '' : 'disabled'}`, 'undo', 'Annuler', 'Annuler (⌘Z)');
+  const redo = medal('tool small', `data-action="redo" ${s.history.redo ? '' : 'disabled'}`, 'redo', 'Rétablir', 'Rétablir (⇧⌘Z)');
+  return undo + redo;
 }
 
 /** Ouvre la main de cartes ; reste enfoncé tant qu'une carte choisie attend sa case. */
 function buildButton(s: ViewState, blink: Blink): string {
   const on = !!s.showHand || s.tool.kind === 'place';
-  return `<button class="tool build${active(on)}${hint(blink?.tool === 'place' && !s.showHand && !s.buildAt)}" data-action="open-hand" title="Choisir un bâtiment, puis cliquer sa case. On peut aussi cliquer une case vide d’abord.">
-        <span class="icon">🔨</span><span>Bâtir</span></button>`;
+  return `<button class="tool build${active(on)}${hint(blink?.tool === 'place' && !s.showHand && !s.buildAt)}" data-action="open-hand" data-tip="Choisir un bâtiment, puis cliquer sa case. On peut aussi cliquer une case vide d’abord.">
+        ${icon('cards')}<span>Bâtir</span></button>`;
 }
 
 /** Le refus du plateau, ou à défaut le départ du lien en cours de tracé. */
 function toast(s: ViewState): string {
-  if (s.boardMessage) return `<div class="toast panel ko">${esc(s.boardMessage)}</div>`;
+  if (s.boardMessage) return `<div class="toast ko">${icon('warn')} ${esc(s.boardMessage)}</div>`;
   const { tool, draft } = s;
-  if (tool.kind === 'place') return `<div class="toast panel">${esc(nameOf(tool.type, s.catalog))} — cliquer la case où bâtir (Échap pour renoncer)</div>`;
+  if (tool.kind === 'place') return `<div class="toast">${esc(nameOf(tool.type, s.catalog))} — cliquer la case où bâtir (Échap pour renoncer)</div>`;
   const from = tool.kind === 'link' && tool.from ? draft.nodes.find((n) => n.id === tool.from) : undefined;
-  return from ? `<div class="toast panel">Départ : ${esc(nameOf(from.type, s.catalog))} — cliquer l’arrivée</div>` : '';
+  return from ? `<div class="toast">Départ : ${esc(nameOf(from.type, s.catalog))} — cliquer l’arrivée</div>` : '';
 }
 
 /** La barre du bas : outils, la main de cartes, et le lancement de la vague. */
@@ -52,14 +60,15 @@ export function renderToolbar(s: ViewState): string {
   // La main ouverte, la bulle se retire : la carte que désigne le guide clignote à sa place.
   const handOpen = !!s.showHand || !!s.buildAt;
   const tutorial = handOpen ? '' : `<div class="tutorial panel">${speech(guide.says, guide.real)}${renderHints(help)}</div>`;
-  const errors = validation.ok ? '' : `<div class="errors panel">${validation.errors.map((e) => `<p>⚠ ${esc(e)}</p>`).join('')}</div>`;
+  const errors = validation.ok ? '' : `<div class="errors panel">${validation.errors.map((e) => `<p>${icon('warn')} ${esc(e)}</p>`).join('')}</div>`;
   return `
     ${tutorial}
     ${toast(s)}
-    <div class="toolbar panel">
-      <div class="group">${toolButtons(s, tool, blink)}</div>
-      <div class="group">${buildButton(s, blink)}</div>
-      <button class="launch${hint(blink?.tool === 'launch')}" data-action="play" ${validation.ok ? '' : 'disabled'} title="${esc(why)}">⚔️ Lancer la vague</button>
+    <div class="toolbar">
+      <div class="group">${toolButtons(tool, blink)}</div>
+      <div class="group">${historyButtons(s)}</div>
+      ${buildButton(s, blink)}
+      <button class="launch${hint(blink?.tool === 'launch')}" data-action="play" ${validation.ok ? '' : 'disabled'} data-tip="${esc(why)}">${icon('swords')}<span>Lancer la vague</span></button>
     </div>
     ${errors}`;
 }

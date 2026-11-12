@@ -1,6 +1,7 @@
 import type { BoardCell, ComponentDef } from '../../engine/types.ts';
 import { draftInfo } from '../draft.ts';
 import { fan, type FanSlot } from '../hand.ts';
+import { icon } from '../icons.ts';
 import { blinkOf, buildable, decimal as fmt, esc, hintClass as blink, nameOf, theme, type ViewState } from './common.ts';
 
 const KINDS_TEXT: Record<string, string> = { read: 'lectures', write: 'écritures', async: 'événements' };
@@ -27,7 +28,7 @@ function handCard(s: ViewState, d: ComponentDef, slot: FanSlot, index: number, h
   const affordable = d.cost <= Math.max(0, budget - draftInfo(s.draft, s.catalog).cost);
   const lifted = s.liftedCard === d.id;
   const again = s.buildAt ? 'Toucher encore pour bâtir' : 'Toucher encore pour choisir';
-  const ribbon = lifted ? again : affordable ? '✓ Constructible' : 'Au-delà du budget';
+  const ribbon = lifted ? again : affordable ? `${icon('check')} Constructible` : 'Au-delà du budget';
   const place = `--k:${slot.offset};--tilt:${slot.tilt.toFixed(2)}deg;--drop:${slot.drop.toFixed(3)};--i:${index}`;
   return `<button class="hcard${lifted ? ' lifted' : ''}${blink(hinted)}" data-action="pick-card" data-type="${esc(d.id)}" style="${place}"
         aria-label="${esc(nameOf(d.id, s.catalog))}, prix ${d.cost}, complexité ${d.complexity}${affordable ? '' : ', au-delà du budget restant'}">
@@ -39,7 +40,7 @@ function handCard(s: ViewState, d: ComponentDef, slot: FanSlot, index: number, h
             <span>${fmt(d.capacity)} unités de travail/s · ${d.latencyMs} ms${accepts ? ` · reçoit ${accepts}` : ''}</span>
             ${ups ? `<span>Évolutions : ${ups}</span>` : ''}
           </span>
-          <span class="hcard-cost"><span title="Prix">💰 ${d.cost}</span><span title="Complexité">⚙ ${d.complexity}</span></span>
+          <span class="hcard-cost"><span title="Prix">${icon('coin')} ${d.cost}</span><span title="Complexité">${icon('cog')} ${d.complexity}</span></span>
           <span class="hcard-ribbon${affordable || lifted ? '' : ' dear'}">${ribbon}</span>
         </span>
       </button>`;
@@ -69,7 +70,7 @@ export function renderHand(s: ViewState): string {
   return `
     <section class="hand" style="--n:${defs.length}" aria-label="Bâtiments à construire">
       <p class="hand-head"><span>${destination(s, s.buildAt)}</span>
-        <button class="close" data-action="close-build" title="Fermer (Échap)" aria-label="Fermer">✕</button></p>
+        <button class="close" data-action="close-build" title="Fermer (Échap)" aria-label="Fermer">${icon('close')}</button></p>
       <div class="hand-cards">${cards}</div>
     </section>`;
 }

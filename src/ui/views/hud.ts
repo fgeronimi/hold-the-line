@@ -1,9 +1,10 @@
 import { migrationCost } from '../../engine/budget.ts';
 import type { Wave } from '../../engine/types.ts';
 import { draftInfo } from '../draft.ts';
-import { decimal as fmt, esc, theme, totalScore, totalStars, type ViewState } from './common.ts';
+import { icon, type IconName } from '../icons.ts';
+import { decimal as fmt, esc, totalScore, totalStars, type ViewState } from './common.ts';
 
-const KIND_ICONS: Record<string, string> = { read: '📖', write: '✍️', async: '✉️' };
+const KIND_ICONS: Record<string, IconName> = { read: 'read', write: 'write', async: 'async' };
 
 /** Le trafic de la vague à son plus fort, par type : ce que le joueur doit dimensionner. */
 function trafficPeak(wave: Wave): string {
@@ -11,12 +12,13 @@ function trafficPeak(wave: Wave): string {
   return (['read', 'write', 'async'] as const)
     .map((k) => ({ k, rps: wave.sources.reduce((a, src) => a + (src.rps[k] ?? 0), 0) * peak }))
     .filter((x) => x.rps > 0)
-    .map((x) => `${KIND_ICONS[x.k]} ${fmt(x.rps)}`)
-    .join(' · ');
+    .map((x) => `${icon(KIND_ICONS[x.k]!)}<b>${fmt(x.rps)}</b>`)
+    .join(' ');
 }
 
-const gauge = (icon: string, label: string, value: string, bad: boolean) =>
-  `<span class="gauge${bad ? ' ko' : ''}" title="${esc(label)}">${icon} ${value}</span>`;
+/** Une jauge : un pictogramme, une valeur, et ce qu'elle mesure au survol ou au clavier. */
+const gauge = (name: IconName | undefined, label: string, value: string, bad: boolean, extra = '') =>
+  `<span class="gauge${bad ? ' ko' : ''}${extra}" data-tip="${esc(label)}" tabindex="0">${name ? icon(name) : ''}${value}</span>`;
 
 /** Les jauges de la construction : facture et complexité prévues face aux plafonds, trafic, SLA. */
 function buildGauges(s: ViewState, wave: Wave): string {
@@ -25,10 +27,10 @@ function buildGauges(s: ViewState, wave: Wave): string {
   const complexity = info.complexity;
   const sla = `${(wave.sla.maxFailureRate * 100).toFixed(0)} % · ${wave.sla.maxP95LatencyMs} ms`;
   return [
-    gauge('💰', 'Coût de la vague / budget', `${fmt(cost)} / ${wave.budget}`, cost > wave.budget),
-    gauge('⚙️', 'Complexité / plafond', `${complexity} / ${wave.complexityCap}`, complexity > wave.complexityCap),
-    gauge('🧍', 'Trafic au plus fort de la vague, en requêtes par seconde : lectures, écritures, événements', trafficPeak(wave), false),
-    gauge('🎯', 'SLA : échecs max, latence p95 max', sla, false),
+    gauge('coin', 'Coût de la vague / budget', `<b>${fmt(cost)}</b> / ${wave.budget}`, cost > wave.budget),
+    gauge('cog', 'Complexité / plafond', `<b>${complexity}</b> / ${wave.complexityCap}`, complexity > wave.complexityCap),
+    gauge(undefined, 'Trafic au plus fort de la vague, en requêtes par seconde : lectures, écritures, événements', trafficPeak(wave), false, ' traffic'),
+    gauge('target', 'SLA : échecs max, latence p95 (approx.) max', `<b>${sla}</b>`, false),
   ].join('');
 }
 
@@ -56,17 +58,17 @@ export function renderHud(s: ViewState): string {
   const gauges = wave && building ? buildGauges(s, wave) : '';
   const menu = s.showMenu ? renderMenu(s) : '';
   const title = wave ? `Vague ${shownIndex + 1}/${n} — ${esc(wave.title)}` : 'Partie terminée';
-  const briefing = wave ? `<button data-action="show-briefing" title="Revoir le briefing">${theme.narrator.icon}</button>` : '';
+  const briefing = wave ? `<button class="round" data-action="show-briefing" data-tip="Revoir le briefing" aria-label="Revoir le briefing">${icon('hat')}</button>` : '';
   return `
-    <div class="hud-bar panel">
-      <div class="hud-title"><b>${esc(s.scenario.subtitle)}</b>
+    <div class="hud-bar">
+      <div class="plaque hud-title"><b>${esc(s.scenario.subtitle)}</b>
         <span>${title}</span></div>
-      <div class="hud-gauges">${gauges}</div>
-      <div class="hud-actions">
-        <span class="gauge stars" title="Étoiles gagnées">★ ${totalStars(s)} / ${n * 3}</span>
-        <span class="gauge" title="Score">🏅 ${fmt(totalScore(s))}</span>
+      ${gauges ? `<div class="plaque hud-gauges">${gauges}</div>` : ''}
+      <div class="plaque hud-actions">
+        ${gauge('star', 'Étoiles gagnées', `<b>${totalStars(s)}</b> / ${n * 3}`, false, ' stars')}
+        ${gauge('medal', 'Score', `<b>${fmt(totalScore(s))}</b>`, false)}
         ${briefing}
-        <button data-action="menu" title="Menu">☰</button>
+        <button class="round" data-action="menu" data-tip="Menu" aria-label="Menu">${icon('menu')}</button>
       </div>
     </div>
     ${menu}`;

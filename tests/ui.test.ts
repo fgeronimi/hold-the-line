@@ -171,7 +171,7 @@ describe('la main de cartes', () => {
     expect(html.match(/data-action="pick-card"/g)).toHaveLength(palette.length);
     expect(html).not.toContain('data-type="domain-service"');
     expect(html).toContain('Autoscaling');
-    expect(html).toContain(`💰 ${catalog.components['app-server']!.cost}`);
+    expect(html).toContain(`</svg> ${catalog.components['app-server']!.cost}</span>`);
     expect(html).toContain('Choisir un bâtiment pour cette case.');
   });
 
@@ -198,7 +198,7 @@ describe('la main de cartes', () => {
     const html = renderHand(view({ showHand: true, scenario: tight }));
     expect(html.match(/Au-delà du budget/g)).toHaveLength(palette.length);
     expect(html).not.toContain('disabled');
-    expect(renderHand(view({ showHand: true }))).toContain('✓ Constructible');
+    expect(renderHand(view({ showHand: true }))).toContain('</svg> Constructible');
   });
 
   it('la carte soulevée au doigt annonce le second contact', () => {
