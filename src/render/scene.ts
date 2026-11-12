@@ -161,6 +161,8 @@ export class CityScene {
   private stuck!: Fleet;
   /** Latence visée par la vague (ms) : au-delà, le bâtiment le plus lent montre son sablier. */
   slaLatencyMs: number | undefined;
+  /** Objectifs propres à un type de requête (la commande payée, M15) : le sablier les lit aussi. */
+  slaLatencyByKind: Partial<Record<RequestKind, number>> = {};
   private readonly alert: Color;
   private readonly host: HTMLElement;
   private readonly theme: Theme;
@@ -1111,7 +1113,10 @@ export class CityScene {
    * où regarder, la latence exacte reste dans la barre et les courbes.
    */
   private slowestNode(tick: TickMetrics | undefined): string | undefined {
-    if (!tick || this.slaLatencyMs === undefined || tick.slaLatencyMs <= this.slaLatencyMs) return undefined;
+    if (!tick || this.slaLatencyMs === undefined) return undefined;
+    const general = tick.slaLatencyMs > this.slaLatencyMs;
+    const ownGoal = Object.entries(tick.latencyByKind ?? {}).some(([k, l]) => l && l.p95Ms > (this.slaLatencyByKind[k as RequestKind] ?? Infinity));
+    if (!general && !ownGoal) return undefined;
     let best: string | undefined;
     let worst = 0;
     for (const [id, n] of Object.entries(tick.nodes)) {

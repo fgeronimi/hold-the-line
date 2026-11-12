@@ -598,6 +598,19 @@ l'artefact de 20 × sa base (B5) ; l'âge du plus vieux message de chaque file e
 affiché et raconté. L'objectif de fraîcheur (D2) est écarté : sans parade dans le jeu, il
 punirait sans rien apprendre (M13). Aucune stratégie gagnante n'a bougé.
 
+**État au 12 novembre 2026 : passe D faite** (branche `passe-latence`), décisions M14,
+M15, X11, S24, B8. Le taux d'échec ne dépasse plus 100 % ; la latence est le p95 pondéré des
+réponses, par chemin et minute par minute, sans « approx. », avec un objectif propre à la
+commande en données (il remplace S17 et S21) ; aucun incident ne dure moins de cinq
+minutes ; le paiement répond en 300 ms, la commande payée a 500 ms. Recalibrage du
+raccourcisseur (vagues 3 et 4), du marché (vague 5), du banquier et du tournoi. Une seule
+impasse reste, assumée : la vague 5 du raccourcisseur depuis la réponse CDN (X1).
+
+Choix gardés, à revoir s'ils gênent : un appel abandonné après attente (délai d'attente,
+dépendance muette) compte dans la latence, sinon le délai seul valait le disjoncteur ; le
+verrou de recalcul n'empêche pas les absences pendant une ruée (122 ms), il faudrait qu'il
+serve ceux qui attendent le même recalcul, un changement de modèle non fait.
+
 **Passe D — tous les scénarios**
 
 | # | Action | Effort | Risque |

@@ -82,7 +82,7 @@ export const market: Scenario = {
       id: 'double-delivery',
       title: 'Livrés deux fois',
       briefing:
-        'Le bus garantit qu’un message arrive au moins une fois… pas exactement une fois. Pendant un incident, une part des messages sera livrée deux fois.',
+        'Le bus garantit qu’un message arrive au moins une fois… pas exactement une fois. En temps normal, quelques doublons passent déjà ; pendant un pic de relivraisons, une part des messages sera livrée deux fois.',
       ticks: TICKS,
       ramp: RAMP,
       profile: flat,
@@ -96,7 +96,7 @@ export const market: Scenario = {
       ],
       consumers: ALL,
       singleStrategy: true,
-      incidents: [{ id: 'redelivery', title: 'Le bus relivre des messages', component: 'pubsub', from: 20, until: 40, effect: { type: 'duplicate-delivery', share: 0.2 } }],
+      incidents: [{ id: 'redelivery', title: 'Pic de relivraisons sur le bus', component: 'pubsub', from: 20, until: 40, effect: { type: 'duplicate-delivery', share: 0.2 } }],
     },
     {
       id: 'lost-orders',
@@ -145,7 +145,7 @@ export const market: Scenario = {
       singleStrategy: true,
       incidents: [
         // Plus forts qu'aux vagues 3 et 4 : noyés dans 1 500 lectures par seconde, ils doivent encore compter.
-        { id: 'sales-redelivery', title: 'Le bus relivre des messages', component: 'pubsub', from: 10, until: 30, effect: { type: 'duplicate-delivery', share: 0.3 } },
+        { id: 'sales-redelivery', title: 'Pic de relivraisons sur le bus', component: 'pubsub', from: 10, until: 30, effect: { type: 'duplicate-delivery', share: 0.3 } },
         { id: 'sales-crash', title: 'Le serveur tombe avant de publier', component: 'app-server', from: 30, until: 50, effect: { type: 'publish-loss', share: 0.8 } },
       ],
     },

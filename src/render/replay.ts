@@ -87,6 +87,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   scene.setArchitecture(o.arch, o.catalog);
   scene.setMode('replay');
   scene.slaLatencyMs = o.wave.sla.maxP95LatencyMs;
+  scene.slaLatencyByKind = o.wave.sla.maxP95LatencyMsByKind ?? {};
 
   // L'instant où la vague est perdue : la cloche sonne, les bords rougissent, la bannière tombe.
   const alarm = document.createElement('div');
@@ -231,6 +232,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     alarm.remove();
     panel.remove();
     scene.slaLatencyMs = undefined;
+    scene.slaLatencyByKind = {};
     scene.showTick(0, undefined, []);
     scene.setMode('build');
     window.removeEventListener('keydown', onKey);
