@@ -61,6 +61,7 @@ const POP_TEXT: Record<Outcome['result'], { text: string; className: string }> =
   repelled: { text: '🛡', className: 'pop shield' },
   twice: { text: '×2', className: 'pop ko' },
   ignored: { text: '🔁 déjà reçu', className: 'pop dedup' },
+  requeued: { text: '↩ en file', className: 'pop dedup' },
 };
 /** Distance d'un panneau de sens au milieu de la route : sur le bas-côté. */
 const SIGN_OFFSET = 0.5;
