@@ -1,95 +1,116 @@
-# Hold the Line
+<div align="center">
 
-Un jeu de construction et de défense pour comprendre le **system design** : on bâtit une
-architecture distribuée sur un plateau, puis on la fait tenir vague après vague. Chaque
-vague amène une nouvelle contrainte (plus de lectures, un pic de trafic, un client abusif,
-des clics à compter) : il faut adapter le système sans tout casser, en arbitrant entre
-coût, complexité et fiabilité.
+<img src="docs/media/banniere.webp" width="100%" alt="Hold the Line : une cité médiévale sur un plateau hexagonal, qui est en fait une architecture distribuée">
 
-**Jouer : https://fgeronimi.github.io/hold-the-line/**
+<br>
+
+**Un jeu pour apprendre le system design.**<br>
+On bâtit une architecture distribuée sur un plateau, puis on la fait tenir, vague après vague.
+
+<br>
+
+<a href="https://fgeronimi.github.io/hold-the-line/"><img src="docs/media/jouer.webp" width="300" alt="Jouer dans le navigateur"></a>
+
+<sub>Gratuit, sans inscription, dans le navigateur · 4 scénarios · 21 vagues · 26 succès</sub>
+
+<br><br>
+
+[Le principe](#le-principe) · [Comment on joue](#comment-on-joue) · [En images](#en-images) · [Développement](#développement) · [Crédits](#crédits)
+
+</div>
+
+<br>
+
+<img src="docs/media/vague.webp" width="100%" alt="Une vague tenue : les voyageurs font l'aller-retour, une instance du serveur tombe et la tour s'embrase">
 
 ## Le principe
 
-Quatre scénarios, au choix dès le lancement : *Les portes de la cité*, un raccourcisseur
-d'URL (serveurs, base, cache, CDN, rate limiting, file de messages) ; *Le grand marché*,
-la prise de commande d'une boutique en ligne (pub/sub, idempotence, outbox) ; *Le
-banquier lombard*, un paiement chez un prestataire qui ralentit ou tombe (cascade de
-pannes, circuit breaker, paiement différé, ruée vers le cache) ; et *Le grand tournoi*,
-une billetterie prise d'assaut (tempête de relances et backoff, file qui déborde,
-partition réseau et lectures cohérentes). Tous sont racontés comme
-une cité médiévale. La métaphore aide à se représenter le système ; le vrai nom
-technique vient toujours en premier.
+Chaque vague amène une nouvelle contrainte : plus de lectures, un pic de trafic, un client
+abusif, un prestataire qui tombe. Il faut adapter le système sans tout casser, en
+arbitrant entre **coût**, **complexité** et **fiabilité**. Le moteur simule vraiment le
+trafic, minute par minute : la file s'allonge, la base sature, le SLA rompt.
+
+Tout est raconté comme une cité médiévale, pour se représenter le système ; mais le nom
+technique vient toujours en premier, et chaque réplique du chambellan, le narrateur, est
+suivie de la même chose **« en vrai »**.
+
+<div align="center">
+<img src="docs/media/choix.webp" width="720" alt="L'écran de choix : quatre scénarios">
+</div>
+
+| Scénario | Niveau | Ce qu'on y apprend |
+|---|---|---|
+| **Les portes de la cité** · un raccourcisseur d'URL | Débutant | serveur et base, cache, CDN, réplicas, scalabilité horizontale, rate limiting, passerelle d'API, file de messages |
+| **Le grand marché** · une prise de commande | Suite | pub/sub, idempotence, transactional outbox, file des lettres mortes |
+| **Le banquier lombard** · un paiement chez un prestataire | Résilience | cascade de pannes, circuit breaker, paiement différé, ruée vers le cache |
+| **Le grand tournoi** · une billetterie prise d'assaut | Distribué | tempête de relances et backoff, load shedding, file qui déborde, partition réseau |
+
+<details>
+<summary><b>La cité, en vrai</b> : ce que chaque bâtiment représente</summary>
+
+<br>
 
 | Dans l'architecture | Dans la cité |
 |---|---|
 | Clients | Hameaux |
 | CDN | Avant-poste |
 | Load balancer, et son rate limiting | Porte de la cité, et sa garde |
+| API gateway | Bureau des laissez-passer |
 | Application server, une tour par instance | Tours des scribes |
+| Worker | Tour des commis |
 | Cache (cache-aside) | Carnet du scribe |
 | Database, et ses réplicas en lecture | Archives royales, et leurs copies |
 | Message queue | Relais de poste |
 | Pub/sub | Crieur public, au clocher |
 | Services métier (stock, facturation, e-mail) | Magasinier, Trésorier, Messager |
-| Prestataire de paiement externe | Banquier lombard |
+| Prestataire de paiement, d'e-mail | Banquier lombard, colombier |
 | Lectures, écritures, tâches async | Messagers, porteurs, mages |
 | Trafic abusif (scraper) | Pillards squelettes |
 
-Chaque réplique du chambellan, le narrateur, est suivie de la même chose « en vrai »,
-avec les termes techniques. Chaque bâtiment dit à quoi il sert, dans les deux langues.
+</details>
 
 ## Comment on joue
 
-1. **Le briefing** : le chambellan annonce la vague (trafic, budget, plafond de
-   complexité, SLA) et l'éventuel incident prévu (un cache qui redémarre à froid, une
-   instance qui tombe).
-2. **La construction** sur le plateau hexagonal : poser des bâtiments (une carte de la
-   main, puis sa case), les déplacer en les glissant, les relier (clic sur le départ, puis
-   sur l'arrivée), régler leurs évolutions dans leur fiche ; annuler avec ⌘Z. Une
-   rivière traverse le plateau : on ne bâtit pas dessus, les chemins la franchissent par
-   un pont. La première vague est guidée pas à pas.
-3. **La vague**, en direct : chaque requête fait l'aller-retour depuis les hameaux, +1
-   quand la réponse revient, −1 là où elle est refusée. Un bandeau signale les goulots et
-   les incidents.
-4. **Le debrief** : ce qui a marché (la part de chaque bâtiment, chiffrée), ce qui a failli
-   casser et pourquoi, la parade, et ce qu'on pourrait alléger. Trois étoiles par vague :
-   la tenir, sans rien de superflu, en restant économe. Perdre ne coûte rien, démolir non
-   plus : on recommence jusqu'aux trois étoiles. Une vague tenue se rejoue aussi, depuis le
-   menu, sans effacer la suite de la partie. Chaque concept appliqué dans une vague tenue
-   débloque un succès : cache, CDN, idempotence, outbox, circuit breaker…
+| | |
+|---|---|
+| **1. Le briefing** | Le chambellan annonce la vague : trafic, budget, plafond de complexité, SLA, et l'incident prévu (un cache qui redémarre à froid, une instance qui tombe). |
+| **2. La construction** | On tire un bâtiment de la main de cartes, on le pose sur le plateau hexagonal, on le relie, on règle ses évolutions. Démolir ne coûte rien. La première vague est guidée pas à pas. |
+| **3. La vague** | En direct : chaque requête fait l'aller-retour depuis les hameaux. Un bandeau signale les goulots et les incidents. |
+| **4. Le debrief** | Ce qui a tenu, chiffré ; ce qui a failli casser, et pourquoi ; la parade ; ce qu'on pourrait alléger. Une courbe par bâtiment, minute par minute. |
 
-Mode debug (calibrage, vue tableau, essais hors partie) : ajouter `?debug` à l'URL, ou
-touche D.
+**Trois étoiles par vague** : la tenir, sans rien de superflu, en restant économe. Perdre ne
+coûte rien : on recommence jusqu'aux trois étoiles, et une vague déjà tenue se rejoue sans
+effacer la suite. Un indice s'ouvre à chaque essai perdu.
+
+**Des succès** : chaque concept appliqué dans une vague tenue en débloque un, du cache au
+circuit breaker. Ils valent pour toutes les parties.
+
+<div align="center">
+<img src="docs/media/succes.webp" width="100%" alt="La fenêtre des succès : les concepts acquis en couleur, ceux à découvrir grisés">
+</div>
 
 ## En images
 
-Captures du jeu tel qu'il tourne, rejeux accélérés.
+<table>
+<tr>
+<td width="50%"><img src="docs/media/construction.webp" width="100%" alt="Construction de la vague 1"></td>
+<td width="50%"><img src="docs/media/defaite.webp" width="100%" alt="Vague perdue : la base sature et le SLA est rompu"></td>
+</tr>
+<tr>
+<td><b>La construction guidée.</b> La main de cartes, la pose de la tour, le chemin tracé depuis les hameaux.</td>
+<td><b>Une vague perdue.</b> La base sature : les bords rougissent, la cloche sonne, le SLA est rompu.</td>
+</tr>
+</table>
 
-**La construction guidée de la vague 1.** Le reflet signale le prochain geste, la main de
-cartes se distribue, une carte se soulève au survol ; on pose la tour, puis on trace son
-chemin depuis les hameaux.
+<div align="center">
+<img src="docs/media/debrief.webp" width="720" alt="Le debrief d'une vague tenue">
+<br><sub><b>Le debrief du chambellan</b> : les étoiles, les succès débloqués, ce qui a tenu et pourquoi.</sub>
+</div>
 
-<img src="docs/media/construction.webp" width="800" alt="Construction de la vague 1 : la main de cartes, la pose d'un bâtiment et le tracé d'un chemin">
+<details>
+<summary><b>La vitrine des effets</b> : chaque incident, seul sur un îlot de démonstration</summary>
 
-**Une vague tenue, avec son incident.** Les voyageurs font l'aller-retour, les compteurs
-montent ; à la 46ᵉ minute une instance du serveur tombe, la caméra s'approche, la tour
-s'embrase.
-
-<img src="docs/media/vague.webp" width="800" alt="Rejeu de la vague 3 : une instance du serveur tombe">
-
-**Une vague perdue.** La base sature dès la 5ᵉ minute : les bords de l'écran rougissent,
-la cloche sonne, la bannière « SLA rompu » tombe.
-
-<img src="docs/media/defaite.webp" width="800" alt="Vague perdue : la base sature et le SLA est rompu">
-
-**Le debrief du chambellan** : ce qui a tenu, chiffré, ce qui a failli casser, la parade.
-
-<img src="docs/media/debrief.webp" width="800" alt="Le debrief d'une vague tenue">
-
-### La vitrine des effets
-
-Chaque incident a son effet sur le plateau, montré seul sur un îlot de démonstration
-(`npm run dev`, puis `/vitrine.html`).
+<br>
 
 | <img src="docs/media/vitrine-saturation.webp" width="260" alt="Saturation"> | <img src="docs/media/vitrine-requete-refusee.webp" width="260" alt="Requête refusée"> | <img src="docs/media/vitrine-arriere-de-file.webp" width="260" alt="Arriéré de file"> |
 |---|---|---|
@@ -103,14 +124,22 @@ Chaque incident a son effet sur le plateau, montré seul sur un îlot de démons
 | <img src="docs/media/vitrine-message-empoisonne.webp" width="260" alt="Message empoisonné"> | <img src="docs/media/vitrine-pastilles-d-evolution.webp" width="260" alt="Pastilles d'évolution"> | <img src="docs/media/vitrine-autoscaling-en-chantier.webp" width="260" alt="Autoscaling"> |
 | **Message empoisonné** · sans file des lettres mortes | **Pastilles d'évolution** · acheter une évolution | **Autoscaling** · le délai de démarrage |
 | <img src="docs/media/vitrine-guerite-du-disjoncteur.webp" width="260" alt="Guérite du disjoncteur"> | <img src="docs/media/vitrine-verrou-de-recalcul.webp" width="260" alt="Verrou de recalcul"> | <img src="docs/media/vitrine-sla-franchi.webp" width="260" alt="SLA franchi"> |
-| **Guérite du disjoncteur** · l'état demi-ouvert | **Verrou de recalcul** · request coalescing (maquette) | **SLA franchi** · la vague est perdue |
+| **Guérite du disjoncteur** · l'état demi-ouvert | **Verrou de recalcul** · request coalescing | **SLA franchi** · la vague est perdue |
 
-### La planche de design
+`npm run dev`, puis `/vitrine.html`.
 
-Pictogrammes, médaillons, badge de vague et barres, dessinés en SVG et en CSS, sans une
-seule image, dans la matière du jeu : parchemin et laiton (`npm run dev`, puis `/design.html`).
+</details>
 
-<img src="docs/media/design.webp" width="800" alt="La planche de design : pictogrammes, boutons et barres en parchemin et laiton">
+<details>
+<summary><b>La planche de design</b> : pictogrammes, boutons et barres, en SVG et CSS, sans une seule image</summary>
+
+<br>
+
+<img src="docs/media/design.webp" width="100%" alt="La planche de design : pictogrammes, boutons et barres en parchemin et laiton">
+
+`npm run dev`, puis `/design.html`.
+
+</details>
 
 ## Développement
 
@@ -134,9 +163,16 @@ Les décisions de design, avec leur pourquoi, sont dans
 Chaque push sur `main` lance les tests puis publie sur GitHub Pages ; l'équilibrage a son
 propre workflow, quand le moteur ou les données changent.
 
-## Ressources utilisées
+Mode debug (calibrage, vue tableau, essais hors partie) : `?debug` dans l'URL, ou la touche D.
 
-### Modèles 3D
+## Crédits
+
+<details>
+<summary>Modèles 3D, bibliothèques, polices</summary>
+
+<br>
+
+**Modèles 3D**
 
 Tous de **Kay Lousberg** ([kaylousberg.com](https://kaylousberg.com)), sous licence
 [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) : le crédit n'est pas
@@ -154,7 +190,7 @@ obligatoire, on le donne quand même. Seuls les modèles utilisés sont copiés 
 Les personnages sont allégés par `scripts/strip-characters.mjs`. Détail des fichiers et
 des licences : [`public/models/CREDITS.md`](public/models/CREDITS.md).
 
-### Bibliothèques
+**Bibliothèques**
 
 - [Three.js](https://threejs.org) (MIT) : le plateau 3D, le chargement glTF, les
   contrôles de caméra et les étiquettes.
@@ -168,11 +204,13 @@ Les pictogrammes sont dessinés pour le jeu, en SVG (`src/ui/sprite.ts`). Titrag
 [Lilita One](https://fonts.google.com/specimen/Lilita+One) (SIL Open Font License), copiée
 dans le dépôt. Aucune autre ressource externe.
 
-### Contenu
+**Contenu**
 
 Le jeu prolonge le calendrier
 [Advent of System Design](https://github.com/fgeronimi/advent-of-system-design), dont les
 fiches seront reprises dans le jeu.
+
+</details>
 
 ## Licence
 

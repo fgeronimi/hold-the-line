@@ -118,9 +118,100 @@ async function playWave(page) {
   return film;
 }
 
+/** Pose un calque par-dessus la page, avec le sprite et la feuille de style du jeu. */
+async function overlay(page, css, html) {
+  await page.evaluate(
+    async ({ css, html }) => {
+      const { installSprite, icon } = await import('/src/ui/icons.ts');
+      installSprite();
+      const style = document.createElement('style');
+      style.textContent = css;
+      document.head.append(style);
+      const host = document.createElement('div');
+      host.id = 'readme-overlay';
+      // Les pictogrammes s'écrivent {nom} dans le gabarit.
+      host.innerHTML = html.replace(/\{([a-z]+)\}/g, (_, name) => icon(name));
+      document.body.append(host);
+      await document.fonts.ready;
+    },
+    { css, html },
+  );
+  await page.waitForTimeout(400);
+}
+
+/** Une capture d'un élément, fond transparent compris, en WebP. */
+async function element(page, selector, name, width) {
+  const dir = mkdtempSync(join(tmpdir(), `hl-${name}-`));
+  const png = join(dir, 'el.png');
+  await page.locator(selector).screenshot({ path: png, omitBackground: true, animations: 'disabled', timeout: 90_000 });
+  execFileSync('cwebp', ['-quiet', '-q', '85', '-alpha_q', '100', ...(width ? ['-resize', String(width), '0'] : []), png, '-o', join(MEDIA, `${name}.webp`)]);
+  rmSync(dir, { recursive: true, force: true });
+  console.log(`  ${name}.webp`);
+}
+
 // ——— Les plans ———
 
 const SHOTS = {
+  /** La bannière du README : la cité de la vague 5 en fond, la plaque du titre posée dessus. */
+  async banniere(page) {
+    await seed(page, 'url-shortener', 4);
+    await page.mouse.move(1279, 719);
+    await overlay(
+      page,
+      `#hud, #toolbar, #hand, #dialog, .city-pips { display: none !important; }
+       #readme-overlay { position: fixed; inset: 0; z-index: 50; pointer-events: none;
+         background: radial-gradient(ellipse 60% 70% at 50% 52%, rgba(20, 12, 4, 0) 40%, rgba(20, 12, 4, .45) 100%); }
+       #readme-overlay .wave-badge { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(2.1); }
+       #readme-overlay .hud-title b { font-size: 26px; white-space: nowrap; }
+       #readme-overlay .hud-title span { font-size: 11.5px; white-space: nowrap; }`,
+      `<div class="wave-badge"><span class="wave-skull">{skull}</span>
+         <div class="plaque hud-title"><b>Hold the Line</b><span>Bâtir une architecture, la faire tenir vague après vague</span></div></div>`,
+    );
+    await still(page, 'banniere', { x: 0, y: 120, width: 1280, height: 480 }, 1280);
+  },
+
+  /** Le bouton « Jouer » du README, dans la matière du bouton de lancement. */
+  async jouer(page) {
+    await page.goto(`${BASE}/`);
+    await overlay(
+      page,
+      `body > *:not(#readme-overlay) { visibility: hidden; }
+       html, body { background: transparent !important; }
+       #readme-overlay { position: fixed; left: 20px; top: 20px; padding: 6px 6px 10px; }
+       #readme-overlay button.launch { font-size: 24px; }`,
+      `<button class="launch">{swords}<span>Jouer dans le navigateur</span></button>`,
+    );
+    await element(page, '#readme-overlay', 'jouer', 440);
+  },
+
+  /** L'écran de choix : les quatre scénarios. */
+  async choix(page) {
+    await page.goto(`${BASE}/`);
+    await page.evaluate((key) => localStorage.removeItem(key), KEY);
+    await page.reload();
+    await page.waitForTimeout(2500);
+    await element(page, '.dialog', 'choix', 900);
+  },
+
+  /** La fenêtre des succès, quelques-uns acquis. */
+  async succes(page) {
+    await page.setViewportSize({ width: 1280, height: 1500 });
+    await page.goto(`${BASE}/`);
+    await page.evaluate((key) => {
+      const at = { scenario: 'url-shortener', wave: 2 };
+      const ids = ['client-server', 'horizontal-scaling', 'redundancy', 'cache', 'cdn', 'read-replica', 'rate-limiting', 'pubsub', 'idempotence', 'circuit-breaker'];
+      localStorage.setItem(key, JSON.stringify({ saves: {}, achievements: Object.fromEntries(ids.map((id) => [id, at])) }));
+    }, KEY);
+    await page.reload();
+    await page.waitForTimeout(1500);
+    await page.click('[data-action="show-achievements"]');
+    // Plus large que dans le jeu, pour que la grille tienne en peu de lignes dans le README.
+    await page.addStyleTag({ content: '.layer.center > .achievements-dialog { width: 1240px; max-width: 1240px; max-height: none; } .achievements { grid-template-columns: repeat(5, 1fr); }' });
+    await page.waitForTimeout(600);
+    await element(page, '.dialog', 'succes', 1000);
+    await page.setViewportSize({ width: 1280, height: 720 });
+  },
+
   /** La vague 1 guidée : reflet, main distribuée, carte soulevée, pose, chemin tracé. */
   async construction(page) {
     await page.goto(`${BASE}/`);
