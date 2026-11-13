@@ -161,11 +161,9 @@ de partenaire qui boucle à 2 000 req/s. Critères de sortie : aucune architectu
 
 ## Prochaines étapes
 
-1. Faire jouer 2 ou 3 personnes de la cible, avec `docs/test-de-jeu.md`, quatrième scénario
-   compris.
-2. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
+1. Jouer et calibrer dans l'interface jusqu'aux critères de sortie, durée de partie
    comprise (B4).
-3. Reproduire les fiches du calendrier dans le jeu (I2, P3).
+2. Reproduire les fiches du calendrier dans le jeu (I2, P3).
 
 ## Positionnement
 

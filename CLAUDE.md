@@ -22,6 +22,8 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 - `npm run captures` : refait les WebP animés du README dans `docs/media/` (Chrome sans
   fenêtre, sa propre origine, ~10 min) ; `npm run captures -- vitrine` n'en refait qu'un plan.
   Il faut `img2webp`/`cwebp` (paquet webp) et `sips` (macOS). À relancer quand un effet change.
+  Le plan `apercu` refait `public/og.png`, l'image d'un lien partagé, que `index.html` nomme par
+  son URL absolue (Open Graph).
 - `npm run dev` : interface de jeu et de calibrage ; `npm run build` : site statique
   dans `dist/`, chemins relatifs pour GitHub Pages
 

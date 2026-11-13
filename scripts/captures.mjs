@@ -210,6 +210,31 @@ const SHOTS = {
   },
 
   /**
+   * L'image d'aperçu d'un lien partagé (réseaux, messageries, la vignette du dépôt) : la bannière
+   * cadrée en 1200 × 627, le format courant des aperçus, en PNG, mieux lu que le WebP. Elle va dans
+   * `public/`, servie à la racine du site : `index.html` la nomme par son URL absolue.
+   */
+  async apercu(page) {
+    await page.setViewportSize({ width: 1200, height: 747 });
+    await seed(page, 'url-shortener', 4);
+    await page.mouse.move(1199, 746);
+    await overlay(
+      page,
+      `#hud, #toolbar, #hand, #dialog, .city-pips { display: none !important; }
+       #readme-overlay { position: fixed; inset: 0; z-index: 50; pointer-events: none;
+         background: radial-gradient(ellipse 60% 70% at 50% 50%, rgba(20, 12, 4, 0) 40%, rgba(20, 12, 4, .45) 100%); }
+       #readme-overlay .wave-badge { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(2.1); }
+       #readme-overlay .hud-title b { font-size: 26px; white-space: nowrap; }
+       #readme-overlay .hud-title span { font-size: 11.5px; white-space: nowrap; }`,
+      `<div class="wave-badge"><span class="wave-skull">{skull}</span>
+         <div class="plaque hud-title"><b>Hold the Line</b><span>Un jeu pour apprendre le system design</span></div></div>`,
+    );
+    await page.screenshot({ path: join(ROOT, 'public/og.png'), clip: { x: 0, y: 60, width: 1200, height: 627 }, animations: 'disabled', timeout: 90_000 });
+    console.log('  public/og.png');
+    await page.setViewportSize({ width: 1280, height: 720 });
+  },
+
+  /**
    * Le bouton « Jouer » du README, dans la matière du bouton de lancement. Affiché à 300 px de
    * large, il est rendu à densité 3 : à l'échelle 1, un écran Retina l'agrandissait et le floutait.
    */

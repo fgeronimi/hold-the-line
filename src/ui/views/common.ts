@@ -107,6 +107,11 @@ export interface ViewState {
 
 export { theme };
 
+/** Le dépôt : le code, le README et les décisions, pour qui arrive par le jeu. */
+export const REPOSITORY = 'https://github.com/fgeronimi/hold-the-line';
+export const repositoryLink = (label: string, className = '') =>
+  `<a class="${className}" href="${REPOSITORY}" target="_blank" rel="noopener">${label}</a>`;
+
 /** L'échappement du rendu, pour tout ce qui vient de l'état (nombres compris). */
 export const esc = (s: unknown) => escapeHtml(String(s));
 

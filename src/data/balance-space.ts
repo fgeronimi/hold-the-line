@@ -12,7 +12,7 @@ import { urlShortener } from './scenarios/url-shortener.ts';
 /**
  * Les espaces d'architectures de `npm run balance`, un par scénario. Chacun énumère les
  * combinaisons de son schéma de référence ; les bornes sont larges pour qu'une réponse
- * imprévue, trouvée par un joueur, y soit déjà (fiche de test de jeu).
+ * imprévue, trouvée par un joueur, y soit déjà.
  */
 
 const levels = (id: string) => catalog.upgrades[id]?.maxLevel ?? 0;

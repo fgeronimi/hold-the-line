@@ -15,6 +15,7 @@ import {
   nameOf,
   pct,
   realGame,
+  repositoryLink,
   renderHints,
   speech,
   starIcons,
@@ -192,7 +193,7 @@ function renderWelcome(): string {
     </div>
     <ol class="welcome-steps">${steps}</ol>
     <ul class="welcome-stars"><li>★ ${esc(STAR_LABELS.held)}</li><li>★ ${esc(STAR_LABELS.lean)}</li><li>★ ${esc(STAR_LABELS.thrifty)} : la facture sous un seuil</li></ul>
-    <p class="actions"><button class="primary" data-action="show-welcome">${esc(w.start)}</button></p>
+    <p class="actions"><span class="welcome-source">${repositoryLink('Code source et explications sur GitHub')}</span><button class="primary" data-action="show-welcome">${esc(w.start)}</button></p>
   </div>`;
 }
 
@@ -204,12 +205,14 @@ function conceptChips(list: Achievement[]): string {
   return list.length === 0 ? '<span class="muted">—</span>' : list.map((a) => `<span class="chip" data-tip="${esc(a.real)}">${icon(a.icon as IconName)} ${esc(a.tech)}</span>`).join('');
 }
 
+/** Sur un téléphone, l'en-tête du tableau disparaît : chaque cellule redit sa colonne (`data-label`). */
 function reviewRow(w: WaveReview): string {
+  const r = theme.review;
   return `<tr>
       <th>${w.index + 1}. ${esc(w.title)}</th>
       <td class="star-row">${starIcons(starCount(w.stars))}</td>
-      <td>${conceptChips(w.fresh)}</td>
-      <td>${conceptChips(w.alternatives)}</td>
+      <td data-label="${esc(r.applied)}">${conceptChips(w.fresh)}</td>
+      <td data-label="${esc(r.alternatives)}"${w.alternatives.length === 0 ? ' class="empty"' : ''}>${conceptChips(w.alternatives)}</td>
     </tr>`;
 }
 

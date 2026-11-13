@@ -2,7 +2,7 @@ import type { Wave } from '../../engine/types.ts';
 import { starCount } from '../../engine/score.ts';
 import { draftInfo } from '../draft.ts';
 import { icon, type IconName } from '../icons.ts';
-import { decimal as fmt, esc, narratorFace, realGame, totalStars, type ViewState } from './common.ts';
+import { decimal as fmt, esc, narratorFace, realGame, repositoryLink, totalStars, type ViewState } from './common.ts';
 
 const KINDS: { k: 'read' | 'write' | 'async'; icon: IconName; short: string; tip: string }[] = [
   { k: 'read', icon: 'read', short: 'lectures/s', tip: 'Lectures par seconde au plus fort de la vague' },
@@ -60,6 +60,7 @@ function renderMenu(s: ViewState): string {
         ${realGame(s).finished ? '<button data-action="show-review">Bilan du scénario</button>' : ''}
         <button data-action="show-achievements">Succès</button>
         <button data-action="show-welcome">Comment jouer</button>
+        ${repositoryLink('Le code sur GitHub', 'menu-link')}
         <button data-action="toggle-debug">${s.debug ? 'Quitter' : 'Ouvrir'} le mode debug</button>
       </div>`;
 }
