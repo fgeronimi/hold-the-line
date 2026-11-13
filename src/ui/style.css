@@ -180,7 +180,9 @@ body[data-phase='debrief'] .replay-bar, body[data-phase='debrief'] .replay-chart
 .replay-bar .hud .ok { color: var(--ok); font-weight: bold; }
 .replay-bar .hud .ko { color: var(--ko); font-weight: bold; }
 .replay-legend i { display: inline-block; width: 10px; height: 10px; margin: 0 4px 0 8px; border-radius: 2px; }
-.replay-alert { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); z-index: 2; padding: 6px 14px; border-radius: 999px; background: linear-gradient(#d8574a, #a93226); border: 2px solid #5e1a12; color: #fff; font-weight: bold; box-shadow: 0 3px 0 #5e1a12, 0 7px 12px rgba(30, 20, 8, .35); }
+.replay-alert { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); z-index: 2; padding: 6px 14px; border-radius: 18px; text-align: center; max-width: calc(100vw - 32px); background: linear-gradient(#d8574a, #a93226); border: 2px solid #5e1a12; color: #fff; font-weight: bold; box-shadow: 0 3px 0 #5e1a12, 0 7px 12px rgba(30, 20, 8, .35); }
+.replay-alert p { margin: 0; }
+.replay-alert p + p { margin-top: 4px; padding-top: 4px; border-top: 1px solid #ffffff40; }
 .replay-loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: #555; font-family: var(--display); font-size: 18px; }
 
 /* Étiquettes et pastilles au-dessus des bâtiments. */

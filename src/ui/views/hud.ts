@@ -89,6 +89,7 @@ export function renderHud(s: ViewState): string {
       <div class="plaque hud-actions">
         ${gauge('star', 'étoiles', 'Étoiles gagnées', `${stars} <em>/ ${n * 3}</em>`, false, ' stars')}
         ${briefing}
+        <button class="round" data-action="show-achievements" data-tip="Succès" aria-label="Succès">${icon('medal')}</button>
         <button class="round" data-action="menu" data-tip="Menu" aria-label="Menu">${icon('menu')}</button>
       </div>
     </div>

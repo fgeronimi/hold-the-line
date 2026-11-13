@@ -169,7 +169,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
       focus ??= a.node;
     }
     if (messages.length === 0) return;
-    alert.innerHTML = messages.join(' ');
+    alert.innerHTML = messages.map((m) => `<p>${m}</p>`).join('');
     alert.hidden = false;
     if (focus) scene.focusOn(focus);
     slowFor = SLOW_MOTION.seconds;
