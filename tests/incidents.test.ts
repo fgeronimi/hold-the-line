@@ -47,9 +47,9 @@ describe('incidents', () => {
 
 describe('étoiles', () => {
   it('une par objectif : tenir, du premier coup, sous le seuil d’économie', () => {
-    const r = simulateWave(A.withCache, wave('read-surge'), catalog, A.minimal);
+    const r = simulateWave(A.withCache, wave('read-surge'), catalog);
     expect(starsFor(r, 0, wave('read-surge'))).toEqual({ held: true, firstTry: true, thrifty: true });
-    const replica = simulateWave(A.withReplica, wave('read-surge'), catalog, A.minimal);
+    const replica = simulateWave(A.withReplica, wave('read-surge'), catalog);
     expect(starCount(starsFor(replica, 1, wave('read-surge')))).toBe(1);
   });
 

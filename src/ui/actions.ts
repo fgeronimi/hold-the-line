@@ -198,7 +198,7 @@ export const actions: Record<string, Action> = {
   },
   try: (s, _, { nextAttemptId: id }) => {
     const waveIndex = s.game.waveIndex;
-    const result = simulateWave(s.draft, s.scenario.waves[waveIndex]!, s.catalog, s.game.committed);
+    const result = simulateWave(s.draft, s.scenario.waves[waveIndex]!, s.catalog);
     const label = `#${id} V${waveIndex + 1} essai ${describeDraft(s.draft)}`;
     const recorded = record(s, { label, waveIndex, result, score: scoreWave(result, s.game.replays, scoring), played: false }, s.game.replays, id);
     return patch(recorded, { kind: 'attempt-recorded' }, { kind: 'play', attempt: id });

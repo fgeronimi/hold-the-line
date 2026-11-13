@@ -12,8 +12,7 @@ const waveById = (id: string) => {
   return w;
 };
 
-const play = (arch: Architecture, waveId: string, previous?: Architecture) =>
-  simulateWave(arch, waveById(waveId), catalog, previous);
+const play = (arch: Architecture, waveId: string) => simulateWave(arch, waveById(waveId), catalog);
 
 /**
  * Chaque vague : gagnée avec la réponse attendue, perdue sans elle, et perdue avec
@@ -37,8 +36,8 @@ describe('Raccourcisseur d’URL', () => {
   });
 
   it('vague 2 — cache ou réplica en lecture, deux profils différents', () => {
-    const cache = play(A.withCache, 'read-surge', A.minimal);
-    const replica = play(A.withReplica, 'read-surge', A.minimal);
+    const cache = play(A.withCache, 'read-surge');
+    const replica = play(A.withReplica, 'read-surge');
     expect(cache.gauges.cost.value).toBeLessThan(replica.gauges.cost.value);
     expect(replica.gauges.complexity.value).toBeLessThan(cache.gauges.complexity.value);
 
@@ -46,7 +45,7 @@ describe('Raccourcisseur d’URL', () => {
   });
 
   it('vague 3 — scaling horizontal derrière un load balancer', () => {
-    expect(play(A.scaled(3), 'marketing-peak', A.withCache).won).toBe(true);
+    expect(play(A.scaled(3), 'marketing-peak').won).toBe(true);
     expect(play(A.withCache, 'marketing-peak').won).toBe(false);
     expect(play(A.scaled(2), 'marketing-peak').won).toBe(false);
     expect(play(A.scaled(4), 'marketing-peak').lossReasons).toEqual(['Budget dépassé : 175 / 170']);
@@ -75,15 +74,14 @@ describe('Raccourcisseur d’URL', () => {
     expect(play(A.autoscaled(0, 3), 'marketing-peak').won).toBe(false);
   });
 
-  it('vague 3 — le réplica choisi en vague 2 coûte une migration', () => {
-    // Décision E3 : retirer le réplica pour poser le cache se paie dans la facture de la vague.
-    const r = play(A.scaled(3), 'marketing-peak', A.withReplica);
-    expect(r.bill.migration).toBe(40);
-    expect(r.lossReasons).toEqual(['Budget dépassé : 195 / 170, dont 40 de migration']);
+  it('vague 3 — démolir le réplica de la vague 2 ne coûte rien', () => {
+    // Décision E8 : la facture ne compte que ce qui est bâti.
+    const r = play(A.scaled(3), 'marketing-peak');
+    expect(r.bill).toEqual({ fixed: r.gauges.cost.value, autoscaling: 0 });
+    expect(r.won).toBe(true);
   });
-
   it('vague 4 — seule une limite bien choisie passe', () => {
-    const at = (tier: number) => play(A.scaled(4, { rateLimitTier: tier }), 'noisy-client', A.scaled(3));
+    const at = (tier: number) => play(A.scaled(4, { rateLimitTier: tier }), 'noisy-client');
     const winning = [1, 2, 3, 4, 5].filter((tier) => at(tier).won);
     // Depuis M4, le palier 80 laisse passer assez de scraper pour ralentir la base, que les
     // lectures ratant le cache attendent : plus de 5 % des requêtes.
@@ -118,7 +116,7 @@ describe('Raccourcisseur d’URL', () => {
   const keyed = { partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, extraInstances: 4, replicas: 1 };
 
   it('vague 5 — aucune limite unique ne sépare les partenaires du scraper (C7)', () => {
-    const at = (tier: number) => play(A.scaled(4, { rateLimitTier: tier }), 'partner-keys', A.scaled(4, { rateLimitTier: A.TIER_40 }));
+    const at = (tier: number) => play(A.scaled(4, { rateLimitTier: tier }), 'partner-keys');
     expect([1, 2, 3, 4, 5].filter((tier) => at(tier).won)).toEqual([]);
     // À 80 et en dessous, elle coupe les partenaires (125 req/s par clé) ; à 160, le scraper
     // (60 req/s par adresse) passe en entier et noie la base.
@@ -166,7 +164,7 @@ describe('Raccourcisseur d’URL', () => {
 
   it('vague 6 — file de messages pour compter les clics hors du chemin critique', () => {
     expect(waveById('click-tracking').singleStrategy).toBe(true);
-    expect(play(A.gated({ ...keyed, queue: true }), 'click-tracking', A.gated(keyed)).won).toBe(true);
+    expect(play(A.gated({ ...keyed, queue: true }), 'click-tracking').won).toBe(true);
     const inline = play(A.gated(keyed), 'click-tracking');
     expect(inline.won).toBe(false);
     expect(inline.nodes.db!.peakUtilization).toBeGreaterThan(1);

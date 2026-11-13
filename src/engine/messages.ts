@@ -14,11 +14,7 @@ export function lossMessage(r: LossReason): string {
     case 'invalid':
       return `Architecture invalide : ${r.message}`;
     case 'budget': {
-      const parts = [
-        r.autoscaling > 0 && `${fmt(r.autoscaling)} d'autoscaling`,
-        r.migration > 0 && `${fmt(r.migration)} de migration`,
-      ].filter(Boolean);
-      const detail = parts.length > 0 ? `, dont ${parts.join(' et ')}` : '';
+      const detail = r.autoscaling > 0 ? `, dont ${fmt(r.autoscaling)} d'autoscaling` : '';
       return `Budget dépassé : ${fmt(r.cost)} / ${fmt(r.limit)}${detail}`;
     }
     case 'complexity':

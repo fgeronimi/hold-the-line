@@ -1,4 +1,3 @@
-import { migrationCost } from '../../engine/budget.ts';
 import type { Wave } from '../../engine/types.ts';
 import { draftInfo } from '../draft.ts';
 import { icon, type IconName } from '../icons.ts';
@@ -33,7 +32,7 @@ const pips = (current: number, total: number) =>
 /** Les jauges de la construction : facture et complexité prévues face aux plafonds, trafic, SLA. */
 function buildGauges(s: ViewState, wave: Wave): string {
   const info = draftInfo(s.draft, s.catalog);
-  const cost = info.cost + migrationCost(s.game.committed, s.draft, s.catalog);
+  const cost = info.cost;
   const complexity = info.complexity;
   const sla = `${(wave.sla.maxFailureRate * 100).toFixed(0)} % <em>· ${wave.sla.maxP95LatencyMs} ms</em>`;
   return [

@@ -79,7 +79,7 @@ export function ordering(delivery: Delivery, o: FanOutOptions = {}): Architectur
       break;
     case 'pubsub':
       // La file du service e-mail garde l'id `queue` des variantes « file » : le joueur la
-      // conserve en posant le pub/sub, et `migrationCost` compare par id.
+      // conserve en posant le pub/sub : l'aide y reconnaît le même bâtiment.
       nodes.push({ id: 'bus', type: 'pubsub' }, ...SERVICES.map((s): ArchNode => ({ id: queueOf(s), type: 'message-queue' })));
       links.push(link('app', 'bus'), ...SERVICES.flatMap((s) => [link('bus', queueOf(s)), link(queueOf(s), s)]));
       break;

@@ -138,8 +138,8 @@ export const urlShortener: Scenario = {
       profile: flat,
       sources: [users({ read: 3000, write: 50 }), bigPartners({ read: 1500 }), runaway({ read: 2000 }), spreadScraper],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
-      // Depuis la réponse sans CDN de la vague 4, garder ses instances et ajouter passerelle et
-      // réplica, en coupant la limite unique (5 de migration) : 255.
+      // Calé du temps où couper la limite unique coûtait 5 de migration (E2, abandonnée par E8) :
+      // 250 suffiraient, gardé tel quel.
       budget: 255,
       // Sans la limite unique : avec elle, un point de trop. L'autoscaling, sur ce trafic qui ne
       // retombe pas, n'y tient pas non plus (+2).

@@ -15,7 +15,7 @@ export interface DraftInfo {
   order: string[];
   /** Ce qui circule sur chaque lien, clé `from→to`. */
   flows: LinkFlows;
-  /** La facture par ligne, hors migration (elle dépend de l'architecture validée). */
+  /** La facture par ligne. */
   bill: BillLine[];
   cost: number;
   complexity: number;

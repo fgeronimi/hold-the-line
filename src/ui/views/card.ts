@@ -194,7 +194,7 @@ export function upgradePips(
     can.move &&
       `<button class="pip act" data-action="tool" data-tool="move" data-node="${id}" aria-label="Déplacer"><span class="icon">${icon('move')}</span><i><em>Déplacer</em>Cliquer la case d’arrivée, ou glisser le bâtiment</i></button>`,
     can.remove &&
-      `<button class="pip act ko${blink(target?.tool === 'remove')}" data-action="remove-node" data-node="${id}" aria-label="Retirer"><span class="icon">${icon('remove')}</span><i><em>Retirer</em>Démolir le bâtiment et ses chemins. S’il était déjà là à la vague précédente, sa valeur d’achat entre dans la facture (migration)</i></button>`,
+      `<button class="pip act ko${blink(target?.tool === 'remove')}" data-action="remove-node" data-node="${id}" aria-label="Retirer"><span class="icon">${icon('remove')}</span><i><em>Retirer</em>Démolir le bâtiment et ses chemins. Démolir ne coûte rien</i></button>`,
   ].filter(Boolean);
   const pips = Object.values(catalog.upgrades)
     .filter((u) => u.appliesTo === node.type)

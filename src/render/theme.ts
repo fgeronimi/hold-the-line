@@ -91,7 +91,7 @@ export type GuideLine =
   | 'overComplexity'
   | 'launch';
 
-export type HintLine = 'place' | 'placeMore' | 'link' | 'upgrade' | 'level' | 'remove' | 'unlink' | 'lower' | 'rewind' | 'rebuilt' | 'ready';
+export type HintLine = 'place' | 'placeMore' | 'link' | 'upgrade' | 'level' | 'remove' | 'unlink' | 'lower' | 'ready';
 
 /**
  * - `won` (`{story}` : ce qui a marché, ou `wonQuiet`), `wonQuiet` (`{title}` : la vague), `lost` ;

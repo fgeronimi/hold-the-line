@@ -1,4 +1,4 @@
-import { migrationCost, totals } from './budget.ts';
+import { totals } from './budget.ts';
 import { callTimeouts, openCircuits } from './circuits.ts';
 import { addStream, isEvent, sumRps, type Flow } from './flow.ts';
 import { activeAt, incidentState } from './incidents.ts';
@@ -31,18 +31,10 @@ import { defOf, isDown, latencyOf, type Now, type World } from './world.ts';
 
 export { envelopeAt } from './profile.ts';
 
-/**
- * `previous` est l'architecture en place à la fin de la vague précédente : les retraits
- * depuis celle-ci s'ajoutent à la facture de la vague (décision E3).
- */
-export function simulateWave(
-  arch: Architecture,
-  wave: Wave,
-  catalog: Catalog,
-  previous?: Architecture,
-): WaveResult {
+/** Joue une vague sur une architecture. Démolir ne coûte rien (décision E8) : la vague ne dépend que de ce qui est bâti. */
+export function simulateWave(arch: Architecture, wave: Wave, catalog: Catalog): WaveResult {
   const { cost: fixed, complexity } = totals(arch, catalog);
-  const billed = { fixed, autoscaling: 0, migration: previous ? migrationCost(previous, arch, catalog) : 0 };
+  const billed = { fixed, autoscaling: 0 };
   const validation = validateArchitecture(arch, catalog);
   if (!validation.ok) {
     return invalidResult(wave, billed, complexity, validation.errors);
@@ -234,7 +226,7 @@ export function simulateWave(
   const latencyGauges = verdicts.map((v) => ({ v, g: gauge(v.p95Ms, v.objective.limitMs) }));
   const binding = latencyGauges.reduce((worst, x) => (x.g.margin < worst.g.margin ? x : worst));
   const gauges = {
-    cost: gauge(billed.fixed + billed.autoscaling + billed.migration, wave.budget),
+    cost: gauge(billed.fixed + billed.autoscaling, wave.budget),
     complexity: gauge(complexity, wave.complexityCap),
     failureRate: gauge(failureRate, wave.sla.maxFailureRate),
     latency: binding.g,

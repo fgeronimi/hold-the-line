@@ -112,7 +112,7 @@ export const market: Scenario = {
       complexityCap: 19,
       thriftyCost: 240,
       // Les deux premières gardent l'idempotence de la vague 3 : sans incident de doublon ici elle
-      // est superflue (les deux dernières), mais la retirer coûterait une migration au joueur.
+      // est superflue (les deux dernières s'en passent).
       answers: [
         { delivery: 4, idempotence: 1, outbox: 1, cache: 1 },
         { delivery: 4, idempotence: 1, outbox: 1, replicas: 1 },
@@ -136,7 +136,7 @@ export const market: Scenario = {
       complexityCap: 22,
       thriftyCost: 190,
       // Les quatre premières gardent l'architecture de la vague 4 : sans ses incidents ici,
-      // outbox, cache et réplica sont superflus, mais les retirer coûterait une migration.
+      // outbox, cache et réplica sont superflus (la dernière s'en passe).
       answers: [
         { delivery: 4, idempotence: 1, outbox: 1, cache: 1, deadLetter: 1 },
         { delivery: 4, idempotence: 1, outbox: 1, replicas: 1, deadLetter: 1 },

@@ -268,7 +268,7 @@ describe('le bouton « Un indice »', () => {
   it('au debrief d’une vague perdue', async () => {
     const { simulateWave } = await import('../src/engine/simulate.ts');
     const wave = urlShortener.waves[2]!;
-    const result = simulateWave(A.withCache, wave, catalog, A.withCache);
+    const result = simulateWave(A.withCache, wave, catalog);
     expect(result.won).toBe(false);
     const attempt = { id: 1, label: 'x', waveIndex: 2, result, score: 0, played: true, settings: [], arch: A.withCache, stars: { held: false, firstTry: false, thrifty: false } };
     const html = renderDialog(view(1, { phase: 'debrief', attempts: [attempt], current: 1, debriefTab: 'analysis' } as Partial<ViewState>));

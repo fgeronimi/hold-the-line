@@ -61,8 +61,7 @@ function follow(scenario: Scenario, waveIndex: number, committed: Architecture, 
 /**
  * Défauts des données trouvés par ce test, en `it.fails` comme les écarts de
  * `conservation.test.ts` : le test dit ce qui devrait être, il passera quand la donnée sera
- * corrigée. Vide : la finale du tournoi, qui n'avait aucune réponse atteignable depuis la
- * vague 3, a été recalibrée (décision B7).
+ * corrigée. Vide aujourd'hui.
  */
 const DATA_DEFECTS = new Set<string>();
 
@@ -73,24 +72,14 @@ describe('suivre les indices mène à la victoire', () => {
         i === 0
           ? [{ label: 'plateau de départ', committed: EMPTY, draft: startOf(scenario) }]
           : answersOf(scenario.id, i - 1).map((a, k) => ({ label: `réponse ${k + 1} de la vague ${i}`, committed: a, draft: a }));
-      // Depuis un brouillon vide aussi, sans rien à démolir.
+      // Depuis un brouillon vide aussi.
       if (i > 0) starts.push({ label: 'brouillon vide', committed: EMPTY, draft: startOf(scenario) });
       for (const s of starts) {
         const test = DATA_DEFECTS.has(`${scenario.id} ${i + 1} ${s.label}`) ? it.fails : it;
         test(`${scenario.id}, vague ${i + 1} (${wave.id}), depuis ${s.label}`, () => {
-          // La vérité : une réponse jouée avec les mêmes identifiants que le départ, dont la
-          // migration est donc exacte, tient-elle la vague ?
-          // Cette vérité majore la migration : l'aide peut faire mieux en réutilisant un
-          // bâtiment déjà validé à une autre place (la file de l'e-mail devient celle du
-          // pub/sub), jamais moins bien.
-          const truth = answersOf(scenario.id, i).some((a) => simulateWave(a, wave, catalog, s.committed).won);
           const end = follow(scenario, i, s.committed, s.draft);
-          if (end.status === 'rewind') {
-            expect(truth).toBe(false);
-          } else {
-            expect(end.status, end.keys.join(', ')).toBe('ready');
-            expect(simulateWave(end.draft, wave, catalog, s.committed).won).toBe(true);
-          }
+          expect(end.status, end.keys.join(', ')).toBe('ready');
+          expect(simulateWave(end.draft, wave, catalog).won).toBe(true);
         });
       }
     });
@@ -111,14 +100,6 @@ describe('aide du raccourcisseur', () => {
     committed: cdnPath[upTo - 1]!,
     history: [EMPTY, ...cdnPath.slice(0, upTo)],
     replays: 1,
-  });
-
-  it('CDN validé en vague 3 : en vague 6, l’indice est de revenir à la vague 3', () => {
-    const game = pathGame(5);
-    const plan = planHints({ game, scenario: urlShortener, catalog, draft: game.committed });
-    expect(plan.status).toBe('rewind');
-    expect(plan.hints[0]).toMatchObject({ kind: 'rewind', wave: 2 });
-    expect(hintText(plan.hints[0]!, catalog, theme, game.committed).real).toContain('Revenir à la vague 3');
   });
 
   it('un joueur qui a posé un CDN en vague 3 est guidé vers une réponse CDN', () => {

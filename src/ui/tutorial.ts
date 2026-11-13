@@ -1,4 +1,3 @@
-import { migrationCost } from '../engine/budget.ts';
 import type { Architecture, Catalog, Wave } from '../engine/types.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { nodeNames, type GuideLine } from '../render/theme.ts';
@@ -160,12 +159,12 @@ export function guideStep(
     };
   }
   const { cost, complexity } = info;
-  const bill = cost + migrationCost(committed, arch, catalog);
+  const bill = cost;
   if (bill > wave.budget) {
     return {
       id: 'over-budget',
       says: line('overBudget', { bill: Math.round(bill), budget: wave.budget }),
-      real: `La facture prévue dépasse le budget de la vague (${Math.round(bill)} / ${wave.budget}, retraits compris). Retirer un composant ou baisser une évolution.`,
+      real: `La facture prévue dépasse le budget de la vague (${Math.round(bill)} / ${wave.budget}). Retirer un composant ou baisser une évolution.`,
     };
   }
   if (complexity > wave.complexityCap) {

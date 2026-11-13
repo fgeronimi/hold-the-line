@@ -35,17 +35,6 @@
      CDN + load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache    3 gagnantes | meilleure : scaling 3, quota par clé 5, limite par adresse 1 | score 32.2 | coût 230/255 | marges coût 10 %, cx 0 %, échecs 100 %, p95 19 %
 [ok] click-tracking (réponse unique assumée) — 1 stratégie(s) : load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica + file
      load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica + file    2 gagnantes | meilleure : scaling 4, quota par clé 5, limite par adresse 1, réplica 1 | score 33.3 | coût 295/300 | marges coût 2 %, cx 6 %, échecs 100 %, p95 25 %
-[ok] Enchaînement read-surge, depuis la réponse 1 de launch : 10 gagnante(s) | moins chère : — | coût 85/115, dont 0 de migration
-[ok] Enchaînement marketing-peak, depuis la réponse 1 de read-surge : 19 gagnante(s) | moins chère : — | coût 125/170, dont 0 de migration
-[ok] Enchaînement marketing-peak, depuis la réponse 2 de read-surge : 2 gagnante(s) | moins chère : — | coût 165/170, dont 40 de migration
-[ok] Enchaînement marketing-peak, depuis la réponse 3 de read-surge : 9 gagnante(s) | moins chère : — | coût 125/170, dont 0 de migration
-[ok] Enchaînement noisy-client, depuis la réponse 1 de marketing-peak : 3 gagnante(s) | moins chère : scaling 1, rate limiting 3 | coût 160/180, dont 0 de migration
-[ok] Enchaînement noisy-client, depuis la réponse 2 de marketing-peak : 4 gagnante(s) | moins chère : scaling 1, rate limiting 3 | coût 160/180, dont 0 de migration
-[ok] Enchaînement noisy-client, depuis la réponse 3 de marketing-peak : 1 gagnante(s) | moins chère : scaling 1, rate limiting 3 | coût 165/180, dont 5 de migration
-[ok] Enchaînement partner-keys, depuis la réponse 1 de noisy-client : 5 gagnante(s) | moins chère : scaling 2, quota par clé 5, limite par adresse 1 | coût 215/255, dont 5 de migration
-[ok] Enchaînement partner-keys, depuis la réponse 2 de noisy-client : 3 gagnante(s) | moins chère : scaling 2, quota par clé 5, limite par adresse 1 | coût 215/255, dont 5 de migration
-[impasse] click-tracking, depuis la réponse 1 de partner-keys : aucune gagnante (retour en arrière, E6)
-[ok] Enchaînement click-tracking, depuis la réponse 2 de partner-keys : 2 gagnante(s) | moins chère : scaling 4, quota par clé 5, limite par adresse 1, réplica 1 | coût 295/300, dont 0 de migration
 
 Architecture gagnant toutes les vagues : aucune (ok)
 Deux stratégies sur la majorité des vagues : oui
@@ -124,18 +113,6 @@ Tout au maximum, click-tracking : perd (ok) — Budget dépassé : 645 / 300 ; T
        ↳ dominée par « pub/sub + outbox + réplica + lettres mortes »
 [ok] sales (réponse unique assumée) — 1 stratégie(s) : pub/sub + scaling + idempotence + outbox + cache + réplica + lettres mortes
      pub/sub + scaling + idempotence + outbox + cache + réplica + lettres mortes    1 gagnantes | meilleure : delivery 4, scaling 1, réplica 1 | score 29.6 | coût 320/325 | marges coût 2 %, cx 0 %, échecs 98 %, p95 19 %
-[ok] Enchaînement three-trades, depuis la réponse 1 de market-open : 1 gagnante(s) | moins chère : delivery 4 | coût 175/180, dont 0 de migration
-[ok] Enchaînement double-delivery, depuis la réponse 1 de three-trades : 1 gagnante(s) | moins chère : delivery 4 | coût 205/210, dont 0 de migration
-[ok] Enchaînement lost-orders, depuis la réponse 1 de double-delivery : 5 gagnante(s) | moins chère : delivery 4 | coût 235/260, dont 30 de migration
-[ok] Enchaînement poison-order, depuis la réponse 1 de lost-orders : 6 gagnante(s) | moins chère : delivery 4 | coût 250/275, dont 60 de migration
-[ok] Enchaînement poison-order, depuis la réponse 2 de lost-orders : 6 gagnante(s) | moins chère : delivery 4 | coût 275/275, dont 85 de migration
-[ok] Enchaînement poison-order, depuis la réponse 3 de lost-orders : 16 gagnante(s) | moins chère : delivery 4 | coût 220/275, dont 30 de migration
-[ok] Enchaînement poison-order, depuis la réponse 4 de lost-orders : 13 gagnante(s) | moins chère : delivery 4 | coût 245/275, dont 55 de migration
-[ok] Enchaînement sales, depuis la réponse 1 de poison-order : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 320/325, dont 0 de migration
-[ok] Enchaînement sales, depuis la réponse 2 de poison-order : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 320/325, dont 0 de migration
-[ok] Enchaînement sales, depuis la réponse 3 de poison-order : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 320/325, dont 0 de migration
-[ok] Enchaînement sales, depuis la réponse 4 de poison-order : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 320/325, dont 0 de migration
-[ok] Enchaînement sales, depuis la réponse 5 de poison-order : 1 gagnante(s) | moins chère : delivery 4, scaling 1, réplica 1 | coût 320/325, dont 0 de migration
 
 Architecture gagnant toutes les vagues : aucune (ok)
 Deux stratégies sur la majorité des vagues : non
@@ -217,13 +194,6 @@ Tout au maximum, sales : perd (ok) — Budget dépassé : 350 / 325 ; SLA rompu 
        ↳ dominée par « scaling + file + cache + verrou de recalcul + réplica »
      scaling + délai d’attente + circuit breaker + file + cache + verrou de recalcul + réplica    1 gagnantes | meilleure : scaling 1, réplica 2 | score 18.2 | coût 240/250 | marges coût 4 %, cx 17 %, échecs 42 %, p95 11 %
        ↳ dominée par « scaling + circuit breaker + file + cache + verrou de recalcul + réplica »
-[ok] Enchaînement slow-banker, depuis la réponse 1 de checkout : 5 gagnante(s) | moins chère : — | coût 80/100, dont 0 de migration
-[ok] Enchaînement midnight-expiry, depuis la réponse 1 de slow-banker : 10 gagnante(s) | moins chère : — | coût 100/125, dont 10 de migration
-[ok] Enchaînement midnight-expiry, depuis la réponse 2 de slow-banker : 6 gagnante(s) | moins chère : — | coût 115/125, dont 25 de migration
-[ok] Enchaînement banker-closed, depuis la réponse 1 de midnight-expiry : 8 gagnante(s) | moins chère : — | coût 115/140, dont 5 de migration
-[ok] Enchaînement banker-closed, depuis la réponse 2 de midnight-expiry : 2 gagnante(s) | moins chère : réplica 1 | coût 135/140, dont 0 de migration
-[ok] Enchaînement fair, depuis la réponse 1 de banker-closed : 8 gagnante(s) | moins chère : scaling 1, réplica 2 | coût 225/250, dont 0 de migration
-[ok] Enchaînement fair, depuis la réponse 2 de banker-closed : 8 gagnante(s) | moins chère : scaling 1, réplica 2 | coût 225/250, dont 0 de migration
 
 Architecture gagnant toutes les vagues : aucune (ok)
 Deux stratégies sur la majorité des vagues : oui
@@ -300,12 +270,6 @@ Tout au maximum, fair : perd (ok) — Budget dépassé : 320 / 250
        ↳ dominée par « backoff + scaling + cache + réplica + lecture au primaire + file + capacité de file »
      backoff + délestage + autoscaling + cache + réplica + lecture au primaire + file    2 gagnantes | meilleure : autoscaling 3, réplica 1 | score 32.0 | coût 227.08/255 | marges coût 11 %, cx 0 %, échecs 96 %, p95 21 %
        ↳ dominée par « backoff + autoscaling + cache + réplica + lecture au primaire + file »
-[ok] Enchaînement pigeons-grounded, depuis la réponse 1 de ticket-rush : 4 gagnante(s) | moins chère : scaling 1, capacité de file 1 | coût 150/155, dont 5 de migration
-[ok] Enchaînement pigeons-grounded, depuis la réponse 2 de ticket-rush : 2 gagnante(s) | moins chère : scaling 1, capacité de file 1 | coût 155/155, dont 10 de migration
-[ok] Enchaînement split-registry, depuis la réponse 1 de pigeons-grounded : 8 gagnante(s) | moins chère : scaling 1, réplica 2 | coût 225/230, dont 15 de migration
-[ok] Enchaînement split-registry, depuis la réponse 2 de pigeons-grounded : 4 gagnante(s) | moins chère : scaling 1, réplica 2 | coût 230/230, dont 20 de migration
-[ok] Enchaînement final-joust, depuis la réponse 1 de split-registry : 4 gagnante(s) | moins chère : scaling 2, réplica 1 | coût 250/255, dont 40 de migration
-[ok] Enchaînement final-joust, depuis la réponse 2 de split-registry : 2 gagnante(s) | moins chère : scaling 2, réplica 1 | coût 255/255, dont 45 de migration
 
 Architecture gagnant toutes les vagues : aucune (ok)
 Deux stratégies sur la majorité des vagues : oui

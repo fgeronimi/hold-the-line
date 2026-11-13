@@ -11,7 +11,7 @@ export function gauge(value: number, limit: number): Gauge {
 export function lossesFor(g: WaveResult['gauges'], billed: WaveResult['bill'], latency: readonly ObjectiveVerdict[]): LossReason[] {
   const losses: LossReason[] = [];
   if (g.cost.value > g.cost.limit) {
-    losses.push({ kind: 'budget', cost: g.cost.value, limit: g.cost.limit, autoscaling: billed.autoscaling, migration: billed.migration });
+    losses.push({ kind: 'budget', cost: g.cost.value, limit: g.cost.limit, autoscaling: billed.autoscaling });
   }
   if (g.complexity.value > g.complexity.limit) losses.push({ kind: 'complexity', value: g.complexity.value, limit: g.complexity.limit });
   if (g.failureRate.value > g.failureRate.limit) losses.push({ kind: 'failure-rate', value: g.failureRate.value, limit: g.failureRate.limit });
@@ -36,7 +36,7 @@ export function invalidResult(
     bill: billed,
     avgLatencyMs: 0,
     gauges: {
-      cost: gauge(billed.fixed + billed.autoscaling + billed.migration, wave.budget),
+      cost: gauge(billed.fixed + billed.autoscaling, wave.budget),
       complexity: gauge(complexity, wave.complexityCap),
       failureRate: gauge(1, wave.sla.maxFailureRate),
       latency: gauge(0, wave.sla.maxP95LatencyMs),

@@ -68,8 +68,8 @@ export function withFixtures(draft: Architecture, scenario: Scenario): Architect
  * Depuis le bâtiment Worker (ticket n° 1), une file ou un pub/sub ne peut plus alimenter un
  * serveur d'application. Un serveur dont tout le trafic vient d'une file ou d'un pub/sub
  * devient donc un worker, avec ses instances en workers supplémentaires ; ses évolutions de
- * serveur de façade (autoscaling, disjoncteur), sans objet derrière une file, tombent. Même id :
- * comme l'architecture validée et l'historique sont convertis pareil, aucune migration n'est due.
+ * serveur de façade (autoscaling, disjoncteur), sans objet derrière une file, tombent. Même id,
+ * pour que brouillon, architecture validée et historique restent le même bâtiment.
  */
 export function withWorkers(arch: Architecture, catalog: Catalog): Architecture {
   if (!catalog.components.worker) return arch;

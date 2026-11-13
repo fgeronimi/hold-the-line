@@ -134,8 +134,8 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 | File des lettres mortes | File | Message empoisonné qui bloque la file | Les messages mis de côté après trois essais ne sont pas traités : ils comptent en échec, et il faut les examiner puis les rejouer (S25) | Oui |
 | Sharding, consistent hashing | — | — | — | Non |
 
-Retirer ou remplacer un composant coûte sa valeur d'achat ; réduire les instances est
-gratuit (E2). La migration entre dans la facture de la vague (E3).
+Démolir ou remplacer est gratuit (E8) : la facture d'une vague ne compte que ce qui est
+bâti. Corriger son architecture ne coûte rien.
 
 ### Incidents
 
@@ -168,7 +168,7 @@ Le joueur est coincé entre « pas assez » et « trop » :
 
 | Jauge | Mesure | Punit |
 | --- | --- | --- |
-| Coût | Facture de la vague : instances, évolutions, migration | Le surdimensionnement |
+| Coût | Facture de la vague : instances, évolutions | Le surdimensionnement |
 | Complexité | Points par composant et évolution | L'over-engineering |
 | Fiabilité | Taux d'échec de la vague et latence p95 de ses réponses face au SLA | Le sous-dimensionnement, le composant manquant |
 
@@ -351,8 +351,8 @@ et déterministe, séparée de l'affichage.
   **un indice par essai perdu**, cumulés sur la vague, vidés à la victoire et au retour en
   arrière, et pas de bouton « toute la solution ». L'indice est déduit des réponses
   attendues de la vague (`Wave.answers`), sans texte écrit par vague : il vise la réponse
-  atteignable la plus proche du brouillon, et propose le retour en arrière (E6) quand aucune
-  ne l'est. Il désigne un élément, pas une case.
+  la plus proche du brouillon (toutes sont atteignables, démolir étant gratuit, E8). Il
+  désigne un élément, pas une case.
 - **Mode debug** (`?debug` ou D) : essais hors partie, vue tableau, calibrage, détail des
   tentatives. `vitrine.html` montre chaque effet d'incident seul.
 

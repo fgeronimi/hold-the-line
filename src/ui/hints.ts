@@ -43,11 +43,7 @@ export type HintKind =
   /** Retirer un lien que la réponse n'a pas. */
   | 'unlink'
   /** Baisser ou couper une évolution. */
-  | 'lower'
-  /** Revenir à une vague précédente (E6) : d'ici, aucune réponse ne tient dans le budget. */
-  | 'rewind'
-  /** Tout y est, mais un bâtiment validé a été démoli puis reposé : sa démolition se paie. */
-  | 'rebuilt';
+  | 'lower';
 
 export type Highlight = NonNullable<TutorialStep['highlight']>;
 
@@ -55,7 +51,7 @@ export interface Hint {
   kind: HintKind;
   /** Identifie l'indice sans identifiant de nœud : c'est elle que garde la partie. */
   key: string;
-  /** `place`, `remove`, `rebuilt` : le type du composant. */
+  /** `place`, `remove` : le type du composant. */
   type?: string;
   /** `place` : combien la réponse en compte, celui-ci compris. */
   count?: number;
@@ -67,8 +63,6 @@ export interface Hint {
   upgrade?: string;
   /** `upgrade`, `lower` : le niveau visé. */
   level?: number;
-  /** `rewind` : l'index de la vague où revenir. */
-  wave?: number;
   /** `link` : ce qui circulera sur le lien dans la réponse visée. */
   carries?: RequestKind[];
   /** Les bâtiments du brouillon concernés, quand ils existent : de quoi appliquer l'indice. */
@@ -96,15 +90,12 @@ export interface HintContext {
 /**
  * - `ready` : le brouillon tient déjà la vague, il n'y a rien à souffler ;
  * - `guide` : les éléments manquants dans l'ordre de pose, puis ce qui est en trop ;
- * - `rewind` : un seul indice, revenir à une vague précédente ;
- * - `stuck` : aucune réponse connue n'est atteignable, même en revenant en arrière.
+ * - `stuck` : la vague n'a aucune réponse connue.
  */
 export interface HintPlan {
-  status: 'ready' | 'guide' | 'rewind' | 'stuck';
+  status: 'ready' | 'guide' | 'stuck';
   hints: Hint[];
 }
-
-const EMPTY: Architecture = { nodes: [], links: [] };
 
 const isSource = (n: ArchNode, catalog: Catalog) => catalog.components[n.type]?.behavior === 'source';
 /** Ce que le joueur pose ou démolit : ni la source ni un service déjà en place. */
@@ -399,81 +390,6 @@ export function compare(ref: Architecture, other: Architecture, catalog: Catalog
   return { missing, extra };
 }
 
-// ——— Ce que la partie peut encore atteindre ———
-
-/**
- * La référence jouée depuis `start` : ses nœuds prennent les identifiants de ceux qu'ils
- * apparient, les autres sont neufs. `migrationCost` compare par identifiant ; une fois
- * renommée, la référence garde ce qui est déjà bâti et ne paie que ce qu'elle démolit.
- */
-export function realize(ref: Architecture, start: Architecture, catalog: Catalog): Architecture {
-  const map = align(ref, start, catalog);
-  const taken = new Set(start.nodes.map((n) => n.id));
-  const rename = new Map<string, string>();
-  for (const n of ref.nodes) {
-    // Un nœud sans pendant garde son id s'il est libre : les services déjà en place sont
-    // nommés par id dans la vague (`consumers`), et ne doivent pas changer de nom.
-    let id = map.get(n.id) ?? (taken.has(n.id) ? undefined : n.id);
-    if (!id) {
-      id = `${n.type}-neuf`;
-      for (let i = 2; taken.has(id); i++) id = `${n.type}-neuf-${i}`;
-    }
-    taken.add(id);
-    rename.set(n.id, id);
-  }
-  return {
-    nodes: ref.nodes.map((n) => ({ ...n, id: rename.get(n.id)! })),
-    links: ref.links.map((l) => ({ from: rename.get(l.from)!, to: rename.get(l.to)! })),
-  };
-}
-
-/** Une architecture réduite à ce que la simulation lit, pour servir de clé. */
-function fingerprint(arch: Architecture): string {
-  const upgrades = (n: ArchNode) =>
-    Object.entries(n.upgrades ?? {})
-      .filter(([, v]) => v > 0)
-      .sort(([a], [b]) => a.localeCompare(b));
-  return JSON.stringify([
-    [...arch.nodes].map((n) => [n.id, n.type, upgrades(n), n.fixed?.tech ?? '']).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
-    arch.links.map((l) => `${l.from}→${l.to}`).sort(),
-  ]);
-}
-
-/** Les mêmes simulations reviennent à chaque rendu : on les garde, par catalogue et par vague. */
-const reachMemo = new WeakMap<Catalog, WeakMap<Wave, Map<string, boolean>>>();
-
-/** La réponse, jouée depuis `start`, tient-elle la vague ? Elle perd si démolir ce qui est bâti la fait sortir du budget. */
-function reachable(ref: Architecture, start: Architecture, wave: Wave, catalog: Catalog): boolean {
-  let byWave = reachMemo.get(catalog);
-  if (!byWave) reachMemo.set(catalog, (byWave = new WeakMap()));
-  let memo = byWave.get(wave);
-  if (!memo) byWave.set(wave, (memo = new Map()));
-  const key = `${fingerprint(ref)}|${fingerprint(start)}`;
-  let won = memo.get(key);
-  if (won === undefined) {
-    won = simulateWave(realize(ref, start, catalog), wave, catalog, start).won;
-    memo.set(key, won);
-  }
-  return won;
-}
-
-/**
- * La plus récente vague où revenir (E6) : celle dont l'architecture validée permet encore,
- * réponse après réponse, d'atteindre une réponse de la vague en cours.
- */
-function rewindTarget(ctx: HintContext, answers: (i: number) => Architecture[]): number | undefined {
-  const { game, scenario, catalog } = ctx;
-  const chain = (j: number, start: Architecture): boolean => {
-    const wave = scenario.waves[j];
-    if (!wave) return false;
-    const ok = answers(j).filter((a) => reachable(a, start, wave, catalog));
-    if (j === game.waveIndex) return ok.length > 0;
-    return ok.some((a) => chain(j + 1, realize(a, start, catalog)));
-  };
-  for (let i = game.waveIndex - 1; i >= 0; i--) if (chain(i, game.history[i] ?? EMPTY)) return i;
-  return undefined;
-}
-
 /**
  * Les indices à donner, dans l'ordre. Le brouillon qui tient déjà la vague n'en reçoit
  * aucun, même s'il ne ressemble à aucune réponse : l'aide ne ramène pas un joueur qui a
@@ -483,29 +399,18 @@ export function planHints(ctx: HintContext): HintPlan {
   const { game, scenario, catalog, draft } = ctx;
   const wave = scenario.waves[game.waveIndex];
   if (game.finished || !wave) return { status: 'stuck', hints: [] };
-  if (simulateWave(draft, wave, catalog, game.committed).won) return { status: 'ready', hints: [] };
-  const answers = ctx.answers ?? ((i: number) => answersFor(scenario, i));
-  const all = answers(game.waveIndex);
+  if (simulateWave(draft, wave, catalog).won) return { status: 'ready', hints: [] };
+  // Démolir est gratuit (E8) : toute réponse attendue reste atteignable, d'où qu'on parte.
+  const all = (ctx.answers ?? ((i: number) => answersFor(scenario, i)))(game.waveIndex);
   if (all.length === 0) return { status: 'stuck', hints: [] };
-  const reach = all.filter((a) => reachable(a, game.committed, wave, catalog));
-  if (reach.length === 0) {
-    const back = rewindTarget(ctx, answers);
-    if (back === undefined) return { status: 'stuck', hints: [] };
-    return { status: 'rewind', hints: [{ kind: 'rewind', key: `rewind|${back}`, wave: back }] };
-  }
   // La plus proche : le moins d'éléments manquants, puis le moins à retirer.
   let best: { missing: Hint[]; extra: Hint[] } | undefined;
-  for (const a of reach) {
+  for (const a of all) {
     const d = compare(a, draft, catalog);
     if (!best || d.missing.length < best.missing.length || (d.missing.length === best.missing.length && d.extra.length < best.extra.length)) best = d;
   }
   const hints = [...best!.missing, ...best!.extra];
-  if (hints.length > 0) return { status: 'guide', hints };
-  // Mêmes éléments que la réponse, qui tiendrait, et pourtant la vague est perdue : seule la
-  // facture diffère, par un bâtiment validé démoli puis reposé sous un autre identifiant.
-  const rebuilt = game.committed.nodes.find((n) => buildable(n, catalog) && !draft.nodes.some((d) => d.id === n.id));
-  const type = rebuilt?.type ?? '';
-  return { status: 'guide', hints: [{ kind: 'rebuilt', key: `rebuilt|${type}`, ...(rebuilt && { type }) }] };
+  return hints.length > 0 ? { status: 'guide', hints } : { status: 'stuck', hints: [] };
 }
 
 /** Le premier indice qui n'a pas encore été donné. */
@@ -524,13 +429,8 @@ export function decodeHint(key: string): Hint {
     case 'link':
     case 'unlink':
       return { kind: kind as HintKind, key, from: parseSlot(a), to: parseSlot(b) };
-    case 'upgrade':
-    case 'lower':
-      return { kind: kind as HintKind, key, node: parseSlot(a), upgrade: b, level: Number(c || d || 0) };
-    case 'rewind':
-      return { kind: 'rewind', key, wave: Number(a) };
     default:
-      return { kind: 'rebuilt', key, ...(a && { type: a }) };
+      return { kind: kind === 'lower' ? 'lower' : 'upgrade', key, node: parseSlot(a), upgrade: b, level: Number(c || d || 0) };
   }
 }
 
@@ -745,20 +645,6 @@ export function hintText(hint: Hint, catalog: Catalog, theme: Theme, arch: Archi
           level === 0
             ? `Désactivez ${up.techName} sur ${both(n)} : la réponse visée s’en passe. ${why}`
             : `Ramenez ${up.techName} sur ${both(n)} à ${levelText(up, level)}. ${why}`,
-      };
-    }
-    case 'rewind': {
-      const wave = String((hint.wave ?? 0) + 1);
-      return {
-        says: line('rewind', { wave }),
-        real: `Depuis l’architecture validée, aucune réponse ne tient dans le budget : démolir ce qui a été validé coûte sa valeur d’achat (migration). Menu ☰, « Revenir à la vague ${wave} » : ça compte comme un rejeu.`,
-      };
-    }
-    case 'rebuilt': {
-      const n = hint.type ? names(slotOf(hint.type), catalog, theme, arch) : { tech: 'un bâtiment', metaphor: '' };
-      return {
-        says: line('rebuilt', { name: said(n) }),
-        real: `Rien ne manque, mais ${both(n)}, validé à la vague précédente, a été démoli puis reposé : son retrait entre dans la facture (migration). Annulez (⌘Z) jusqu’à retrouver le bâtiment d’origine.`,
       };
     }
   }

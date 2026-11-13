@@ -39,25 +39,6 @@ export function formatScenarioReport(scenario: Scenario, space: BalanceSpace, re
     }
   }
 
-  // Blocage ou impasse : le jeu laisse revenir à une vague jouée avec l'architecture validée
-  // alors (décision E6). Un départ sans gagnante est donc une impasse dont on sort par un
-  // retour en arrière, tant qu'un autre départ gagne ; seul l'échec de tous est un KO.
-  for (const chain of report.chaining) {
-    const blocked = chain.starts.every((s) => s.winners === 0);
-    if (blocked) ko++;
-    for (const s of chain.starts) {
-      const where = `${chain.waveId}, depuis la réponse ${s.answerIndex + 1} de ${chain.fromWaveId}`;
-      if (!s.cheapest) {
-        lines.push(blocked ? `[KO] Blocage ${where} : aucune réponse de ${chain.fromWaveId} ne permet de gagner` : `[impasse] ${where} : aucune gagnante (retour en arrière, E6)`);
-        continue;
-      }
-      const { choice, cost, migration, limit } = s.cheapest;
-      lines.push(
-        `[ok] Enchaînement ${where} : ${s.winners} gagnante(s) | moins chère : ${levelsOf(choice) || '—'} | coût ${round2(cost)}/${round2(limit)}, dont ${round2(migration)} de migration`,
-      );
-    }
-  }
-
   lines.push('');
   if (report.universalWinners.length > 0) ko++;
   lines.push(`Architecture gagnant toutes les vagues : ${report.universalWinners.length === 0 ? 'aucune (ok)' : `${report.universalWinners.length} (KO)`}`);

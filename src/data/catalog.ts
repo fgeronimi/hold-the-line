@@ -236,7 +236,6 @@ export const catalog: Catalog = {
       cost: { base: 0, perLevel: 20 },
       complexity: { base: 1, perLevel: 0 },
       requiresUpstream: ['load-balancer'],
-      removalCost: 'free',
       effect: { type: 'instances' },
     },
     // Derrière une file, plusieurs workers se partagent les messages (M5).
@@ -249,7 +248,6 @@ export const catalog: Catalog = {
       cost: { base: 0, perLevel: 20 },
       complexity: { base: 1, perLevel: 0 },
       requiresUpstream: ['message-queue', 'pubsub'],
-      removalCost: 'free',
       effect: { type: 'instances' },
     },
     autoscaling: {
@@ -261,7 +259,6 @@ export const catalog: Catalog = {
       cost: { base: 5, perLevel: 0 },
       complexity: { base: 2, perLevel: 0 },
       requiresUpstream: ['load-balancer'],
-      removalCost: 'on-disable',
       effect: { type: 'autoscaling', instanceCost: 25, startupTicks: 2, targetUtilization: 0.7 },
     },
     'read-replica': {
@@ -272,7 +269,6 @@ export const catalog: Catalog = {
       maxLevel: 5,
       cost: { base: 0, perLevel: 40 },
       complexity: { base: 0, perLevel: 1 },
-      removalCost: 'per-level',
       effect: { type: 'readReplicas', capacityPerReplica: 600 },
     },
     idempotence: {
@@ -283,7 +279,6 @@ export const catalog: Catalog = {
       maxLevel: 1,
       cost: { base: 10, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
-      removalCost: 'on-disable',
       effect: { type: 'idempotence' },
     },
     outbox: {
@@ -294,7 +289,6 @@ export const catalog: Catalog = {
       maxLevel: 1,
       cost: { base: 15, perLevel: 0 },
       complexity: { base: 2, perLevel: 0 },
-      removalCost: 'on-disable',
       effect: { type: 'outbox' },
     },
     'circuit-breaker': {
@@ -305,7 +299,6 @@ export const catalog: Catalog = {
       maxLevel: 1,
       cost: { base: 10, perLevel: 0 },
       complexity: { base: 2, perLevel: 0 },
-      removalCost: 'on-disable',
       effect: { type: 'circuitBreaker', timeoutMs: 500 },
     },
     'call-timeout': {
@@ -316,7 +309,6 @@ export const catalog: Catalog = {
       maxLevel: 1,
       cost: { base: 5, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
-      removalCost: 'on-disable',
       // La première protection d'un appel direct, et la moins chère : ne pas attendre plus que
       // ce que le client peut attendre lui-même (M12). Le disjoncteur va plus loin : il n'attend plus.
       // Une seconde : au-dessus des 300 ms d'un prestataire de paiement normal (SC6).
@@ -330,7 +322,6 @@ export const catalog: Catalog = {
       maxLevel: 1,
       cost: { base: 5, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
-      removalCost: 'on-disable',
       effect: { type: 'coalescing' },
     },
     'client-backoff': {
@@ -341,7 +332,6 @@ export const catalog: Catalog = {
       maxLevel: 1,
       cost: { base: 5, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
-      removalCost: 'on-disable',
       // Des délais qui doublent (1, 2, 4 min de jeu…) tirés au hasard : les relances s'étalent.
       effect: { type: 'backoff', spreadTicks: 15 },
     },
@@ -355,7 +345,6 @@ export const catalog: Catalog = {
       maxLevel: 3,
       cost: { base: 0, perLevel: 5 },
       complexity: { base: 1, perLevel: 0 },
-      removalCost: 'free',
       effect: { type: 'retention', perLevel: 100000 },
     },
     // Un message que son consommateur échoue toujours à traiter bloquerait la file : on le met
@@ -368,7 +357,6 @@ export const catalog: Catalog = {
       maxLevel: 1,
       cost: { base: 5, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
-      removalCost: 'on-disable',
       effect: { type: 'deadLetter', maxReceives: 3 },
     },
     'leader-reads': {
@@ -379,7 +367,6 @@ export const catalog: Catalog = {
       maxLevel: 1,
       cost: { base: 5, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
-      removalCost: 'on-disable',
       effect: { type: 'leaderReads' },
     },
     'rate-limiting': {
@@ -390,7 +377,6 @@ export const catalog: Catalog = {
       maxLevel: 5,
       cost: { base: 5, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
-      removalCost: 'on-disable',
       effect: { type: 'rateLimit', tiersPerClientRps: [10, 20, 40, 80, 160] },
     },
     // Une limite par classe de client, sur la passerelle : mêmes paliers que la limite unique du
@@ -403,7 +389,6 @@ export const catalog: Catalog = {
       maxLevel: 5,
       cost: { base: 5, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
-      removalCost: 'on-disable',
       effect: { type: 'rateLimit', tiersPerClientRps: [10, 20, 40, 80, 160], class: 'partner' },
     },
     'anonymous-quota': {
@@ -414,7 +399,6 @@ export const catalog: Catalog = {
       maxLevel: 5,
       cost: { base: 5, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
-      removalCost: 'on-disable',
       effect: { type: 'rateLimit', tiersPerClientRps: [10, 20, 40, 80, 160], class: 'anonymous' },
     },
     'load-shedding': {
@@ -425,7 +409,6 @@ export const catalog: Catalog = {
       maxLevel: 1,
       cost: { base: 10, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
-      removalCost: 'on-disable',
       // La parade côté serveur à la tempête de relances : celle que l'opérateur possède,
       // même quand les clients ne sont pas son application (M11).
       effect: { type: 'loadShedding', targetUtilization: 0.75 },

@@ -15,10 +15,10 @@ const catalog: Catalog = {
     queue: { id: 'queue', behavior: 'queue', label: 'Q', techName: 'Q', cost: 25, complexity: 2, capacity: 10000, latencyMs: 2, workPerRequest: { async: 1 }, terminalFor: [], accepts: ['async'], routingPriority: 1, batchSize: 10, maxBacklog: 1000, allowedDownstream: ['app'] },
   },
   upgrades: {
-    scale: { id: 'scale', label: 'Scale', techName: 'Scale', appliesTo: 'app', maxLevel: 5, cost: { base: 0, perLevel: 20 }, complexity: { base: 1, perLevel: 0 }, requiresUpstream: ['lb', 'queue'], removalCost: 'free', effect: { type: 'instances' } },
-    auto: { id: 'auto', label: 'Auto', techName: 'Auto', appliesTo: 'app', maxLevel: 5, cost: { base: 5, perLevel: 0 }, complexity: { base: 2, perLevel: 0 }, requiresUpstream: ['lb'], removalCost: 'on-disable', effect: { type: 'autoscaling', instanceCost: 30, startupTicks: 2, targetUtilization: 0.5 } },
-    replica: { id: 'replica', label: 'Replica', techName: 'Replica', appliesTo: 'db', maxLevel: 3, cost: { base: 0, perLevel: 30 }, complexity: { base: 0, perLevel: 1 }, removalCost: 'per-level', effect: { type: 'readReplicas', capacityPerReplica: 100 } },
-    limit: { id: 'limit', label: 'Limit', techName: 'Limit', appliesTo: 'lb', maxLevel: 2, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, removalCost: 'on-disable', effect: { type: 'rateLimit', tiersPerClientRps: [10, 20] } },
+    scale: { id: 'scale', label: 'Scale', techName: 'Scale', appliesTo: 'app', maxLevel: 5, cost: { base: 0, perLevel: 20 }, complexity: { base: 1, perLevel: 0 }, requiresUpstream: ['lb', 'queue'], effect: { type: 'instances' } },
+    auto: { id: 'auto', label: 'Auto', techName: 'Auto', appliesTo: 'app', maxLevel: 5, cost: { base: 5, perLevel: 0 }, complexity: { base: 2, perLevel: 0 }, requiresUpstream: ['lb'], effect: { type: 'autoscaling', instanceCost: 30, startupTicks: 2, targetUtilization: 0.5 } },
+    replica: { id: 'replica', label: 'Replica', techName: 'Replica', appliesTo: 'db', maxLevel: 3, cost: { base: 0, perLevel: 30 }, complexity: { base: 0, perLevel: 1 }, effect: { type: 'readReplicas', capacityPerReplica: 100 } },
+    limit: { id: 'limit', label: 'Limit', techName: 'Limit', appliesTo: 'lb', maxLevel: 2, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, effect: { type: 'rateLimit', tiersPerClientRps: [10, 20] } },
   },
 };
 

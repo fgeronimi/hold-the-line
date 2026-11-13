@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { catalog } from '../src/data/catalog.ts';
 import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
-import { migrationCost } from '../src/engine/budget.ts';
 import { hintsLeft, newGame, playWave, rewindTo, withHint } from '../src/engine/game.ts';
 import { scoreWave } from '../src/engine/score.ts';
 import type { Architecture, Gauge, WaveResult } from '../src/engine/types.ts';
@@ -10,46 +9,6 @@ import type { Architecture, Gauge, WaveResult } from '../src/engine/types.ts';
 const withUpgrades = (arch: Architecture, id: string, upgrades: Record<string, number>): Architecture => ({
   ...arch,
   nodes: arch.nodes.map((n) => (n.id === id ? { ...n, upgrades } : n)),
-});
-
-describe('migrationCost', () => {
-  it('ajouter ne coûte rien', () => {
-    expect(migrationCost(A.minimal, A.withCache, catalog)).toBe(0);
-  });
-
-  it('retirer un composant coûte sa valeur d’achat', () => {
-    expect(migrationCost(A.withCache, A.minimal, catalog)).toBe(15);
-  });
-
-  it('changer le type d’un nœud compte comme un retrait', () => {
-    const swapped: Architecture = {
-      ...A.minimal,
-      nodes: A.minimal.nodes.map((n) => (n.id === 'app' ? { ...n, type: 'cache' } : n)),
-    };
-    expect(migrationCost(A.minimal, swapped, catalog)).toBe(20);
-  });
-
-  it('réduire les instances est gratuit', () => {
-    expect(migrationCost(A.scaled(4), A.scaled(2), catalog)).toBe(0);
-  });
-
-  it('retirer un réplica coûte chaque niveau retiré', () => {
-    const two = withUpgrades(A.minimal, 'db', { 'read-replica': 2 });
-    expect(migrationCost(two, A.withReplica, catalog)).toBe(40);
-    expect(migrationCost(two, A.minimal, catalog)).toBe(80);
-  });
-
-  it('changer de palier de rate limiting est gratuit, le désactiver coûte', () => {
-    const t3 = A.scaled(3, { rateLimitTier: 3 });
-    expect(migrationCost(t3, A.scaled(3, { rateLimitTier: 1 }), catalog)).toBe(0);
-    expect(migrationCost(t3, A.scaled(3), catalog)).toBe(5);
-  });
-
-  it('retirer un nœud fait payer ses évolutions selon leurs règles', () => {
-    const replicated = withUpgrades(A.minimal, 'db', { 'read-replica': 1 });
-    const noDb: Architecture = { nodes: replicated.nodes.filter((n) => n.id !== 'db'), links: [] };
-    expect(migrationCost(replicated, noDb, catalog)).toBe(50 + 40);
-  });
 });
 
 describe('scoreWave', () => {
@@ -96,14 +55,6 @@ describe('playWave', () => {
     expect(won.state.waveIndex).toBe(2);
     expect(won.state.replays).toBe(0);
     expect(won.score).toBeCloseTo(scoreWave(won.result, 1, scoring));
-  });
-
-  it('facture la migration depuis l’architecture validée', () => {
-    let state = newGame();
-    ({ state } = playWave(state, urlShortener, A.minimal, catalog, scoring));
-    ({ state } = playWave(state, urlShortener, A.withReplica, catalog, scoring));
-    const { result } = playWave(state, urlShortener, A.scaled(3), catalog, scoring);
-    expect(result.bill.migration).toBe(40);
   });
 
   it('joue le scénario de bout en bout avec les réponses attendues', () => {

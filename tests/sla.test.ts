@@ -115,7 +115,7 @@ describe('raisons de défaite typées', () => {
       expect(kinds.includes('latency'), label).toBe(g.latency.value > g.latency.limit);
       expect(r.won, label).toBe(r.losses.length === 0);
       for (const l of r.losses) {
-        if (l.kind === 'budget') expect(l, label).toEqual({ kind: 'budget', cost: g.cost.value, limit: g.cost.limit, autoscaling: r.bill.autoscaling, migration: r.bill.migration });
+        if (l.kind === 'budget') expect(l, label).toEqual({ kind: 'budget', cost: g.cost.value, limit: g.cost.limit, autoscaling: r.bill.autoscaling });
         if (l.kind === 'latency' && l.requestKind) {
           const own = r.latencyByKind![l.requestKind]!;
           expect(l, label).toEqual({ kind: 'latency', p95Ms: own.value, limitMs: own.limit, requestKind: l.requestKind });
@@ -131,8 +131,8 @@ describe('raisons de défaite typées', () => {
   });
 
   it('met en forme chaque raison', () => {
-    expect(lossMessage({ kind: 'budget', cost: 195, limit: 170, autoscaling: 0, migration: 40 })).toBe('Budget dépassé : 195 / 170, dont 40 de migration');
-    expect(lossMessage({ kind: 'budget', cost: 180.25, limit: 170, autoscaling: 10.25, migration: 0 })).toBe('Budget dépassé : 180.3 / 170, dont 10.3 d\'autoscaling');
+    expect(lossMessage({ kind: 'budget', cost: 195, limit: 170, autoscaling: 0 })).toBe('Budget dépassé : 195 / 170');
+    expect(lossMessage({ kind: 'budget', cost: 180.25, limit: 170, autoscaling: 10.25 })).toBe('Budget dépassé : 180.3 / 170, dont 10.3 d\'autoscaling');
     expect(lossMessage({ kind: 'complexity', value: 5, limit: 4 })).toBe('Trop complexe : 5 / 4 points');
     expect(lossMessage({ kind: 'failure-rate', value: 0.0234, limit: 0.01 })).toBe('SLA rompu : 2.34 % d\'échecs (max 1.00 %)');
     expect(lossMessage({ kind: 'latency', p95Ms: 312.5, limitMs: 200 })).toBe('SLA rompu : latence p95 312.5 ms (max 200 ms)');

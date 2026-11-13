@@ -1,4 +1,3 @@
-import { migrationCost } from '../../engine/budget.ts';
 import type { LinkFlows } from '../../engine/routing.ts';
 import type { Architecture, Gauge, SimEvent, Wave } from '../../engine/types.ts';
 import { calibrationGroups, formatField, getAt, type FieldGroup } from '../calibration.ts';
@@ -57,7 +56,6 @@ function renderBuild(s: ViewState, wave: Wave): string {
   const info = draftInfo(draft, catalog);
   const { validation, flows, complexity } = info;
   const fixed = info.cost;
-  const migration = migrationCost(s.game.committed, draft, catalog);
 
   const nodeRows = draft.nodes.map((n) => nodeRow(s, n)).join('');
   const addable = Object.values(catalog.components)
@@ -90,7 +88,7 @@ function renderBuild(s: ViewState, wave: Wave): string {
         <h3>Schéma</h3>
         <pre>${esc(renderSchema(draft, flows, info.order))}</pre>
         <h3>Facture prévue</h3>
-        <p><span${over(fixed + migration, wave.budget)}>coût ${fmt(fixed)}${migration > 0 ? ` + ${fmt(migration)} de migration` : ''} / ${wave.budget}</span>
+        <p><span${over(fixed, wave.budget)}>coût ${fmt(fixed)} / ${wave.budget}</span>
           (hors autoscaling, connu après la vague) ·
           <span${over(complexity, wave.complexityCap)}>complexité ${complexity} / ${wave.complexityCap}</span></p>
         ${validation.ok ? '' : `<ul class="ko">${validation.errors.map((e) => `<li>${esc(e)}</li>`).join('')}</ul>`}
@@ -189,7 +187,7 @@ function renderDebrief(a: Attempt, s: ViewState): string {
             ${gaugeRow("taux d'échec", r.gauges.failureRate, pct)}
             ${gaugeRow('latence p95', r.gauges.latency, (v) => `${fmt(v)} ms`)}
           </table>
-          <p class="muted">Facture : fixe ${fmt(r.bill.fixed)} · autoscaling ${fmt(r.bill.autoscaling)} · migration ${fmt(r.bill.migration)}
+          <p class="muted">Facture : fixe ${fmt(r.bill.fixed)} · autoscaling ${fmt(r.bill.autoscaling)}
             · latence moyenne ${fmt(r.avgLatencyMs)} ms</p>
           <h3>Échecs</h3>
           <p>${reasons.length > 0 ? reasons.map(([k, v]) => `${esc(k)} : ${fmt(v)}`).join(' · ') : 'aucun'}

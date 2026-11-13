@@ -120,8 +120,6 @@ export const fortifiedCity: Theme = {
     remove: 'Cette fois, {name} ne sert à rien, et le trésor le paie quand même.',
     unlink: 'Le chemin de {from} à {to} égare les voyageurs : qu’on le ferme.',
     lower: '{name} en fait trop : {upgrade}, c’est plus qu’il n’en faut cette fois.',
-    rewind: 'Sire, d’ici la cité ne tiendra pas : défaire ce qui est bâti coûterait plus que le trésor. Revenons à la vague {wave}, avant ce choix.',
-    rebuilt: 'Tout y est, Sire, mais {name} a été démoli puis rebâti : le trésor paie la démolition.',
     ready: 'Tout y est, Sire. Lancez la vague !',
   },
   debrief: {

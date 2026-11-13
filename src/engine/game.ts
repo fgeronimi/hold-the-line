@@ -78,7 +78,7 @@ export function playWave(
   const wave = scenario.waves[state.waveIndex];
   if (state.finished || !wave) throw new Error('La partie est terminée');
 
-  const result = simulateWave(arch, wave, catalog, state.committed);
+  const result = simulateWave(arch, wave, catalog);
   if (!result.won) {
     return { state: { ...state, replays: state.replays + 1 }, result, score: 0 };
   }

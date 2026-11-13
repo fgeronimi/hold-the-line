@@ -27,8 +27,8 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 
 ## Architecture
 
-- `src/engine/` : moteur pur, sans DOM. `simulateWave(architecture, wave, catalog, previous?)`
-  renvoie jauges, facture (dont migration depuis `previous`), journal d'événements et
+- `src/engine/` : moteur pur, sans DOM. `simulateWave(architecture, wave, catalog)`
+  renvoie jauges, facture, journal d'événements et
   métriques par tick. `game.ts` enchaîne les vagues et les rejeux, `score.ts` note.
 - Modèle de flux par ticks : à chaque tick, le trafic traverse le graphe en ordre
   topologique ; au-delà de sa capacité un nœud fait échouer l'excédent. Seule la file
@@ -151,12 +151,8 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   exige toujours un load balancer.
 - Imports relatifs avec l'extension `.ts` obligatoire : c'est ce qui permet à Node
   de lancer `scripts/` sans build.
-- Une réponse attendue doit rester atteignable depuis celles de la vague précédente
-  (migration comprise, E2/E3) : `npm run balance` le vérifie par un contrôle d'enchaînement
-  et sort en KO s'il y a blocage, c'est-à-dire qu'aucune ne mène à gagner (décision B7) ; une
-  impasse isolée se sort par un retour en arrière (E6) et reste listée. Un même bâtiment
-  porte le même id dans toutes les variantes d'un espace, sinon la migration est facturée à tort.
-  Recalibrer le budget d'une vague, c'est le relancer.
+- Démolir est gratuit (E8) : une vague ne dépend que de l'architecture jouée, jamais de la
+  précédente. Ne pas réintroduire de coût de retrait ni de paramètre `previous`.
 - Un composant ou une évolution ajouté à un scénario doit entrer dans son espace de
   `src/data/balance-space.ts`, sinon `npm run balance` ne voit pas les réponses qui s'en
   servent. Une dimension avec `requires` ou `excludes` vient après celle qu'elle nomme.

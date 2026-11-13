@@ -121,14 +121,6 @@ export type UpgradeEffect =
    */
   | { type: 'deadLetter'; maxReceives: number };
 
-/**
- * Ce que coûte une baisse de niveau (décision E2) :
- * - `free` : rien, comme retirer des instances ;
- * - `per-level` : le prix d'achat de chaque niveau retiré, comme un réplica ;
- * - `on-disable` : changer de niveau est gratuit, revenir à 0 coûte l'achat complet.
- */
-export type RemovalCost = 'free' | 'per-level' | 'on-disable';
-
 export interface UpgradeDef {
   id: string;
   label: string;
@@ -140,7 +132,6 @@ export interface UpgradeDef {
   complexity: { base: number; perLevel: number };
   /** Types de composants dont doit venir tout le trafic du nœud amélioré. */
   requiresUpstream?: string[];
-  removalCost: RemovalCost;
   effect: UpgradeEffect;
 }
 
@@ -490,8 +481,8 @@ export interface NodeSummary {
 /** Pourquoi une vague est perdue, avec les nombres qui le disent ; la phrase vient de `messages.ts`. */
 export type LossReason =
   | { kind: 'invalid'; message: string }
-  /** Facture au-delà du budget ; `autoscaling` et `migration` sont déjà dans `cost`. */
-  | { kind: 'budget'; cost: number; limit: number; autoscaling: number; migration: number }
+  /** Facture au-delà du budget ; `autoscaling` est déjà dans `cost`. */
+  | { kind: 'budget'; cost: number; limit: number; autoscaling: number }
   | { kind: 'complexity'; value: number; limit: number }
   | { kind: 'failure-rate'; value: number; limit: number }
   /** Latence au p95 des réponses de la vague (M4) ; `requestKind` pour un objectif propre à un type. */
@@ -503,10 +494,10 @@ export interface WaveResult {
   lossReasons: string[];
   losses: LossReason[];
   /**
-   * Facture de la vague : le fixe (composants et évolutions), les instances ajoutées par
-   * l'autoscaling au prorata de leur temps de service, et les retraits depuis la vague précédente.
+   * Facture de la vague : le fixe (composants et évolutions) et les instances ajoutées par
+   * l'autoscaling au prorata de leur temps de service.
    */
-  bill: { fixed: number; autoscaling: number; migration: number };
+  bill: { fixed: number; autoscaling: number };
   avgLatencyMs: number;
   gauges: {
     cost: Gauge;

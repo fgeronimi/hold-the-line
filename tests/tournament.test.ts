@@ -22,16 +22,6 @@ describe('la billetterie du tournoi', () => {
     });
   });
 
-  // `npm run balance` le vérifie sur tout l'espace ; ici, sur les réponses attendues elles-mêmes.
-  it('depuis chaque réponse d’une vague, une réponse de la suivante est atteignable avec sa migration', () => {
-    tournament.waves.slice(1).forEach((w, i) => {
-      for (const [k, previous] of answersOf(tournament.id, i).entries()) {
-        const reachable = answersOf(tournament.id, i + 1).some((arch) => simulateWave(arch, w, catalog, previous).won);
-        expect(reachable, `${w.id}, depuis la réponse ${k + 1} de ${tournament.waves[i]!.id}`).toBe(true);
-      }
-    });
-  });
-
   it('chaque vague est perdue sans sa réponse', () => {
     const rush = { extraInstances: 1, cache: true };
     expect(play(boxOffice(rush), 'ticket-rush').won).toBe(false);

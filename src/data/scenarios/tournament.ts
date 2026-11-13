@@ -129,8 +129,7 @@ export const tournament: Scenario = {
       answers: [
         { backoff: 1, scaling: 2, cache: 1, replicas: 1, leaderReads: 1, queue: 1 },
         { backoff: 1, scaling: 1, autoscaling: 3, cache: 1, replicas: 1, leaderReads: 1, queue: 1 },
-        // Les deux réplicas de la vague 3 gardés : sans les 40 de migration d'un réplica retiré,
-        // la vague reste gagnable après une vague 3 gagnée (B7).
+        // Les deux réplicas de la vague 3 gardés : la suite la plus directe d'une vague 3 gagnée.
         { backoff: 1, scaling: 2, cache: 1, replicas: 2, leaderReads: 1, queue: 1 },
       ],
       consumers: ['mail'],

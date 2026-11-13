@@ -7,7 +7,6 @@ import { scoring } from '../src/data/scoring.ts';
 import { hintsLeft, newGame, playWave } from '../src/engine/game.ts';
 import { setAt } from '../src/ui/calibration.ts';
 import { choices, gameOf, isStore, readStore, startOf, withFixtures, withGame, withInsertedWaves, withWorkers, type Store } from '../src/ui/session.ts';
-import { migrationCost } from '../src/engine/budget.ts';
 import { validateArchitecture } from '../src/engine/validate.ts';
 import type { Architecture } from '../src/engine/types.ts';
 
@@ -125,7 +124,7 @@ describe('le bâtiment Worker dans une partie en cours (ticket n° 1)', () => {
     expect(withWorkers(after, catalog)).toEqual(after);
   });
 
-  it('au chargement, brouillon, architecture validée et historique sont convertis, sans migration', () => {
+  it('au chargement, brouillon, architecture validée et historique sont convertis ensemble', () => {
     const old = legacy(A.queuedClicks(3));
     const game = { ...newGame(), waveIndex: 4, committed: old, history: [newGame().committed, A.minimal, A.withCache, A.scaled(3), old] };
     const store: Store = { current: urlShortener.id, saves: { [urlShortener.id]: { game, draft: old } } };
@@ -133,7 +132,7 @@ describe('le bâtiment Worker dans une partie en cours (ticket n° 1)', () => {
     for (const arch of [picked.draft, picked.game.committed, picked.game.history[4]!]) {
       expect(arch.nodes.find((n) => n.id === 'worker')!.type).toBe('worker');
     }
-    expect(migrationCost(picked.game.committed, picked.draft, catalog)).toBe(0);
+    expect(picked.draft.nodes.map((n) => n.id).sort()).toEqual(picked.game.committed.nodes.map((n) => n.id).sort());
     expect(picked.game.history[3]).toEqual(A.scaled(3));
   });
 });
