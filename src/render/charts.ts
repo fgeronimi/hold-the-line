@@ -98,7 +98,7 @@ export function chartModel(
         const x = t.nodes[id];
         if (!x) return [];
         return [
-          ...(x.down ? [`⚡ ${x.down} instance${x.down > 1 ? 's' : ''} en panne`] : []),
+          ...(x.down ? [`${x.down} instance${x.down > 1 ? 's' : ''} en panne`] : []),
           ...(x.instances !== undefined && x.instances > 1 ? [`${x.instances} instances`] : []),
           ...(x.backlog ? [`${twoDigits(x.backlog)} messages en attente`] : []),
           ...(x.backlogAge ? [`le plus vieux attend depuis ${x.backlogAge} min`] : []),
@@ -181,8 +181,8 @@ export function renderChart(m: ChartModel, opts: { live?: boolean } = {}): strin
       `<rect class="chart-incident" x="${xa}" y="${CHART.top - 4}" width="${(i.until - i.from) * step}" height="${H - CHART.top - CHART.axis + 4}"/>`,
       // Près du bord droit, l'étiquette s'aligne sur la fin de la bande pour ne pas sortir du cadre.
       xa > (x0 + x1) / 2
-        ? `<text class="chart-incident-label" x="${xa + (i.until - i.from) * step}" y="${CHART.top - 6}" text-anchor="end">⚡ ${escapeHtml(i.title)}</text>`
-        : `<text class="chart-incident-label" x="${xa + 3}" y="${CHART.top - 6}">⚡ ${escapeHtml(i.title)}</text>`,
+        ? `<text class="chart-incident-label" x="${xa + (i.until - i.from) * step}" y="${CHART.top - 6}" text-anchor="end">${escapeHtml(i.title)}</text>`
+        : `<text class="chart-incident-label" x="${xa + 3}" y="${CHART.top - 6}">${escapeHtml(i.title)}</text>`,
     );
   }
 

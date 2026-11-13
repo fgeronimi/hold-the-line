@@ -100,6 +100,13 @@ describe('ruée vers le cache', () => {
     expect(herd.ticks[30]!.nodes.db!.utilization).toBeGreaterThan(locked.ticks[30]!.nodes.db!.utilization * 3);
     expect(herd.ticks[30]!.nodes.db!.failed).toBeGreaterThan(locked.ticks[30]!.nodes.db!.failed);
   });
+
+  it('avec le verrou, la base ne recalcule que les pages distinctes : elle reste sous sa capacité (M16)', () => {
+    const locked = play(checkout({ cache: true, coalescing: true }), 'midnight-expiry');
+    const rush = locked.ticks.slice(30, 35);
+    expect(Math.max(...rush.map((t) => t.nodes.db!.utilization))).toBeLessThan(1);
+    expect(rush.every((t) => t.nodes.db!.failed === 0)).toBe(true);
+  });
 });
 
 describe('le chambellan raconte la résilience', () => {

@@ -213,7 +213,7 @@ function renderUnlocked(s: ViewState, ids: string[]): string {
 // ——— Le briefing ———
 
 function incidentLine(i: NonNullable<Wave['incidents']>[number], s: ViewState): string {
-  return `<p class="incident">⚡ <b>Incident annoncé :</b> ${esc(i.title)}, ${minuteSpan(i.from, i.until)}. <i>${esc(nameOf(i.component, s.catalog))}</i></p>`;
+  return `<p class="incident">${icon('bolt')} <b>Incident annoncé :</b> ${esc(i.title)}, ${minuteSpan(i.from, i.until)}. <i>${esc(nameOf(i.component, s.catalog))}</i></p>`;
 }
 
 const RATE_NAMES: Record<string, string> = { read: 'lectures', write: 'écritures', async: 'événements' };

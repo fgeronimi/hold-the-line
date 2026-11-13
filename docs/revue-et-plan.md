@@ -559,7 +559,7 @@ bougé : vague 2 avec une troisième réponse (CDN, 110), vague 3 à 125 de seui
 Choix laissés tels quels, faute d'argument pour payer leur prix : l'impasse « vague 4
 depuis CDN + réplica » reste (en sortir demandait 220 de budget, où le scaling seul gagne
 tout) ; derrière un CDN, le palier 160 gagne encore la vague 4 (trop bas coupe partout,
-trop haut ne perd que sans CDN). À ajouter au rendu (R10, nouveau) : les messages rendus
+trop haut ne perd que sans CDN) ; réglé depuis par le p95 (M15) : seul le palier 40 tient. À ajouter au rendu (R10, nouveau) : les messages rendus
 à leur file (`deferred`) s'affichent comme servis sur le lien file → worker → base.
 
 **Passe B — tournoi**
@@ -609,7 +609,7 @@ impasse reste, assumée : la vague 5 du raccourcisseur depuis la réponse CDN (X
 Choix gardés, à revoir s'ils gênent : un appel abandonné après attente (délai d'attente,
 dépendance muette) compte dans la latence, sinon le délai seul valait le disjoncteur ; le
 verrou de recalcul n'empêche pas les absences pendant une ruée (122 ms), il faudrait qu'il
-serve ceux qui attendent le même recalcul, un changement de modèle non fait.
+serve ceux qui attendent le même recalcul : fait depuis (M16).
 
 **Passe D — tous les scénarios**
 

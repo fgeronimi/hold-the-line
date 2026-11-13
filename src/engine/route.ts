@@ -2,7 +2,7 @@ import { addStream, classOf, isEvent, type Flow, type Stream } from './flow.ts';
 import { fail, failStream, lose, tally } from './ledger.ts';
 import type { NodeRoutes, RouteTable } from './routing.ts';
 import { REQUEST_KINDS, type ArchNode, type Catalog, type ComponentDef, type RequestKind, type TickMetrics } from './types.ts';
-import { hasEffect, type NodeUpgrades } from './upgrades.ts';
+import { activeEffect, hasEffect, type NodeUpgrades } from './upgrades.ts';
 import { defOf, type Now, type World } from './world.ts';
 
 /** Débit envoyé par nœud, par type et par voisin pendant le tick : pondère les latences. */
@@ -86,10 +86,15 @@ function hitRateAt(w: World, now: Now, cacheId: string, s: Stream): number {
   return src?.longTail || src?.consistent ? 0 : (defOf(w, cacheId).hitRate ?? 0) * now.incidents.hitFactor(w.nodes.get(cacheId)!.type);
 }
 
-/** Chaque absence recalculée `herd` fois en base pendant une ruée, sauf derrière un verrou de recalcul. */
-function herdAt(w: World, now: Now, cacheId: string): number {
-  if (hasEffect(w.upgrades.get(cacheId)!, 'coalescing')) return 1;
-  return now.incidents.herd(w.nodes.get(cacheId)!.type);
+/**
+ * Ce que pèse une absence en base pendant une ruée : recalculée `herd` fois sans verrou ; avec
+ * un verrou de recalcul, une seule fois par page, et les lecteurs d'une même page attendent ce
+ * recalcul, si bien que la base ne voit que la part distincte des absences. Hors ruée, 1.
+ */
+function missWorkAt(w: World, now: Now, cacheId: string): number {
+  const herd = now.incidents.herd(w.nodes.get(cacheId)!.type);
+  if (herd <= 1) return 1;
+  return activeEffect(w.upgrades.get(cacheId)!, 'coalescing')?.distinctShare ?? herd;
 }
 
 export function route(id: string, def: ComponentDef, passed: Flow, w: World, now: Now, out: Delivery): void {
@@ -153,18 +158,19 @@ export function route(id: string, def: ComponentDef, passed: Flow, w: World, now
 
     // Cache-aside : chaque cache consulté sert sa part, le reste repart d'ici.
     let remaining = s.rps;
-    let herd = 1;
     const lookups = routes.lookup[s.kind];
+    // Le pire des caches consultés : une ruée sans verrou sur l'un l'emporte sur le verrou d'un autre.
+    const missWork = lookups.length > 0 ? Math.max(...lookups.map((c) => missWorkAt(w, now, c))) : 1;
     for (const cache of lookups) {
       const consulted = s.rps / lookups.length;
       const hits = consulted * hitRateAt(w, now, cache, s);
       send(cache, s, hits);
       remaining -= hits;
-      herd = Math.max(herd, herdAt(w, now, cache));
     }
-    // Une ruée recalcule chaque absence plusieurs fois : la base fait `herd` fois le travail,
-    // mais chaque client n'attend qu'une réponse (un lot plus petit que 1 multiplie le travail).
-    if (herd > 1) s = { ...s, batch: s.batch / herd };
+    // Une ruée recalcule chaque absence plusieurs fois, un verrou une seule fois par page : la
+    // base fait `missWork` fois le travail, mais chaque client n'attend qu'une réponse (le lot
+    // divise le travail, comme celui d'une file, et les échecs se comptent toujours en requêtes).
+    if (missWork !== 1) s = { ...s, batch: s.batch / missWork };
 
     const targets = routes.forward[s.kind];
     if (targets.length === 0) {

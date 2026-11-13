@@ -124,13 +124,14 @@ export const resilience: Scenario = {
       // Chaque paiement doit parvenir au banquier : une cité qui ne le relie pas ne paie rien.
       consumers: ['bank'],
       sla: SLA,
-      budget: 250,
-      complexityCap: 18,
-      thriftyCost: 225,
+      // Recalé quand le verrou de recalcul a cessé de laisser la base saturer pendant la ruée :
+      // les deux réplicas ne servaient qu'à encaisser ce que le verrou laissait passer.
+      budget: 160,
+      complexityCap: 12,
+      thriftyCost: 130,
       answers: [
-        { scaling: 2, breaker: 1, cache: 1, coalescing: 1, replicas: 2 },
-        // 2 200 lectures depuis SC7 : derrière une file, une instance de plus suffit.
-        { scaling: 1, queue: 1, cache: 1, coalescing: 1, replicas: 2 },
+        { scaling: 1, breaker: 1, cache: 1, coalescing: 1 },
+        { scaling: 1, queue: 1, cache: 1, coalescing: 1 },
       ],
       incidents: [
         { id: 'fair-slow', title: 'Le banquier fait attendre chaque paiement', component: 'payment-provider', from: 15, until: 20, effect: { type: 'slow-dependency', latencyMs: 4000 } },

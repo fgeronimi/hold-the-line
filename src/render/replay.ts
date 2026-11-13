@@ -159,17 +159,17 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     incidents.forEach((i, k) => {
       if (i.tick > time || shownIncidents.has(k)) return;
       shownIncidents.add(k);
-      messages.push(`⚡ Incident ${minuteSpan(i.tick, i.tick)} : ${i.title}.`);
+      messages.push(`${pict('bolt')} Incident ${minuteSpan(i.tick, i.tick)} : ${escapeHtml(i.title)}.`);
       focus ??= i.node;
     });
     for (const a of alerts) {
       if (a.tick > time || shown.has(a.node)) continue;
       shown.add(a.node);
-      messages.push(`⚠ ${nameOf(a.node)} sature ${minuteSpan(a.tick, a.tick)}.`);
+      messages.push(`${pict('warn')} ${escapeHtml(nameOf(a.node))} sature ${minuteSpan(a.tick, a.tick)}.`);
       focus ??= a.node;
     }
     if (messages.length === 0) return;
-    alert.textContent = messages.join(' ');
+    alert.innerHTML = messages.join(' ');
     alert.hidden = false;
     if (focus) scene.focusOn(focus);
     slowFor = SLOW_MOTION.seconds;
@@ -182,7 +182,7 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     alarm.hidden = breach === undefined;
     if (breach && alarm.dataset.breach !== breach) {
       alarm.dataset.breach = breach;
-      alarm.innerHTML = `<div class="sla-banner"><span class="bell">🔔</span> ${alarmText[breach]}</div>`;
+      alarm.innerHTML = `<div class="sla-banner"><span class="bell">${pict('bell')}</span> ${alarmText[breach]}</div>`;
     }
     const { sla, budget } = o.wave;
     const cost = o.result.gauges.cost.value;

@@ -1057,7 +1057,7 @@ const ENTRIES: Entry[] = [
       const arriving = Array.from({ length: 3 }, (_, i) => v.walker(i % 2 ? 'write' : 'read'));
       const overlay = document.createElement('div');
       overlay.className = 'sla';
-      overlay.innerHTML = '<div class="vig"></div><div class="bar"><i></i><b></b><span>SLA 1 %</span></div><div class="banner">SLA rompu</div><div class="bell">🔔</div>';
+      overlay.innerHTML = '<div class="vig"></div><div class="bar"><i></i><b></b><span>SLA 1 %</span></div><div class="banner">SLA rompu</div><div class="bell">' + pict('bell') + '</div>';
       v.host.appendChild(overlay);
       const [vig, bar, banner, bell] = ['.vig', '.bar i', '.banner', '.bell'].map((s) => overlay.querySelector(s) as HTMLElement);
       return (t) => {

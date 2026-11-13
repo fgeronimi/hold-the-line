@@ -90,8 +90,12 @@ export type UpgradeEffect =
    * direct est coupée ; ses appels échouent tout de suite au lieu de bloquer des fils.
    */
   | { type: 'circuitBreaker'; timeoutMs: number }
-  /** Cache : une seule requête recalcule une entrée expirée, les autres l'attendent. */
-  | { type: 'coalescing' }
+  /**
+   * Cache : pendant une ruée, une seule requête recalcule une entrée expirée, les autres
+   * attendent son résultat. La base ne voit que les pages distinctes : `distinctShare` des
+   * absences, au lieu de chaque absence `herd` fois.
+   */
+  | { type: 'coalescing'; distinctShare: number }
   /**
    * Clients : relances espacées (backoff exponentiel, jitter), étalées sur `spreadTicks`
    * ticks ; sans elles, tous les échecs reviennent ensemble au tick suivant (décision S19).

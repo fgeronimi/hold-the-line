@@ -41,7 +41,7 @@ const catalog: Catalog = {
     auto: { id: 'auto', label: 'Auto', techName: 'Auto', appliesTo: 'app', maxLevel: 5, cost: { base: 5, perLevel: 0 }, complexity: { base: 2, perLevel: 0 }, requiresUpstream: ['lb'], effect: { type: 'autoscaling', instanceCost: 30, startupTicks: 2, targetUtilization: 0.5 } },
     replica: { id: 'replica', label: 'Replica', techName: 'Replica', appliesTo: 'db', maxLevel: 3, cost: { base: 0, perLevel: 30 }, complexity: { base: 0, perLevel: 1 }, effect: { type: 'readReplicas', capacityPerReplica: 100 } },
     breaker: { id: 'breaker', label: 'Breaker', techName: 'Breaker', appliesTo: 'app', maxLevel: 1, cost: { base: 10, perLevel: 0 }, complexity: { base: 2, perLevel: 0 }, effect: { type: 'circuitBreaker', timeoutMs: 100 } },
-    coalescing: { id: 'coalescing', label: 'Lock', techName: 'Lock', appliesTo: 'cache', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, effect: { type: 'coalescing' } },
+    coalescing: { id: 'coalescing', label: 'Lock', techName: 'Lock', appliesTo: 'cache', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, effect: { type: 'coalescing', distinctShare: 0.25 } },
     backoff: { id: 'backoff', label: 'Backoff', techName: 'Backoff', appliesTo: 'src', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, effect: { type: 'backoff', spreadTicks: 4 } },
     retention: { id: 'retention', label: 'Retention', techName: 'Retention', appliesTo: 'queue', maxLevel: 3, cost: { base: 0, perLevel: 5 }, complexity: { base: 0, perLevel: 1 }, effect: { type: 'retention', perLevel: 50 } },
     leader: { id: 'leader', label: 'Leader', techName: 'Leader', appliesTo: 'db', maxLevel: 1, cost: { base: 5, perLevel: 0 }, complexity: { base: 1, perLevel: 0 }, effect: { type: 'leaderReads' } },
@@ -277,10 +277,13 @@ describe('incidents de cache et d’instances', () => {
     expect(r.ticks[2]!.failed).toBeCloseTo(50 / 3, 9);
   });
 
-  it('le verrou de recalcul ramène la ruée à un cache froid', () => {
+  it('le verrou de recalcul : la base ne recalcule que les pages distinctes, les autres lecteurs attendent', () => {
+    // Sans verrou, la ruée ferait 3 fois le travail d'un cache froid (0.6, 0.48…) ; avec, un
+    // quart (distinctShare 0.25) : 0.2 × 0.25 = 0.05. Hors ruée, rien ne change.
     const stampede = incident('cache', 2, 6, { type: 'cache-stampede', herd: 3 });
     const r = simulateWave(cached({ coalescing: 1 }), wave([users({ read: 20 })], { incidents: [stampede] }), catalog);
-    expect(dbLoad(r).map((u) => +u.toFixed(9))).toEqual([0.04, 0.04, 0.2, 0.16, 0.12, 0.08, 0.04]);
+    expect(dbLoad(r).map((u) => +u.toFixed(9))).toEqual([0.04, 0.04, 0.05, 0.04, 0.03, 0.02, 0.04]);
+    expect(r.failuresByReason.saturation).toBe(0);
   });
 
   describe('instance-down', () => {

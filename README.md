@@ -107,10 +107,10 @@ Chaque incident a son effet sur le plateau, montré seul sur un îlot de démons
 
 ### La planche de design
 
-Pictogrammes, médaillons et rubans dessinés en SVG et en CSS, sans une seule image
-(`npm run dev`, puis `/design.html`).
+Pictogrammes, médaillons, badge de vague et barres, dessinés en SVG et en CSS, sans une
+seule image, dans la matière du jeu : parchemin et laiton (`npm run dev`, puis `/design.html`).
 
-<img src="docs/media/design.webp" width="800" alt="La planche de design : pictogrammes et boutons">
+<img src="docs/media/design.webp" width="800" alt="La planche de design : pictogrammes, boutons et barres en parchemin et laiton">
 
 ## Développement
 

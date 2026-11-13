@@ -185,16 +185,19 @@ const SHOTS = {
     await film.stop('defaite', { speed: 1.5, q: 62, to: 16 });
   },
 
-  /** La planche de design, des pictogrammes aux boutons. */
+  /** La planche de design, dans la seule matière retenue (parchemin et laiton) : pictogrammes, boutons, badges, barres. */
   async design(page) {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(`${BASE}/design.html`);
     await page.waitForTimeout(2000);
+    // Les deux autres matières de la planche ont été écartées (I18) : le README n'en montre qu'une.
+    await page.addStyleTag({ content: '.stage.t-blond, .stage.t-dark { display: none !important; }' });
+    await page.waitForTimeout(300);
     const clip = await page.evaluate(() => {
       const sections = [...document.querySelectorAll('main section')];
       const at = (title) => sections.find((s) => s.querySelector('h2')?.textContent.startsWith(title)).getBoundingClientRect();
       const top = at('Pictogrammes').top + scrollY - 10;
-      return { x: 0, y: top, width: innerWidth, height: at('Boutons').bottom + scrollY + 10 - top };
+      return { x: 0, y: top, width: innerWidth, height: at('Barre du haut').bottom + scrollY + 10 - top };
     });
     await still(page, 'design', clip);
     await page.setViewportSize({ width: 1280, height: 720 });

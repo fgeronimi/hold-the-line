@@ -322,7 +322,8 @@ export const catalog: Catalog = {
       maxLevel: 1,
       cost: { base: 5, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
-      effect: { type: 'coalescing' },
+      // Une ruée porte sur les pages les plus lues : un quart des absences sont des pages distinctes.
+      effect: { type: 'coalescing', distinctShare: 0.25 },
     },
     'client-backoff': {
       id: 'client-backoff',
