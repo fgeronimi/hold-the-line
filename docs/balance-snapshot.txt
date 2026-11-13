@@ -1,32 +1,24 @@
-## Raccourcisseur d’URL — 51936 architectures × 6 vagues
+## Raccourcisseur d’URL — 77904 architectures × 6 vagues
 [ok] launch (réponse unique assumée) — 1 stratégie(s) : serveur + base
      serveur + base                                      1 gagnantes | meilleure : — | score 56.6 | coût 70/100 | marges coût 30 %, cx 25 %, échecs 100 %, p95 72 %
      load balancer                                       1 gagnantes | meilleure : — | score 47.5 | coût 80/100 | marges coût 20 %, cx 0 %, échecs 100 %, p95 70 %
        ↳ dominée par « serveur + base »
-[ok] read-surge — 3 stratégie(s) : CDN | réplica | cache
+[ok] read-surge — 3 stratégie(s) : CDN | cache + verrou de recalcul | réplica
      CDN                                                 1 gagnantes | meilleure : — | score 49.4 | coût 110/115 | marges coût 4 %, cx 29 %, échecs 100 %, p95 65 %
+     cache + verrou de recalcul                          1 gagnantes | meilleure : — | score 45.6 | coût 90/115 | marges coût 22 %, cx 14 %, échecs 100 %, p95 46 %
      réplica                                             1 gagnantes | meilleure : réplica 1 | score 41.8 | coût 110/115 | marges coût 4 %, cx 43 %, échecs 100 %, p95 20 %
-     cache                                               1 gagnantes | meilleure : — | score 25.9 | coût 85/115 | marges coût 26 %, cx 29 %, échecs 2 %, p95 47 %
-     load balancer + cache                               1 gagnantes | meilleure : — | score 19.8 | coût 95/115 | marges coût 17 %, cx 14 %, échecs 2 %, p95 46 %
-       ↳ dominée par « cache »
-     load balancer + scaling + cache                     1 gagnantes | meilleure : scaling 1 | score 16.6 | coût 115/115 | marges coût 0 %, cx 0 %, échecs 2 %, p95 65 %
-       ↳ dominée par « cache »
-     load balancer + rate limiting + cache               5 gagnantes | meilleure : rate limiting 1 | score 15.1 | coût 100/115 | marges coût 13 %, cx 0 %, échecs 2 %, p95 46 %
-       ↳ dominée par « cache »
-[ok] marketing-peak — 3 stratégie(s) : load balancer + scaling + cache | load balancer + scaling + autoscaling + cache | CDN + cache
+     load balancer + cache + verrou de recalcul          1 gagnantes | meilleure : — | score 39.4 | coût 100/115 | marges coût 13 %, cx 0 %, échecs 100 %, p95 45 %
+       ↳ dominée par « cache + verrou de recalcul »
+[ok] marketing-peak — 3 stratégie(s) : CDN + load balancer + scaling + cache | load balancer + scaling + cache | load balancer + scaling + autoscaling + cache
      CDN + load balancer + scaling + cache               1 gagnantes | meilleure : scaling 1 | score 44.1 | coût 155/170 | marges coût 9 %, cx 0 %, échecs 100 %, p95 68 %
-       ↳ dominée par « CDN + cache »
      load balancer + scaling + cache                     1 gagnantes | meilleure : scaling 3 | score 38.6 | coût 155/170 | marges coût 9 %, cx 22 %, échecs 100 %, p95 24 %
+     load balancer + scaling + cache + verrou de recalcul    1 gagnantes | meilleure : scaling 3 | score 35.1 | coût 160/170 | marges coût 6 %, cx 11 %, échecs 100 %, p95 24 %
+       ↳ dominée par « load balancer + scaling + cache »
      load balancer + scaling + rate limiting + cache     5 gagnantes | meilleure : scaling 3, rate limiting 1 | score 35.1 | coût 160/170 | marges coût 6 %, cx 11 %, échecs 100 %, p95 24 %
        ↳ dominée par « load balancer + scaling + cache »
      load balancer + scaling + autoscaling + cache       4 gagnantes | meilleure : scaling 2, autoscaling 3 | score 33.3 | coût 153.33/170 | marges coût 10 %, cx 0 %, échecs 100 %, p95 24 %
-     CDN + cache                                         1 gagnantes | meilleure : — | score 27.5 | coût 125/170 | marges coût 26 %, cx 22 %, échecs 17 %, p95 45 %
-     CDN + load balancer + cache                         1 gagnantes | meilleure : — | score 22.8 | coût 135/170 | marges coût 21 %, cx 11 %, échecs 17 %, p95 43 %
-       ↳ dominée par « CDN + cache »
-     CDN + load balancer + rate limiting + cache         5 gagnantes | meilleure : rate limiting 1 | score 19.3 | coût 140/170 | marges coût 18 %, cx 0 %, échecs 17 %, p95 43 %
-       ↳ dominée par « CDN + cache »
-     CDN + cache + réplica                               1 gagnantes | meilleure : réplica 1 | score 18.9 | coût 165/170 | marges coût 3 %, cx 11 %, échecs 17 %, p95 45 %
-       ↳ dominée par « CDN + cache »
+     load balancer + scaling + rate limiting + cache + verrou de recalcul    5 gagnantes | meilleure : scaling 3, rate limiting 1 | score 31.6 | coût 165/170 | marges coût 3 %, cx 0 %, échecs 100 %, p95 24 %
+       ↳ dominée par « load balancer + scaling + cache + verrou de recalcul »
 [ok] noisy-client — 2 stratégie(s) : CDN + load balancer + scaling + rate limiting + cache | load balancer + scaling + rate limiting + cache
      CDN + load balancer + scaling + rate limiting + cache    3 gagnantes | meilleure : scaling 2, rate limiting 3 | score 39.6 | coût 180/180 | marges coût 0 %, cx 0 %, échecs 100 %, p95 58 %
      load balancer + scaling + rate limiting + cache     1 gagnantes | meilleure : scaling 4, rate limiting 3 | score 34.8 | coût 180/180 | marges coût 0 %, cx 20 %, échecs 100 %, p95 19 %
@@ -35,15 +27,17 @@
      CDN + load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache    3 gagnantes | meilleure : scaling 3, quota par clé 5, limite par adresse 1 | score 31.8 | coût 230/250 | marges coût 8 %, cx 0 %, échecs 100 %, p95 19 %
 [ok] click-tracking (réponse unique assumée) — 1 stratégie(s) : load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica + file
      load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica + file    2 gagnantes | meilleure : scaling 4, quota par clé 5, limite par adresse 1, réplica 1 | score 33.3 | coût 295/300 | marges coût 2 %, cx 6 %, échecs 100 %, p95 25 %
+     load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + verrou de recalcul + réplica + file    2 gagnantes | meilleure : scaling 4, quota par clé 5, limite par adresse 1, réplica 1 | score 31.3 | coût 300/300 | marges coût 0 %, cx 0 %, échecs 100 %, p95 25 %
+       ↳ dominée par « load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica + file »
 
 Architecture gagnant toutes les vagues : aucune (ok)
 Deux stratégies sur la majorité des vagues : oui
-Tout au maximum, launch : perd (ok) — Budget dépassé : 645 / 100 ; Trop complexe : 25 / 4 points
-Tout au maximum, read-surge : perd (ok) — Budget dépassé : 645 / 115 ; Trop complexe : 25 / 7 points
-Tout au maximum, marketing-peak : perd (ok) — Budget dépassé : 645 / 170 ; Trop complexe : 25 / 9 points
-Tout au maximum, noisy-client : perd (ok) — Budget dépassé : 645 / 180 ; Trop complexe : 25 / 10 points
-Tout au maximum, partner-keys : perd (ok) — Budget dépassé : 645 / 250 ; Trop complexe : 25 / 13 points
-Tout au maximum, click-tracking : perd (ok) — Budget dépassé : 645 / 300 ; Trop complexe : 25 / 16 points ; SLA rompu : 23.43 % d'échecs (max 1.00 %)
+Tout au maximum, launch : perd (ok) — Budget dépassé : 650 / 100 ; Trop complexe : 26 / 4 points
+Tout au maximum, read-surge : perd (ok) — Budget dépassé : 650 / 115 ; Trop complexe : 26 / 7 points
+Tout au maximum, marketing-peak : perd (ok) — Budget dépassé : 650 / 170 ; Trop complexe : 26 / 9 points
+Tout au maximum, noisy-client : perd (ok) — Budget dépassé : 650 / 180 ; Trop complexe : 26 / 10 points
+Tout au maximum, partner-keys : perd (ok) — Budget dépassé : 650 / 250 ; Trop complexe : 26 / 13 points
+Tout au maximum, click-tracking : perd (ok) — Budget dépassé : 650 / 300 ; Trop complexe : 26 / 16 points ; SLA rompu : 23.43 % d'échecs (max 1.00 %)
 
 ## Prise de commande — 1408 architectures × 6 vagues
 [ok] market-open (réponse unique assumée) — 1 stratégie(s) : file
@@ -144,13 +138,13 @@ Tout au maximum, sales : perd (ok) — Budget dépassé : 350 / 325 ; SLA rompu 
        ↳ dominée par « réplica »
      délai d’attente + cache + verrou de recalcul        1 gagnantes | meilleure : — | score 47.3 | coût 95/125 | marges coût 24 %, cx 30 %, échecs 100 %, p95 35 %
        ↳ dominée par « cache + verrou de recalcul »
-     file + cache + verrou de recalcul                   1 gagnantes | meilleure : — | score 45.0 | coût 115/125 | marges coût 8 %, cx 20 %, échecs 100 %, p95 52 %
+     file + cache + verrou de recalcul                   1 gagnantes | meilleure : — | score 45.2 | coût 115/125 | marges coût 8 %, cx 20 %, échecs 100 %, p95 53 %
        ↳ dominée par « cache + verrou de recalcul »
      circuit breaker + réplica                           1 gagnantes | meilleure : réplica 1 | score 44.8 | coût 120/125 | marges coût 4 %, cx 40 %, échecs 100 %, p95 35 %
        ↳ dominée par « réplica »
      circuit breaker + cache + verrou de recalcul        1 gagnantes | meilleure : — | score 43.8 | coût 100/125 | marges coût 20 %, cx 20 %, échecs 100 %, p95 35 %
        ↳ dominée par « cache + verrou de recalcul »
-     délai d’attente + file + cache + verrou de recalcul    1 gagnantes | meilleure : — | score 41.5 | coût 120/125 | marges coût 4 %, cx 10 %, échecs 100 %, p95 52 %
+     délai d’attente + file + cache + verrou de recalcul    1 gagnantes | meilleure : — | score 41.7 | coût 120/125 | marges coût 4 %, cx 10 %, échecs 100 %, p95 53 %
        ↳ dominée par « file + cache + verrou de recalcul »
      délai d’attente + circuit breaker + réplica         1 gagnantes | meilleure : réplica 1 | score 41.3 | coût 125/125 | marges coût 0 %, cx 30 %, échecs 100 %, p95 35 %
        ↳ dominée par « circuit breaker + réplica »
@@ -158,7 +152,7 @@ Tout au maximum, sales : perd (ok) — Budget dépassé : 350 / 325 ; SLA rompu 
        ↳ dominée par « circuit breaker + cache + verrou de recalcul »
      scaling + cache + verrou de recalcul                1 gagnantes | meilleure : scaling 1 | score 40.2 | coût 120/125 | marges coût 4 %, cx 20 %, échecs 100 %, p95 37 %
        ↳ dominée par « cache + verrou de recalcul »
-     circuit breaker + file + cache + verrou de recalcul    1 gagnantes | meilleure : — | score 38.0 | coût 125/125 | marges coût 0 %, cx 0 %, échecs 100 %, p95 52 %
+     circuit breaker + file + cache + verrou de recalcul    1 gagnantes | meilleure : — | score 38.2 | coût 125/125 | marges coût 0 %, cx 0 %, échecs 100 %, p95 53 %
        ↳ dominée par « file + cache + verrou de recalcul »
      scaling + délai d’attente + cache + verrou de recalcul    1 gagnantes | meilleure : scaling 1 | score 36.7 | coût 125/125 | marges coût 0 %, cx 10 %, échecs 100 %, p95 37 %
        ↳ dominée par « délai d’attente + cache + verrou de recalcul »
@@ -184,13 +178,13 @@ Tout au maximum, sales : perd (ok) — Budget dépassé : 350 / 325 ; SLA rompu 
      délai d’attente + file + réplica                    1 gagnantes | meilleure : réplica 1 | score 36.9 | coût 140/140 | marges coût 0 %, cx 42 %, échecs 100 %, p95 6 %
        ↳ dominée par « file + réplica »
 [ok] fair — 2 stratégie(s) : scaling + circuit breaker + cache + verrou de recalcul | scaling + file + cache + verrou de recalcul
-     scaling + circuit breaker + cache + verrou de recalcul    2 gagnantes | meilleure : scaling 2 | score 21.3 | coût 150/160 | marges coût 6 %, cx 17 %, échecs 27 %, p95 35 %
-     scaling + file + cache + verrou de recalcul         1 gagnantes | meilleure : scaling 1 | score 21.0 | coût 145/160 | marges coût 9 %, cx 17 %, échecs 51 %, p95 7 %
-     scaling + délai d’attente + circuit breaker + cache + verrou de recalcul    2 gagnantes | meilleure : scaling 2 | score 18.4 | coût 155/160 | marges coût 3 %, cx 8 %, échecs 27 %, p95 35 %
+     scaling + circuit breaker + cache + verrou de recalcul    2 gagnantes | meilleure : scaling 2 | score 33.5 | coût 150/160 | marges coût 6 %, cx 17 %, échecs 76 %, p95 35 %
+     scaling + file + cache + verrou de recalcul         1 gagnantes | meilleure : scaling 1 | score 33.1 | coût 145/160 | marges coût 9 %, cx 17 %, échecs 100 %, p95 6 %
+     scaling + délai d’attente + circuit breaker + cache + verrou de recalcul    2 gagnantes | meilleure : scaling 2 | score 30.7 | coût 155/160 | marges coût 3 %, cx 8 %, échecs 76 %, p95 35 %
        ↳ dominée par « scaling + circuit breaker + cache + verrou de recalcul »
-     scaling + délai d’attente + file + cache + verrou de recalcul    1 gagnantes | meilleure : scaling 1 | score 18.2 | coût 150/160 | marges coût 6 %, cx 8 %, échecs 51 %, p95 7 %
+     scaling + délai d’attente + file + cache + verrou de recalcul    1 gagnantes | meilleure : scaling 1 | score 30.3 | coût 150/160 | marges coût 6 %, cx 8 %, échecs 100 %, p95 6 %
        ↳ dominée par « scaling + file + cache + verrou de recalcul »
-     scaling + circuit breaker + file + cache + verrou de recalcul    1 gagnantes | meilleure : scaling 1 | score 15.3 | coût 155/160 | marges coût 3 %, cx 0 %, échecs 51 %, p95 7 %
+     scaling + circuit breaker + file + cache + verrou de recalcul    1 gagnantes | meilleure : scaling 1 | score 27.4 | coût 155/160 | marges coût 3 %, cx 0 %, échecs 100 %, p95 6 %
        ↳ dominée par « scaling + file + cache + verrou de recalcul »
 
 Architecture gagnant toutes les vagues : aucune (ok)

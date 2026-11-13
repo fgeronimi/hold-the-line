@@ -29,6 +29,12 @@ export const withCache: Architecture = {
   ],
 };
 
+/** La réponse de la vague 2 depuis X12 : le verrou encaisse le redémarrage à froid. */
+export const withLockedCache: Architecture = {
+  ...withCache,
+  nodes: withCache.nodes.map((n) => (n.type === 'cache' ? { ...n, upgrades: { 'request-coalescing': 1 } } : n)),
+};
+
 export const withReplica: Architecture = {
   nodes: [source, { id: 'app', type: 'app-server' }, { ...db, upgrades: { 'read-replica': 1 } }],
   links: minimal.links,
@@ -75,14 +81,17 @@ export function queuedClicks(extraInstances: number): Architecture {
   };
 }
 
-/** Réponse CDN de la vague 3 : les redirections sont servies en bordure. */
+/**
+ * Réponse CDN de la vague 3 avec `extraInstances: 1` (X12) : les redirections sont servies en
+ * bordure, une seconde instance encaisse la panne. Le scaling exige le load balancer.
+ */
 export function withCdn(opts: { rateLimitTier?: number; queue?: boolean; extraInstances?: number } = {}): Architecture {
   const app: ArchNode = { id: 'app', type: 'app-server', ...(opts.extraInstances ? { upgrades: { 'horizontal-scaling': opts.extraInstances } } : {}) };
   const nodes: ArchNode[] = [source, { id: 'cdn', type: 'cdn' }, app, { id: 'cache', type: 'cache' }, db];
   const links: ArchLink[] = [link('src', 'cdn')];
 
-  if (opts.rateLimitTier) {
-    nodes.push({ id: 'lb', type: 'load-balancer', upgrades: { 'rate-limiting': opts.rateLimitTier } });
+  if (opts.rateLimitTier || opts.extraInstances) {
+    nodes.push({ id: 'lb', type: 'load-balancer', upgrades: { 'rate-limiting': opts.rateLimitTier ?? 0 } });
     links.push(link('cdn', 'lb'), link('lb', 'app'));
   } else {
     links.push(link('cdn', 'app'));

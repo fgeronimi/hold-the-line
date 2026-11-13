@@ -34,14 +34,14 @@ const shortener = narrowed(shortenerSpace, {
   anonymousQuota: [0, 1],
 });
 
-const base: Choice = { cdn: 0, lb: 1, scaling: 3, autoscaling: 0, rateLimit: 0, gateway: 0, partnerQuota: 0, anonymousQuota: 0, cache: 1, replicas: 0, queue: 0, workers: 0 };
+const base: Choice = { cdn: 0, lb: 1, scaling: 3, autoscaling: 0, rateLimit: 0, gateway: 0, partnerQuota: 0, anonymousQuota: 0, cache: 1, coalescing: 0, replicas: 0, queue: 0, workers: 0 };
 
 describe('enumerate', () => {
   const candidates = [...enumerate(shortener)];
 
   it('couvre tout l’espace canonique', () => {
-    // Sans LB : CDN × cache × réplicas × file.
-    const withoutLb = 2 * 2 * 2 * 2;
+    // Sans LB : CDN × (pas de cache, cache, cache et verrou) × réplicas × file.
+    const withoutLb = 2 * 3 * 2 * 2;
     // Avec LB : en plus, autoscaling × instances × (5 paliers de limite unique, ou sans elle :
     // pas de passerelle, ou une passerelle et ses 2 × 2 limites par classe).
     const withLb = withoutLb * 2 * 5 * (5 + 1 + 2 * 2);
@@ -101,14 +101,14 @@ describe('runMassSim sur le raccourcisseur', () => {
     expect(report.waves.every((w) => w.meetsStrategyCriterion)).toBe(true);
   });
 
-  it('vague 2 : cache, réplica, ou CDN depuis son prix revu (M9a)', () => {
-    expect([...wave('read-surge').strategies].sort()).toEqual(['CDN', 'cache', 'réplica']);
+  it('vague 2 : cache et son verrou, réplica, ou CDN depuis son prix revu (M9a, X12)', () => {
+    expect([...wave('read-surge').strategies].sort()).toEqual(['CDN', 'cache + verrou de recalcul', 'réplica']);
   });
 
   it('vague 3 : CDN, scaling permanent et autoscaling sont des stratégies distinctes', () => {
     expect(wave('marketing-peak').strategies).toEqual(
       expect.arrayContaining([
-        'CDN + cache',
+        'CDN + load balancer + scaling + cache',
         'load balancer + scaling + cache',
         'load balancer + scaling + autoscaling + cache',
       ]),

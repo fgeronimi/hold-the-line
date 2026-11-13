@@ -157,7 +157,7 @@ export const CONCEPT_ACHIEVEMENTS: Achievement[] = [
     concept: 'Ruée vers le cache',
     tech: 'Request coalescing',
     metaphor: 'le verrou du carnet',
-    real: 'Tout le cache a expiré d’un coup ; le verrou n’a laissé recalculer chaque page qu’une fois.',
+    real: 'Le cache s’est vidé d’un coup, expiré ou redémarré à froid ; le verrou n’a laissé recalculer chaque page qu’une fois.',
     icon: 'lock',
   },
   {

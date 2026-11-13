@@ -322,8 +322,9 @@ export const catalog: Catalog = {
       maxLevel: 1,
       cost: { base: 5, perLevel: 0 },
       complexity: { base: 1, perLevel: 0 },
-      // Une ruée porte sur les pages les plus lues : un quart des absences sont des pages distinctes.
-      effect: { type: 'coalescing', distinctShare: 0.25 },
+      // Une ruée porte sur les pages les plus lues : 15 % des absences sont des pages distinctes.
+      // À 25 %, la ruée de minuit de la grande foire saturait encore la base derrière le verrou (X12).
+      effect: { type: 'coalescing', distinctShare: 0.15 },
     },
     'client-backoff': {
       id: 'client-backoff',

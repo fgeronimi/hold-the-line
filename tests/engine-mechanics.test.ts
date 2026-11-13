@@ -279,11 +279,18 @@ describe('incidents de cache et d’instances', () => {
 
   it('le verrou de recalcul : la base ne recalcule que les pages distinctes, les autres lecteurs attendent', () => {
     // Sans verrou, la ruée ferait 3 fois le travail d'un cache froid (0.6, 0.48…) ; avec, un
-    // quart (distinctShare 0.25) : 0.2 × 0.25 = 0.05. Hors ruée, rien ne change.
+    // quart (distinctShare 0.25) : 0.2 × 0.25 = 0.05. Hors incident du cache, rien ne change.
     const stampede = incident('cache', 2, 6, { type: 'cache-stampede', herd: 3 });
     const r = simulateWave(cached({ coalescing: 1 }), wave([users({ read: 20 })], { incidents: [stampede] }), catalog);
     expect(dbLoad(r).map((u) => +u.toFixed(9))).toEqual([0.04, 0.04, 0.05, 0.04, 0.03, 0.02, 0.04]);
     expect(r.failuresByReason.saturation).toBe(0);
+  });
+
+  it('le verrou de recalcul sert aussi au cache froid : la base ne voit que les pages distinctes (M17)', () => {
+    // Les mêmes absences que le cache froid sans verrou (20, 16, 12, 8), chacune au quart.
+    const cold = incident('cache', 2, 6, { type: 'cold-cache' });
+    const r = simulateWave(cached({ coalescing: 1 }), wave([users({ read: 20 })], { incidents: [cold] }), catalog);
+    expect(dbLoad(r).map((u) => +u.toFixed(9))).toEqual([0.04, 0.04, 0.05, 0.04, 0.03, 0.02, 0.04]);
   });
 
   describe('instance-down', () => {

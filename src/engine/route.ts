@@ -87,14 +87,15 @@ function hitRateAt(w: World, now: Now, cacheId: string, s: Stream): number {
 }
 
 /**
- * Ce que pèse une absence en base pendant une ruée : recalculée `herd` fois sans verrou ; avec
- * un verrou de recalcul, une seule fois par page, et les lecteurs d'une même page attendent ce
- * recalcul, si bien que la base ne voit que la part distincte des absences. Hors ruée, 1.
+ * Ce que pèse une absence en base pendant que le cache se remplit : recalculée `herd` fois sans
+ * verrou pendant une ruée, une fois sur un cache froid. Avec un verrou de recalcul, une seule fois
+ * par page, et les lecteurs d'une même page attendent ce recalcul : la base ne voit que la part
+ * distincte des absences, ruée ou redémarrage à froid (M17). Le reste du temps, 1.
  */
 function missWorkAt(w: World, now: Now, cacheId: string): number {
-  const herd = now.incidents.herd(w.nodes.get(cacheId)!.type);
-  if (herd <= 1) return 1;
-  return activeEffect(w.upgrades.get(cacheId)!, 'coalescing')?.distinctShare ?? herd;
+  const type = w.nodes.get(cacheId)!.type;
+  if (!now.incidents.refilling(type)) return 1;
+  return activeEffect(w.upgrades.get(cacheId)!, 'coalescing')?.distinctShare ?? now.incidents.herd(type);
 }
 
 export function route(id: string, def: ComponentDef, passed: Flow, w: World, now: Now, out: Delivery): void {

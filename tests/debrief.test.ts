@@ -81,11 +81,13 @@ describe('analyzeWave', () => {
     expect(opening!.tech).toContain('des lectures');
   });
 
-  it('une vague tenue n’a pas de rouge : l’incident encaissé est une alerte, raconté une seule fois', () => {
-    const findings = analyze(A.withCache, 'read-surge');
-    expect(findings[0]!.says).toMatch(/Votre Carnet du scribe a fait le travail : 9\d voyageurs sur 100/);
+  it('une vague tenue sans perte n’a ni rouge ni alerte : l’incident encaissé est raconté une seule fois', () => {
+    // Le verrou encaisse le redémarrage à froid (X12) : l'incident est une alerte, pas un rouge.
+    const findings = analyze(A.withLockedCache, 'read-surge');
+    expect(findings[0]!.says).toMatch(/Votre Carnet du scribe a fait le travail : 8\d voyageurs sur 100/);
     expect(findings.some((f) => f.tone === 'bad')).toBe(false);
-    expect(findings.filter((f) => f.tone === 'warn').map((f) => f.concept)).toEqual(['Cache stampede']);
+    expect(findings.filter((f) => f.tone !== 'good' && f.tone !== 'tip')).toEqual([]);
+    expect(findings.filter((f) => f.concept === 'Cache stampede').map((f) => f.tone)).toEqual(['good']);
     // Rien à alléger : le seul conseil d'over-engineering serait faux ici.
     expect(findings.some((f) => f.concept === 'Over-engineering')).toBe(false);
   });
@@ -98,8 +100,9 @@ describe('analyzeWave', () => {
   });
 
   it('raconte l’incident : un serveur unique qui tombe est un SPOF, la redondance l’encaisse', () => {
+    // Depuis X12, la panne fait perdre la vague à un serveur unique.
     const spof = analyze(A.withCdn(), 'marketing-peak').find((f) => f.concept === 'Redondance, SPOF')!;
-    expect(spof.tone).toBe('warn');
+    expect(spof.tone).toBe('bad');
     const redundant = analyze(A.scaled(3), 'marketing-peak').find((f) => f.concept === 'Redondance, SPOF')!;
     expect(redundant.tone).toBe('good');
   });

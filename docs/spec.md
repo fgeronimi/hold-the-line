@@ -125,7 +125,7 @@ sert à rien fait partie du jeu, et le debrief signale le superflu.
 | Idempotence | Service métier | Message livré deux fois | Coût et complexité, les clés vivent dans le service (S5) | Oui |
 | Transactional outbox | Base | Événement perdu entre base et bus | Une écriture de plus par commande (S6) | Oui |
 | Circuit breaker | Serveur | Dépendance lente ou en panne qui bloque le serveur | Les appels coupés échouent : réponse dégradée (S15) | Oui |
-| Request coalescing | Cache | Ruée vers le cache | Coût et complexité ; ne sert qu'à l'expiration (S15) | Oui |
+| Request coalescing | Cache | Ruée vers le cache, redémarrage à froid | Coût et complexité ; ne sert que pendant que le cache se remplit, après une expiration ou un redémarrage (S15, M17) | Oui |
 | Backoff exponentiel et jitter | Clients (la source) | Tempête de relances | Coût et complexité ; ne sert qu'après une panne ; suppose d'écrire le client ; étale les relances sur 15 minutes (S19, X11) | Oui |
 | Délai d'attente | Serveur | Dépendance lente ou muette qui retient les fils | Le client attend tout le délai (1 s), puis l'appel échoue (M12, S24) | Oui |
 | Délestage | Load balancer | Tempête de relances, surcharge | Les refus restent des échecs, relancés ; la porte garde 25 % de marge (M11) | Oui |
@@ -141,13 +141,16 @@ bâti. Corriger son architecture ne coûte rien.
 
 Les incidents sont annoncés au briefing et déterministes (X5) : pas de tirage au sort. Aucun
 ne dure moins de cinq minutes (X11) : le p95 voit tout ce qui pèse plus de 5 % des réponses.
+Un incident ne coûte rien à une réponse attendue, sauf le prix que sa parade annonce (appels
+coupés par un disjoncteur, messages mis aux lettres mortes), et fait perdre la vague à qui ne
+le pare pas (X12) : pas de vague tenue de justesse malgré l'incident.
 
 | Incident | Parade | Où |
 | --- | --- | --- |
 | Hausse des lectures | Cache, réplica, CDN | Raccourcisseur, vague 2 |
 | Pic de trafic | Scaling horizontal, autoscaling, CDN | Raccourcisseur, vague 3 |
-| Le cache redémarre à froid | Une base qui tient le temps de le réchauffer | Raccourcisseur, vague 2 |
-| Une instance du serveur tombe | Redondance : plusieurs instances | Raccourcisseur, vague 3 |
+| Le cache redémarre à froid, dix minutes | Verrou de recalcul, ou une base qui tient seule (réplica, CDN) | Raccourcisseur, vague 2 |
+| Une instance du serveur tombe, dix minutes | Redondance : plusieurs instances | Raccourcisseur, vague 3 |
 | Client qui spamme | Rate limiting | Raccourcisseur, vague 4 |
 | Partenaires plus gourmands que le scraper, une clé qui boucle | Limites par classe sur une passerelle d'API | Raccourcisseur, vague 5 |
 | Traitement lent sur le chemin critique | File de messages | Raccourcisseur vague 6, marché vague 1 |
@@ -203,8 +206,8 @@ une vague à réponse unique le déclare dans ses données.
 | Vague | Information | Réponses gagnantes |
 | --- | --- | --- |
 | 1. Lancement | 100 req/s, 90 % de lectures | Serveur + base (tutoriel, réponse unique) |
-| 2. Les lectures explosent | 900 lectures/s ; le cache redémarre à froid | Cache, réplica, ou CDN (X9) |
-| 3. Campagne marketing | Pic à 5 fois le trafic, en rampe ; une instance tombe | CDN + cache, scaling + cache, scaling + autoscaling + cache (sur 3 instances fixes) |
+| 2. Les lectures explosent | 900 lectures/s ; le cache redémarre à froid dix minutes | Cache et verrou de recalcul, réplica, ou CDN (X9, X12) |
+| 3. Campagne marketing | Pic à 5 fois le trafic, en rampe ; une instance tombe dix minutes | CDN + cache sur deux instances, scaling + cache, scaling + autoscaling + cache (sur 3 instances fixes) ; un serveur unique perd la vague (X12) |
 | 4. Un client trop gourmand | Un scraper, et des partenaires légitimes qui appellent une API non cachable en bordure (X7) | Rate limiting au palier 40, avec scaling ou CDN (une instance de plus derrière lui) ; sur ce trafic qui ne retombe pas, l'autoscaling coûte trop (X10) |
 | 5. À chacun sa limite | 12 partenaires à 125 req/s par clé, une clé qui boucle à 2 000 req/s, un scraper sur 20 adresses à 60 req/s : aucune limite unique ne les sépare (C7) | Une passerelle d'API : 160 par clé, 10 par adresse ; derrière un CDN avec deux instances de plus, ou sans CDN avec quatre instances de plus et un réplica (le saut de latence coûte une instance) |
 | 6. Compter les clics | Chaque redirection émet un événement de clic ; le worker tombe dix minutes | File de messages et worker, avec la passerelle (réponse unique) ; la file garde les clics et se vide au rythme de la base ; le CDN y perd les clics servis en bordure |

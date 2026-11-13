@@ -220,7 +220,7 @@ describe('le bouton « Un indice »', () => {
     ({
       catalog,
       scenario: urlShortener,
-      game: { ...newGame(), waveIndex: 2, committed: A.withCache, history: [{ nodes: [], links: [] }, A.minimal, A.withCache], replays, hints: [] },
+      game: { ...newGame(), waveIndex: 2, committed: A.withLockedCache, history: [{ nodes: [], links: [] }, A.minimal, A.withLockedCache], replays, hints: [] },
       draft: A.withCache,
       attempts: [],
       tool: { kind: 'select' },
@@ -239,15 +239,15 @@ describe('le bouton « Un indice »', () => {
   it('actif après un essai perdu ; un indice donné s’affiche et fait clignoter son bouton', () => {
     expect(button(renderToolbar(view(1)))).not.toContain('disabled');
     const s = view(1);
-    const html = renderToolbar({ ...s, game: { ...s.game, hints: ['place|cdn|1'] } });
+    const html = renderToolbar({ ...s, game: { ...s.game, hints: ['place|load-balancer|1'] } });
     expect(button(html)).toContain('disabled');
     expect(html).toContain('Un indice de plus après le prochain essai perdu.');
-    expect(html).toContain('CDN (Avant-poste)');
-    // L'indice « poser un CDN » fait clignoter « Bâtir », puis la carte du CDN une fois la main ouverte.
+    expect(html).toContain('Load balancer (');
+    // L'indice « poser un load balancer » fait clignoter « Bâtir », puis sa carte une fois la main ouverte.
     expect(html).toMatch(/class="tool build hint" data-action="open-hand"/);
-    const open = { ...s, showHand: true, game: { ...s.game, hints: ['place|cdn|1'] } };
+    const open = { ...s, showHand: true, game: { ...s.game, hints: ['place|load-balancer|1'] } };
     expect(renderToolbar(open)).toMatch(/class="tool build active" data-action="open-hand"/);
-    expect(renderHand(open)).toMatch(/class="hcard hint" data-action="pick-card" data-type="cdn"/);
+    expect(renderHand(open)).toMatch(/class="hcard hint" data-action="pick-card" data-type="load-balancer"/);
     expect(renderHand(open).match(/class="hcard hint"/g)).toHaveLength(1);
   });
 

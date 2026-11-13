@@ -26,7 +26,7 @@ describe('le temps compressé (M7)', () => {
 
   it('un incident annoncé se dit en minutes, jamais en ticks', () => {
     const html = renderDialog(briefing(1));
-    expect(html).toContain('de la 31ᵉ à la 35ᵉ minute');
+    expect(html).toContain('de la 31ᵉ à la 40ᵉ minute');
     expect(html).not.toMatch(/ticks? \d/);
   });
 

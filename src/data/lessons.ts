@@ -218,13 +218,13 @@ export const incidentLessons: Record<IncidentEffect['type'], { hurt: Lesson; hel
     hurt: {
       says: '{title}. Le carnet perdu, tout le monde a couru aux archives en même temps : elles ont débordé quelques minutes et {failed} voyageurs sont repartis sans réponse.',
       tech: 'Un cache vidé renvoie d’un coup toutes les lectures sur la base, qui sature le temps qu’il se remplisse : c’est le cache stampede.',
-      remedy: 'Une base qui tient seule le pic de lectures (réplica en lecture), un cache préchauffé, ou de la marge sur la base.',
+      remedy: 'Un verrou de recalcul (request coalescing) : une seule requête va chercher chaque page, les autres attendent son résultat. Ou une base qui tient seule le pic de lectures (réplica en lecture), un cache préchauffé, de la marge sur la base.',
       concept: 'Cache stampede',
       signal: 'Taux de succès du cache et charge de la base juste après un redémarrage.',
     },
     held: {
-      says: '{title} : les archives ont tenu seules le temps que le carnet se remplisse.',
-      tech: 'La base a encaissé les lectures que le cache ne servait plus pendant qu’il se réchauffait.',
+      says: '{title} : les archives n’ont pas débordé le temps que le carnet se remplisse.',
+      tech: 'La base a encaissé les lectures que le cache ne servait plus pendant qu’il se réchauffait ; derrière un verrou de recalcul, elle n’en voit qu’une par page manquante.',
       remedy: 'Un cache est une optimisation : la base doit survivre à son absence, au moins un moment.',
       concept: 'Cache stampede',
       signal: 'Taux de succès du cache et charge de la base juste après un redémarrage.',

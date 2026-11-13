@@ -61,7 +61,7 @@ export function earned(result: WaveResult, arch: Architecture, wave: Wave, catal
     'circuit-breaker': () => ticks.some((t) => Object.values(t.nodes).some((n) => (n.open?.length ?? 0) > 0)),
     'deferred-payment': () =>
       arch.links.some((l) => behaviorOf(l.from) === 'queue' && typeOf(l.to) === 'payment-provider') && (wave.incidents ?? []).some((i) => i.component === 'payment-provider'),
-    coalescing: () => during('cache-stampede') && upgraded('coalescing'),
+    coalescing: () => (during('cache-stampede') || during('cold-cache')) && upgraded('coalescing'),
     backoff: () => upgraded('backoff') && ticks.some((t) => (t.retries ?? 0) > 0) && !storm,
     'load-shedding': () => result.failuresByReason['load-shed'] > 0,
     partition: () => held('partition'),

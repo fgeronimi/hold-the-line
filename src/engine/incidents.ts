@@ -19,6 +19,8 @@ export interface IncidentState {
   hitFactor(type: string): number;
   /** Recalculs de chaque absence en base pendant une ruée, verrou de recalcul non compris. */
   herd(type: string): number;
+  /** Le cache se remplit après un redémarrage à froid ou une ruée : le verrou de recalcul y sert (M17). */
+  refilling(type: string): boolean;
   /** Latence hors charge d'un composant, ralentie par un incident en cours. */
   latencyMs(type: string, baseMs: number): number;
   /** Les réplicas de ce composant sont coupés de leur primaire (S21). */
@@ -48,6 +50,7 @@ export function incidentState(active: readonly Incident[], tick: number): Incide
         1,
       ),
     herd: (type) => active.reduce((h, i) => (i.component === type && i.effect.type === 'cache-stampede' ? Math.max(h, i.effect.herd) : h), 1),
+    refilling: (type) => active.some((i) => i.component === type && (i.effect.type === 'cold-cache' || i.effect.type === 'cache-stampede')),
     latencyMs: (type, baseMs) =>
       active.reduce(
         (l, i) =>

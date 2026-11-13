@@ -120,10 +120,10 @@ describe('les actions', () => {
   });
 
   it('une vague gagnée débloque ses succès, une seule fois ; le debrief les montre', () => {
-    const won = run('play', atWave2({ draft: A.withCache }));
+    const won = run('play', atWave2({ draft: A.withLockedCache }));
     expect(won.patch!.achievements).toHaveProperty('cache');
     expect(won.patch!.attempts!.at(-1)!.unlocked).toContain('cache');
-    const again = run('play', atWave2({ draft: A.withCache, achievements: won.patch!.achievements! }));
+    const again = run('play', atWave2({ draft: A.withLockedCache, achievements: won.patch!.achievements! }));
     expect(again.patch!.attempts!.at(-1)!.unlocked).toEqual([]);
     const lost = run('play', atWave2({ draft: A.minimal }));
     expect(lost.patch!.achievements).toEqual({});

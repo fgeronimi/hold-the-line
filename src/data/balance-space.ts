@@ -53,7 +53,7 @@ function shortener(c: Choice): Architecture {
   // le routage envoie l'async à la file quand elle est là.
   links.push(link('app', 'db'));
   if (on(c, 'cache')) {
-    nodes.push({ id: 'cache', type: 'cache' });
+    nodes.push({ id: 'cache', type: 'cache', upgrades: { 'request-coalescing': c.coalescing ?? 0 } });
     links.push(link('app', 'cache'));
   }
   if (on(c, 'queue')) {
@@ -81,6 +81,7 @@ export const shortenerSpace: BalanceSpace = {
     { id: 'partnerQuota', levels: [0, 4, 5], label: 'quota par clé', requires: 'gateway' },
     { id: 'anonymousQuota', levels: upTo(3), label: 'limite par adresse', requires: 'gateway' },
     { id: 'cache', levels: [0, 1], label: 'cache' },
+    { id: 'coalescing', levels: [0, 1], label: 'verrou de recalcul', requires: 'cache' },
     { id: 'replicas', levels: upTo(levels('read-replica')), label: 'réplica' },
     { id: 'queue', levels: [0, 1], label: 'file' },
     { id: 'workers', levels: upTo(2), requires: 'queue' },

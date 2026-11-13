@@ -11,8 +11,8 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 
 - `npm test` : Vitest, tous les tests
 - `npm run typecheck` : `tsc --noEmit` (TypeScript 7)
-- `npm run balance` : simulation en masse des quatre scénarios, ~52 000 architectures
-  canoniques pour le raccourcisseur, ~6 min (Node exécute le TypeScript nativement, sans
+- `npm run balance` : simulation en masse des quatre scénarios, ~78 000 architectures
+  canoniques pour le raccourcisseur, ~8 min (Node exécute le TypeScript nativement, sans
   build) ; `npm run balance -- market` n'en joue qu'un, par son id ; sort en code 1 s'il y a
   un KO
 - `npm run balance:snapshot` : réécrit `docs/balance-snapshot.txt` (rapport sans durées,
@@ -198,8 +198,10 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   toute réplique du chambellan a sa ligne « En vrai ». Elle s'écrit avec `speech()` ou
   `bubble()` (`src/ui/views/common.ts`) : une bulle, la réplique, puis « En vrai · » sous un
   filet (I22). Le visage du chambellan est `narratorFace()`, une image de `public/`.
-- Les incidents (X5) sont calés pour ne faire perdre aucune réponse attendue : en ajouter
-  un, c'est relancer `npm run balance` et `url-shortener.test.ts`.
+- Un incident (X5) ne coûte rien à une réponse attendue, sauf le prix que sa parade annonce
+  (disjoncteur, lettres mortes), et fait perdre la vague à qui ne le pare pas (X12) : jamais de
+  vague tenue de justesse malgré lui. `tests/incidents.test.ts` le vérifie sur tous les
+  scénarios ; en ajouter un, c'est relancer ce test et `npm run balance`.
 - Pas de cascade par saturation : un aval saturé ne ralentit pas l'amont (M3). La seule
   cascade est celle des fils d'exécution (S14) : un serveur qui appelle en direct une
   dépendance lente sature pour tout le monde, sauf derrière un circuit breaker ou une file.

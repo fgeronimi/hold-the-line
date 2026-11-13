@@ -63,15 +63,16 @@ export const urlShortener: Scenario = {
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
       budget: 115,
       complexityCap: 7,
-      thriftyCost: 85,
+      thriftyCost: 90,
       answers: [
-        { cache: 1 },
+        { cache: 1, coalescing: 1 },
         { replicas: 1 },
         // Au prix d'un CDN réaliste (M9a), les redirections servies en bordure suffisent aussi.
         { cdn: 1 },
       ],
-      // Sans danger pour un réplica ; un cache tient, mais on voit la base encaisser la ruée.
-      incidents: [{ id: 'cache-restart', title: 'Le cache redémarre à froid', component: 'cache', from: 30, until: 35, effect: { type: 'cold-cache' } }],
+      // Sans danger pour un réplica ou un CDN. Dix minutes : un cache seul perd la vague (1,6 %
+      // d'échec), le verrou de recalcul l'encaisse sans perte (X12).
+      incidents: [{ id: 'cache-restart', title: 'Le cache redémarre à froid', component: 'cache', from: 30, until: 40, effect: { type: 'cold-cache' } }],
     },
     {
       id: 'marketing-peak',
@@ -91,17 +92,19 @@ export const urlShortener: Scenario = {
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
       budget: 170,
       complexityCap: 9,
-      thriftyCost: 125,
+      thriftyCost: 155,
       // Plus de CDN + réplica depuis M4 : les 20 % de lectures que la bordure laisse passer
       // attendent une base à 87 %, et ce sont plus de 5 % des requêtes. Plus d'autoscaling sur
       // une seule instance fixe : les minutes de la montée, où le serveur sature, pèsent trop.
+      // Plus de CDN + cache sur un seul serveur depuis X12 : la panne le laisse sans serveur.
+      // La réponse CDN en tête : à distance égale, l'aide garde le CDN de qui l'a posé.
       answers: [
-        { cdn: 1, cache: 1 },
+        { cdn: 1, cache: 1, lb: 1, scaling: 1 },
         { lb: 1, scaling: 3, cache: 1 },
         { lb: 1, scaling: 2, autoscaling: 3, cache: 1 },
       ],
-      // Après le pic : une cité à serveur unique perd quelques requêtes, pas la vague.
-      incidents: [{ id: 'server-crash', title: 'Une instance du serveur tombe', component: 'app-server', from: 45, until: 50, effect: { type: 'instance-down', count: 1 } }],
+      // Après le pic, dix minutes : une cité à serveur unique perd la vague (X12).
+      incidents: [{ id: 'server-crash', title: 'Une instance du serveur tombe', component: 'app-server', from: 45, until: 55, effect: { type: 'instance-down', count: 1 } }],
     },
     {
       id: 'noisy-client',

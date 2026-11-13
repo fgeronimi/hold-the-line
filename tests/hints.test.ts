@@ -89,8 +89,8 @@ describe('suivre les indices mène à la victoire', () => {
 describe('aide du raccourcisseur', () => {
   const cdnPath = [
     A.minimal,
-    A.withCache,
-    A.withCdn(),
+    A.withLockedCache,
+    A.withCdn({ extraInstances: 1 }),
     A.withCdn({ rateLimitTier: A.TIER_40 }),
     A.gated({ partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, cdn: true, extraInstances: 2 }),
   ];
@@ -103,21 +103,21 @@ describe('aide du raccourcisseur', () => {
   });
 
   it('un joueur qui a posé un CDN en vague 3 est guidé vers une réponse CDN', () => {
+    // Un seul serveur derrière le CDN ne passe pas la panne (X12) : l'aide garde le CDN et
+    // ajoute ce qui manque pour une seconde instance.
     const game = pathGame(2);
-    const draft = addNode(A.withCache, 'cdn');
-    const plan = planHints({ game, scenario: urlShortener, catalog, draft });
+    const plan = planHints({ game, scenario: urlShortener, catalog, draft: A.withCdn() });
     expect(plan.status).toBe('guide');
     expect(plan.hints.some((h) => h.kind === 'remove')).toBe(false);
-    expect(plan.hints.some((h) => h.type === 'load-balancer')).toBe(false);
-    expect(plan.hints[0]).toMatchObject({ kind: 'link' });
-    expect(plan.hints[0]!.key).toContain('cdn');
+    expect(plan.hints[0]).toMatchObject({ kind: 'place', type: 'load-balancer' });
+    expect(plan.hints.map((h) => h.key)).toContain('link|cdn|load-balancer');
   });
 
   it('un brouillon déjà gagnant ne reçoit aucun indice de pose', () => {
     const game = pathGame(2);
-    const plan = planHints({ game, scenario: urlShortener, catalog, draft: A.withCdn() });
+    const plan = planHints({ game, scenario: urlShortener, catalog, draft: A.withCdn({ extraInstances: 1 }) });
     expect(plan).toEqual({ status: 'ready', hints: [] });
-    const panel = hintPanel({ game, scenario: urlShortener, catalog, draft: A.withCdn() }, theme);
+    const panel = hintPanel({ game, scenario: urlShortener, catalog, draft: A.withCdn({ extraInstances: 1 }) }, theme);
     expect(panel.button.enabled).toBe(false);
     expect(panel.button.why).toContain('lancez la vague');
   });
@@ -144,7 +144,7 @@ describe('aide du raccourcisseur', () => {
 describe('le bouton « Un indice »', () => {
   // Vague 3 du raccourcisseur depuis le cache de la vague 2 : il manque plusieurs éléments.
   const ctx = (game: GameState, draft = A.withCache) => ({ game, scenario: urlShortener, catalog, draft });
-  const base = { ...newGame(), waveIndex: 2, committed: A.withCache, history: [EMPTY, A.minimal, A.withCache] };
+  const base = { ...newGame(), waveIndex: 2, committed: A.withLockedCache, history: [EMPTY, A.minimal, A.withLockedCache] };
 
   it('sans essai perdu, aucun indice', () => {
     const game = { ...base, replays: 0 };
@@ -169,9 +169,9 @@ describe('le bouton « Un indice »', () => {
   it('un indice satisfait par le brouillon est marqué fait', () => {
     const game = askHint(ctx({ ...base, replays: 1 }));
     const [key] = game.hints!;
-    expect(key).toBe('place|cdn|1');
+    expect(key).toBe('place|load-balancer|1');
     expect(hintPanel(ctx(game), theme).given[0]!.done).toBe(false);
-    const panel = hintPanel(ctx(game, addNode(A.withCache, 'cdn')), theme);
+    const panel = hintPanel(ctx(game, addNode(A.withCache, 'load-balancer')), theme);
     expect(panel.given[0]!.done).toBe(true);
     // Le droit est consommé : le suivant attend le prochain essai perdu.
     expect(panel.button.enabled).toBe(false);

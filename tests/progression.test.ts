@@ -15,11 +15,11 @@ const withUpgrades = (arch: Architecture, id: string, upgrades: Record<string, n
 
 describe('le superflu (étoile « rien de superflu »)', () => {
   it('une réponse attendue nue n’a rien de trop', () => {
-    expect(superfluous(A.withCache, readSurge, catalog)).toEqual([]);
+    expect(superfluous(A.withLockedCache, readSurge, catalog)).toEqual([]);
   });
 
   it('un cache et un réplica qui suffisent chacun seul sont tous deux signalés', () => {
-    const both = withUpgrades(A.withCache, 'db', { 'read-replica': 1 });
+    const both = withUpgrades(A.withLockedCache, 'db', { 'read-replica': 1 });
     expect(superfluous(both, readSurge, catalog)).toEqual([{ node: 'cache' }, { node: 'db', upgrade: 'read-replica', level: 0 }]);
   });
 
@@ -30,7 +30,7 @@ describe('le superflu (étoile « rien de superflu »)', () => {
   });
 
   it('un bâtiment entier en trop l’est avec ses évolutions', () => {
-    const extra = { ...A.withCache, nodes: [...A.withCache.nodes, { id: 'cdn', type: 'cdn' }], links: [...A.withCache.links] };
+    const extra = { ...A.withLockedCache, nodes: [...A.withLockedCache.nodes, { id: 'cdn', type: 'cdn' }], links: [...A.withLockedCache.links] };
     expect(superfluous(extra, readSurge, catalog).filter((s) => s.node === 'cdn')).toEqual([{ node: 'cdn' }]);
   });
 });
@@ -60,7 +60,7 @@ describe('playWave', () => {
     expect(lost.state.committed).toBe(A.minimal);
 
     // Perdre ne coûte rien (E9) : la vague gagnée ensuite a toutes ses étoiles.
-    const won = playWave(lost.state, urlShortener, A.withCache, catalog);
+    const won = playWave(lost.state, urlShortener, A.withLockedCache, catalog);
     expect(won.state.waveIndex).toBe(2);
     expect(won.state.replays).toBe(0);
     expect(won.stars).toEqual({ held: true, lean: true, thrifty: true });
@@ -70,7 +70,7 @@ describe('playWave', () => {
   it('une vague tenue avec du superflu manque l’étoile « rien de superflu »', () => {
     let state = newGame();
     ({ state } = playWave(state, urlShortener, A.minimal, catalog));
-    ({ state } = playWave(state, urlShortener, A.withCache, catalog));
+    ({ state } = playWave(state, urlShortener, A.withLockedCache, catalog));
     const { stars } = playWave(state, urlShortener, A.autoscaled(2, 3), catalog);
     expect(stars).toMatchObject({ held: true, lean: false });
   });
@@ -78,7 +78,7 @@ describe('playWave', () => {
   it('joue le scénario de bout en bout avec les réponses attendues', () => {
     const answers = [
       A.minimal,
-      A.withCache,
+      A.withLockedCache,
       A.scaled(3),
       A.scaled(4, { rateLimitTier: A.TIER_40 }),
       A.gated({ partnerTier: A.PARTNER_160, anonymousTier: A.ANONYMOUS_10, extraInstances: 4, replicas: 1 }),
@@ -97,7 +97,7 @@ describe('rejouer une vague tenue (E10)', () => {
   const played = () => {
     let state = newGame();
     ({ state } = playWave(state, urlShortener, A.minimal, catalog));
-    ({ state } = playWave(state, urlShortener, A.withCache, catalog));
+    ({ state } = playWave(state, urlShortener, A.withLockedCache, catalog));
     // Vague 3 tenue avec un cran d'autoscaling en trop : l'étoile « rien de superflu » manque.
     ({ state } = playWave(state, urlShortener, A.autoscaled(2, 3), catalog));
     return state;
@@ -107,7 +107,7 @@ describe('rejouer une vague tenue (E10)', () => {
     const real = played();
     const practice = practiceGame(real, 2);
     expect(practice.waveIndex).toBe(2);
-    expect(practice.committed).toBe(A.withCache);
+    expect(practice.committed).toBe(A.withLockedCache);
     expect(practice.replays).toBe(0);
     expect(real.waveIndex).toBe(3);
     expect(() => practiceGame(real, 3)).toThrow();
@@ -115,10 +115,10 @@ describe('rejouer une vague tenue (E10)', () => {
 
   it('un rejeu gagné n’apporte que ses étoiles, gardées objectif par objectif', () => {
     const real = played();
-    expect(real.stars[2]).toEqual({ held: true, lean: false, thrifty: false });
+    expect(real.stars[2]).toEqual({ held: true, lean: false, thrifty: true });
     const { stars } = playWave(practiceGame(real, 2), urlShortener, A.scaled(3), catalog);
     const after = withReplayedStars(real, 2, stars);
-    expect(after.stars[2]).toEqual({ held: true, lean: true, thrifty: false });
+    expect(after.stars[2]).toEqual({ held: true, lean: true, thrifty: true });
     expect(after.waveIndex).toBe(real.waveIndex);
     expect(after.committed).toBe(real.committed);
     expect(after.history).toBe(real.history);
