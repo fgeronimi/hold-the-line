@@ -40,7 +40,8 @@ export interface Theme {
   buildings: Record<string, BuildingStyle>;
   vehicles: Record<RequestKind, VehicleStyle>;
   /** Le personnage qui annonce les vagues et analyse les défaites : le recruteur, dans la métaphore. */
-  narrator: { name: string; icon: string };
+  /** Le narrateur : son nom, et son portrait (un personnage du kit, rendu par `npm run captures -- narrateur`). */
+  narrator: { name: string; portrait: string };
   /** Le récit de chaque vague dans la métaphore (clé : id de la vague) ; les chiffres restent affichés à côté. */
   narratives: Record<string, string>;
   /** La règle du temps (décision M7), annoncée au premier briefing de chaque scénario : sa réplique, puis « En vrai ». */

@@ -90,7 +90,7 @@ export const fortifiedCity: Theme = {
       },
       metaphor: 'Crieur public', icon: '📣', shape: 'belfry', color: '#c7bfae', accent: '#3d5a80' },
   },
-  narrator: { name: 'Le chambellan', icon: '🎩' },
+  narrator: { name: 'Le chambellan', portrait: 'narrator.webp' },
   // Les pictogrammes du sprite (`src/ui/sprite.ts`, I18), par évolution du catalogue.
   upgradeIcons: {
     'horizontal-scaling': 'scale',

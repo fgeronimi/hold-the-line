@@ -152,6 +152,24 @@ async function element(page, selector, name, width) {
 // ——— Les plans ———
 
 const SHOTS = {
+  /**
+   * Le portrait du chambellan (I22) : le mage du kit, en buste, sur fond transparent. Il va dans
+   * `public/`, pas dans `docs/media/` : c'est une image du jeu, que le thème nomme.
+   */
+  async narrateur(page) {
+    await page.goto(`${BASE}/design.html`);
+    const data = await page.evaluate(async () => {
+      const { portraitOf } = await import('/src/render/avatar.ts');
+      return portraitOf('/models/kaykit-chars/Mage.glb', { size: 256, crop: 0.66, clip: 'Walking_B', time: 0.15, turn: 18 });
+    });
+    const dir = mkdtempSync(join(tmpdir(), 'hl-narrateur-'));
+    const png = join(dir, 'face.png');
+    writeFileSync(png, Buffer.from(data.split(',')[1], 'base64'));
+    execFileSync('cwebp', ['-quiet', '-q', '90', '-alpha_q', '100', '-resize', '160', '0', png, '-o', join(ROOT, 'public/narrator.webp')]);
+    rmSync(dir, { recursive: true, force: true });
+    console.log('  public/narrator.webp');
+  },
+
   /** La bannière du README : la cité de la vague 5 en fond, la plaque du titre posée dessus. */
   async banniere(page) {
     await seed(page, 'url-shortener', 4);

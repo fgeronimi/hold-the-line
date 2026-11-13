@@ -195,7 +195,9 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   partir des ticks (`from`/`until` des incidents, `src/ui/time.ts`) ; les débits restent par
   seconde, et les compteurs cumulés (arriéré d'une file) sont à l'échelle du jeu.
 - Double narration (décision I6) : nom technique d'abord, métaphore entre parenthèses ;
-  toute réplique du chambellan a sa ligne « En vrai ».
+  toute réplique du chambellan a sa ligne « En vrai ». Elle s'écrit avec `speech()` ou
+  `bubble()` (`src/ui/views/common.ts`) : une bulle, la réplique, puis « En vrai · » sous un
+  filet (I22). Le visage du chambellan est `narratorFace()`, une image de `public/`.
 - Les incidents (X5) sont calés pour ne faire perdre aucune réponse attendue : en ajouter
   un, c'est relancer `npm run balance` et `url-shortener.test.ts`.
 - Pas de cascade par saturation : un aval saturé ne ralentit pas l'amont (M3). La seule

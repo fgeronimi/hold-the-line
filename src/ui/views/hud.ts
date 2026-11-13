@@ -2,7 +2,7 @@ import type { Wave } from '../../engine/types.ts';
 import { starCount } from '../../engine/score.ts';
 import { draftInfo } from '../draft.ts';
 import { icon, type IconName } from '../icons.ts';
-import { decimal as fmt, esc, realGame, totalStars, type ViewState } from './common.ts';
+import { decimal as fmt, esc, narratorFace, realGame, totalStars, type ViewState } from './common.ts';
 
 const KINDS: { k: 'read' | 'write' | 'async'; icon: IconName; short: string; tip: string }[] = [
   { k: 'read', icon: 'read', short: 'lectures/s', tip: 'Lectures par seconde au plus fort de la vague' },
@@ -78,7 +78,7 @@ export function renderHud(s: ViewState): string {
   const subtitle = wave ? esc(wave.title) : esc(s.scenario.subtitle);
   // Pendant la vague, les étoiles d'avant : le résultat se découvre au debrief.
   const stars = s.phase !== 'wave' || !playing ? totalStars(s) : s.practice ? (s.practice.before ?? totalStars(s)) : starsBefore(s, playing.waveIndex);
-  const briefing = wave ? `<button class="round" data-action="show-briefing" data-tip="Revoir le briefing" aria-label="Revoir le briefing">${icon('hat')}</button>` : '';
+  const briefing = wave ? `<button class="round" data-action="show-briefing" data-tip="Revoir le briefing" aria-label="Revoir le briefing">${narratorFace()}</button>` : '';
   return `
     <div class="hud-bar">
       <div class="wave-badge" data-tip="${esc(s.scenario.subtitle)}">

@@ -216,7 +216,7 @@
 
 
       /* ——— Variantes, dans la matière retenue ——— */
-      /* ——— Le chambellan et « En vrai » : les propositions ——— */
+      /* ——— Le chambellan et « En vrai » (retenu, I22) ——— */
       .narr { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; }
       .narr-card { background: var(--plank); border: 2px solid var(--edge); border-radius: 14px; padding: 12px 14px 14px; box-shadow: var(--raise); display: grid; gap: 8px; align-content: start; }
       .narr-card > b { font: 16px var(--display); color: var(--text); }
@@ -235,25 +235,11 @@
       .say .line { margin: 0; padding: 8px 12px; background: #fffaf0; border: 1px solid #d9bb7c; border-radius: 12px; font-size: 14px; line-height: 1.4; color: #3b2a1a; }
       .say .line b { font-weight: 700; }
       .say .real { margin: 0; font-size: 12.5px; line-height: 1.4; color: #4a3d2c; }
-      /* A : l'actuel, avec l'ombre qui reste sous la ligne */
-      .ev-a .line { box-shadow: inset 0 -2px 0 #ecd9ad; }
-      .ev-a .real { font-style: italic; border-left: 3px solid #b9a77f; padding: 0 8px; box-shadow: inset 0 -2px 0 #ecd9ad; }
-      .ev-a .real::before { content: '⚙ En vrai : '; font-style: normal; font-weight: 700; }
-      /* B : note de marge, étiquette en petites capitales laiton */
-      .ev-b .real { padding: 0 2px 0 14px; }
-      .ev-b .real::before { content: 'En vrai'; display: block; font: 10px/1.6 system-ui; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #a5772a; }
-      /* C : fiche technique, une seconde carte sous la bulle */
-      .ev-c .real { background: #f3e6c4; border: 1px dashed #b9965a; border-radius: 10px; padding: 7px 10px 8px; }
-      .ev-c .real::before { content: 'En vrai'; display: inline-block; margin-right: 6px; padding: 0 7px; border-radius: 999px; background: linear-gradient(#f6dd92, #d3a63b); border: 1px solid #a57f25; font: 11px/1.6 var(--display); color: #3b2a1a; }
       /* D : une seule bulle, le vrai sous un filet */
       .ev-d .bubble { background: #fffaf0; border: 1px solid #d9bb7c; border-radius: 12px; gap: 0; overflow: hidden; }
       .ev-d .line { border: 0; border-radius: 0; background: none; }
       .ev-d .real { padding: 7px 12px 8px; border-top: 1px dashed #d1b37a; background: #f6ecd2; }
       .ev-d .real::before { content: 'En vrai · '; font-weight: 800; color: #a5772a; }
-      /* E : un sceau de laiton en marge */
-      .ev-e .real { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; }
-      .ev-e .real::before { content: 'EN\A VRAI'; white-space: pre; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; text-align: center;
-        font: 8.5px/1 system-ui; font-weight: 900; letter-spacing: .04em; color: #5a3a12; background: radial-gradient(circle at 40% 35%, #ffe9a8, #c9982f); border: 1.5px solid #8a6220; box-shadow: 0 1px 2px rgba(40,25,10,.3); transform: rotate(-8deg); }
       .chosen { background: var(--hexes), var(--board); border-radius: 14px; padding: 18px 16px 22px; display: grid; gap: 18px; }
       .chosen h3 { margin: 0; font: 18px var(--display); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
       .variants { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
@@ -658,11 +644,11 @@
       </section>
 
       <section>
-        <h2>Le chambellan et « En vrai » — propositions</h2>
+        <h2>Retenu : le chambellan et « En vrai »</h2>
         <p class="lead">
-          Un vrai personnage du kit à la place du chapeau, rendu une fois en portrait sur fond transparent
-          (<code>src/render/avatar.ts</code>). Puis cinq façons de poser la ligne « En vrai » sous sa réplique,
-          la première étant l'actuelle.
+          Le mage du kit, en buste (<code>public/narrator.webp</code>, rendu par <code>npm run captures -- narrateur</code>
+          avec <code>src/render/avatar.ts</code>). Sa réplique et la même chose « en vrai » dans une seule bulle, sous un filet
+          pointillé (I22).
         </p>
         <div class="narr" id="narrator"></div>
       </section>
@@ -830,23 +816,14 @@
       // ——— Le chambellan : portraits 3D et « En vrai » ———
       const SAYS = '« Les lectures explosent, Sire : dix fois plus de voyageurs demandent leur chemin. Comment soulager les archives sans vider le trésor ? »';
       const REAL = 'Les liens circulent : 900 lectures par seconde, toujours 10 écritures. Une base seule encaisse 600 requêtes par seconde.';
-      const CANDIDATES = [
-        ['mage', 'Le mage', 'robe, chapeau pointu : le conseiller savant', '/models/kaykit-chars/Mage.glb', 'Walking_B'],
-        ['barbarian', 'Le barbare', 'le garde de la porte, chope en main', '/models/kaykit-chars/Barbarian.glb', 'Walking_A'],
-        ['rogue', 'Le rôdeur', 'la cape, le messager', '/models/kaykit-chars/Rogue.glb', 'Running_A'],
-      ];
+      const CANDIDATES = [['mage', 'Le mage', '', '/models/kaykit-chars/Mage.glb', 'Walking_B']];
       const say = (cls, avatar, label, hint) => `<div class="narr-card"><b>${label}</b><small>${hint}</small>
         <div class="say ${cls}">${avatar}<div class="bubble"><p class="line"><b>Le chambellan :</b> ${SAYS}</p><p class="real">${REAL}</p></div></div></div>`;
       const avatar = (key, cls = '') => `<span class="avatar ${cls}" data-portrait="${key}"></span>`;
       document.getElementById('narrator').innerHTML = [
-        `<div class="narr-card" style="grid-column: 1 / -1"><b>Le personnage</b><small>Rendu sur la pose de marche des fichiers allégés. Le chevalier et le rôdeur encapuchonné du même pack ne sont pas encore dans le dépôt.</small>
-          <div class="who">${CANDIDATES.map(([k, label, hint]) => `<figure>${avatar(k, 'lg')}<b style="font:14px var(--display);color:var(--text)">${label}</b><span>${hint}</span><span style="display:flex;gap:6px">${avatar(k)}${avatar(k, 'sm')}</span></figure>`).join('')}
-          <figure><span class="avatar lg empty">Chevalier<br>(à télécharger)</span><b style="font:14px var(--display);color:var(--text)">Le chevalier</b><span>l'officier de la cour, armure et cape</span></figure></div></div>`,
-        say('ev-a', avatar('mage', 'sm'), 'A · L’actuel', 'italique, filet gauche, et l’ombre du bas de bulle qui reste sous la ligne'),
-        say('ev-b', avatar('mage', 'sm'), 'B · Note de marge', 'une petite étiquette « EN VRAI » en laiton, le texte droit, sans cadre ni ombre'),
-        say('ev-c', avatar('mage', 'sm'), 'C · Fiche technique', 'une seconde carte sous la bulle, pointillés et pastille de laiton'),
-        say('ev-d', avatar('mage', 'sm'), 'D · Une seule bulle', 'la métaphore en haut, le vrai en dessous d’un filet pointillé, dans la même bulle'),
-        say('ev-e', avatar('mage', 'sm'), 'E · Le sceau', 'un sceau de laiton « En vrai » en marge, le texte à côté'),
+        `<div class="narr-card"><b>Le personnage</b><small>Dans les bulles, sur le bouton « Revoir le briefing » et l'onglet « Analyse ».</small>
+          <div class="who"><figure>${avatar('mage', 'lg')}</figure><figure>${avatar('mage')}</figure><figure>${avatar('mage', 'sm')}</figure></div></div>`,
+        say('ev-d', avatar('mage', 'sm'), 'La bulle', 'la métaphore en haut, le vrai en dessous d’un filet pointillé, dans la même bulle'),
       ].join('');
       import('/src/render/avatar.ts').then(async ({ portraitOf }) => {
         for (const [key, , , url, clip] of CANDIDATES) {

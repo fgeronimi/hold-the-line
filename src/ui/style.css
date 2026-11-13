@@ -146,14 +146,26 @@ select, input { font: inherit; color: var(--ink); background: #fffaf0; border: 2
 
 /* Le narrateur : son médaillon et sa bulle. */
 .speech { display: flex; gap: 10px; align-items: flex-start; margin: 6px 0; }
-.speech .speaker { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 50% 35%, #fffaf0, #e6d2a2);
-  border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(30, 20, 8, .2); }
-.speech .speaker .ico { width: 28px; height: 28px; }
-.speech p { margin: 0; padding: 8px 12px; background: #fffaf0; border: 1px solid #d9bb7c; border-radius: 12px; font-size: 15px; box-shadow: inset 0 -2px 0 #ecd9ad; }
+.speech .speaker { flex: none; width: 48px; height: 48px; border-radius: 50%; overflow: hidden; display: grid; place-items: end center;
+  background: radial-gradient(circle at 50% 40%, #fffaf0, #e6cf98); border: 2.5px solid #c9982f; box-shadow: 0 0 0 1px #6b4a1a, 0 2px 4px rgba(30, 20, 8, .3); }
+.face { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* Le visage du chambellan dans un bouton (revoir le briefing, l'onglet Analyse). */
+button .face { display: inline-block; width: 22px; height: 22px; border-radius: 50%; object-fit: cover; vertical-align: -5px; }
+button.round .face { width: 100%; height: 100%; }
+
+/*
+ * La bulle (I22) : ce qui est dit en haut, la même chose en vrai en dessous d'un filet
+ * pointillé, dans la même bulle. Pas d'ombre intérieure : elle traînait sous la ligne.
+ */
+.bubble { flex: 1; min-width: 0; background: #fffaf0; border: 1px solid #d9bb7c; border-radius: 12px; overflow: hidden; }
+.bubble .line { margin: 0; padding: 8px 12px; font-size: 15px; }
+.bubble .real { margin: 0; padding: 6px 12px 7px; border-top: 1px dashed #d1b37a; background: #f6ecd2; font-size: 13px; font-style: normal; color: #4a3d2c; opacity: 1; }
+.bubble .real::before { content: 'En vrai · '; font-weight: 800; color: #a5772a; }
 .findings { display: grid; gap: 6px; margin: 8px 0; }
 .finding { padding: 6px 10px; border-left: 4px solid #ccc; background: rgba(255, 255, 255, 0.5); border-radius: 4px; }
 .finding p { margin: 3px 0; }
-.finding .says { font-style: italic; }
+/* Les constats suivants, une bulle sans visage, un peu plus petite. */
+.finding > .bubble .line { font-size: 14px; font-style: italic; }
 .finding.bad { border-color: var(--ko); }
 .finding.good { border-color: var(--ok); }
 .finding.warn { border-color: #e9a23b; }
@@ -227,12 +239,12 @@ body[data-phase='debrief'] .replay-bar, body[data-phase='debrief'] .replay-chart
 }
 
 /* Double narration : sous la bulle du chambellan, la même chose en vrai. */
-.speech > div { display: flex; flex-direction: column; gap: 4px; }
-.real { margin: 0; padding: 0 4px; font-style: italic; color: #4a3d2c; font-size: 13px; }
-.real::before { content: '⚙ En vrai : '; font-style: normal; font-weight: bold; }
-/* Une ligne qui porte sa propre étiquette (« En vrai », le nom d'une évolution) ne garde que le rouage. */
-.real.named::before { content: '⚙ '; }
-.finding .real { margin: 3px 0; }
+.real { margin: 0; padding: 0 4px; color: #4a3d2c; font-size: 13px; }
+.real::before { content: 'En vrai · '; font-weight: 800; color: #a5772a; }
+/* Une ligne qui porte sa propre étiquette (« En vrai », le nom d'une évolution) n'en ajoute pas. */
+.real.named::before { content: none; }
+.real.named b { color: #a5772a; }
+.finding > .bubble { margin: 3px 0; }
 .incident { margin: 4px 0; padding: 4px 8px; border-left: 4px solid #e9a23b; background: rgba(233, 162, 59, 0.15); border-radius: 4px; }
 
 /* Étoiles. */
@@ -248,16 +260,14 @@ body[data-phase='debrief'] .replay-bar, body[data-phase='debrief'] .replay-chart
 /* Aide : les indices donnés sous la bulle, puis le bouton qui en demande un de plus. */
 .hints { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #cbb98f; }
 .hints ol { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 32vh; overflow-y: auto; }
-.hints li p { margin: 0; font-size: 13px; }
-.hints li .says { padding: 2px 6px; }
-.hints li .says small { color: var(--ok); font-weight: bold; }
+.hints li .bubble .line { font-size: 13px; padding: 5px 10px; }
+.hints li .bubble .real { font-size: 12px; padding: 4px 10px 5px; }
+.hints li .line small { color: var(--ok); font-weight: bold; }
 .hints li.done { opacity: .6; }
 .hint-ask { display: flex; align-items: center; gap: 8px; margin: 0; flex-wrap: wrap; }
 .pip.hint .icon { opacity: 1; }
-.speech p.real { background: none; border: none; border-left: 3px solid #b9a77f; border-radius: 0; padding: 0 8px; font-size: 13px; }
-.card .speech .speaker { width: 30px; height: 30px; }
-.card .speech .speaker .ico { width: 21px; height: 21px; }
-.card .speech p { font-size: 13px; }
+.card .speech .speaker { width: 34px; height: 34px; border-width: 2px; }
+.card .speech .bubble .line { font-size: 13px; }
 
 /* Courbes tick par tick : une figure, un axe des ticks partagé. */
 .chart { position: relative; overflow-x: auto; }

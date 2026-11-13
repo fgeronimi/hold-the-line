@@ -6,6 +6,8 @@ import { draftInfo } from '../draft.ts';
 import { minuteSpan } from '../time.ts';
 import {
   activeClass,
+  bubble,
+  narratorFace,
   decimal as fmt,
   esc,
   findingsOf,
@@ -68,7 +70,7 @@ function debriefTitle(a: Attempt): string {
 
 function debriefTabs(s: ViewState): string {
   return `<p class="tabs">
-      <button data-action="debrief-tab" data-tab="analysis" ${activeClass(s.debriefTab === 'analysis')}>${icon('hat')} Analyse</button>
+      <button data-action="debrief-tab" data-tab="analysis" ${activeClass(s.debriefTab === 'analysis')}>${narratorFace()} Analyse</button>
       <button data-action="debrief-tab" data-tab="charts" ${activeClass(s.debriefTab === 'charts')}>${icon('chart')} Courbes</button>
     </p>`;
 }
@@ -106,7 +108,7 @@ const TONE_ICONS: Record<Finding['tone'], string> = { good: icon('check'), warn:
 /** Le premier constat parle dans la bulle du narrateur, les suivants en dessous. */
 function findingLine(f: Finding, first: boolean): string {
   if (first) return speech(f.says, f.tech);
-  return `<p class="says">${TONE_ICONS[f.tone]} « ${esc(f.says)} »</p>${f.tech ? `<p class="real">${esc(f.tech)}</p>` : ''}`;
+  return bubble(`${TONE_ICONS[f.tone]} « ${esc(f.says)} »`, f.tech);
 }
 
 /** L'analyse du narrateur : ce qu'il dit, l'explication technique, la parade, la notion à réviser. */

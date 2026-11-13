@@ -158,14 +158,20 @@ export function findingsOf(a: Attempt, wave: Wave, s: ViewState): Finding[] {
   return analysis.findings;
 }
 
+/** Le visage du narrateur : son portrait, chemin relatif au site (`base: './'`). */
+export const narratorFace = () => `<img class="face" src="${esc(theme.narrator.portrait)}" alt="" draggable="false">`;
+
+/** Une bulle : ce qui est dit, puis, sous un filet, la même chose en vrai (décision I6, présentation I22). */
+export const bubble = (said: string, real?: string) =>
+  `<div class="bubble"><p class="line">${said}</p>${real ? `<p class="real">${esc(real)}</p>` : ''}</div>`;
+
 /**
- * Double narration : le chambellan parle dans la métaphore, la ligne en italique dit la
- * même chose en vrai, avec les termes techniques. La métaphore seule ne s'apprend pas.
+ * Double narration : le chambellan parle dans la métaphore ; sous un filet, dans la même
+ * bulle, la même chose en vrai, avec les termes techniques. La métaphore seule ne s'apprend pas.
  */
 export function speech(text: string, real?: string): string {
-  return `<div class="speech"><span class="speaker">${icon('hat')}</span>
-    <div><p><b>${esc(theme.narrator.name)} :</b> « ${esc(text)} »</p>
-    ${real ? `<p class="real">${esc(real)}</p>` : ''}</div></div>`;
+  return `<div class="speech"><span class="speaker">${narratorFace()}</span>
+    ${bubble(`<b>${esc(theme.narrator.name)} :</b> « ${esc(text)} »`, real)}</div>`;
 }
 
 /**
@@ -184,7 +190,5 @@ export function renderHints(panel: HintPanel): string {
 }
 
 function givenHint({ text, done }: HintPanel['given'][number]): string {
-  return `<li class="${done ? 'done' : 'todo'}">
-        <p class="says">${icon(done ? 'check' : 'bulb')} « ${esc(text.says)} »${done ? ' <small>fait</small>' : ''}</p>
-        <p class="real">${esc(text.real)}</p></li>`;
+  return `<li class="${done ? 'done' : 'todo'}">${bubble(`${icon(done ? 'check' : 'bulb')} « ${esc(text.says)} »${done ? ' <small>fait</small>' : ''}`, text.real)}</li>`;
 }
