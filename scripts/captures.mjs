@@ -95,7 +95,7 @@ async function seed(page, id, k, draft = 'answer') {
       const history = [g.history[0]];
       for (let i = 1; i <= k; i++) history.push(answersOf(id, i - 1)[0]);
       const game = { ...g, waveIndex: k, committed: history[k], history, stars: Array(k).fill({ held: true, lean: true, thrifty: true }) };
-      localStorage.setItem(key, JSON.stringify({ current: id, saves: { [id]: { game, draft: draft === 'answer' ? answersOf(id, k)[0] : history[k] } } }));
+      localStorage.setItem(key, JSON.stringify({ current: id, welcomed: true, saves: { [id]: { game, draft: draft === 'answer' ? answersOf(id, k)[0] : history[k] } } }));
     },
     { id, k, draft, key: KEY },
   );
@@ -223,10 +223,42 @@ const SHOTS = {
     await element(page, '#readme-overlay', 'jouer', 440);
   },
 
+  /** L'accueil du premier lancement (P4) : le chambellan en pied, les quatre temps d'une vague. */
+  async accueil(page) {
+    await page.goto(`${BASE}/`);
+    await page.evaluate((key) => localStorage.removeItem(key), KEY);
+    await page.reload();
+    await page.waitForTimeout(2500);
+    await element(page, '.dialog', 'accueil', 900);
+  },
+
+  /** Le bilan du raccourcisseur, joué jusqu'au bout avec des réponses attendues (P4). */
+  async bilan(page) {
+    await page.setViewportSize({ width: 1280, height: 1100 });
+    await page.goto(`${BASE}/`);
+    await page.evaluate(async (key) => {
+      const { answersOf } = await import('/src/data/balance-space.ts');
+      const { catalog } = await import('/src/data/catalog.ts');
+      const { urlShortener } = await import('/src/data/scenarios/url-shortener.ts');
+      const { newGame, playWave } = await import('/src/engine/game.ts');
+      let game = newGame();
+      // La vague 3 en autoscaling, pour que « À revoir » ait quelque chose à dire.
+      const picks = urlShortener.waves.map((_, i) => answersOf('url-shortener', i)[i === 2 ? 2 : 0]);
+      for (const arch of picks) ({ state: game } = playWave(game, urlShortener, arch, catalog));
+      localStorage.setItem(key, JSON.stringify({ current: 'url-shortener', welcomed: true, saves: { 'url-shortener': { game, draft: picks.at(-1) } } }));
+    }, KEY);
+    await page.reload();
+    await page.click('[data-action="pick-scenario"][data-scenario="url-shortener"]');
+    await page.addStyleTag({ content: '.layer.center > .review-dialog { max-height: none; }' });
+    await page.waitForTimeout(2500);
+    await element(page, '.review-dialog', 'bilan', 900);
+    await page.setViewportSize({ width: 1280, height: 720 });
+  },
+
   /** L'écran de choix : les quatre scénarios. */
   async choix(page) {
     await page.goto(`${BASE}/`);
-    await page.evaluate((key) => localStorage.removeItem(key), KEY);
+    await page.evaluate((key) => localStorage.setItem(key, JSON.stringify({ saves: {}, welcomed: true })), KEY);
     await page.reload();
     await page.waitForTimeout(2500);
     await element(page, '.dialog', 'choix', 900);
@@ -239,7 +271,7 @@ const SHOTS = {
     await page.evaluate((key) => {
       const at = { scenario: 'url-shortener', wave: 2 };
       const ids = ['client-server', 'horizontal-scaling', 'redundancy', 'cache', 'cdn', 'read-replica', 'rate-limiting', 'pubsub', 'idempotence', 'circuit-breaker'];
-      localStorage.setItem(key, JSON.stringify({ saves: {}, achievements: Object.fromEntries(ids.map((id) => [id, at])) }));
+      localStorage.setItem(key, JSON.stringify({ saves: {}, welcomed: true, achievements: Object.fromEntries(ids.map((id) => [id, at])) }));
     }, KEY);
     await page.reload();
     await page.waitForTimeout(1500);
@@ -254,7 +286,7 @@ const SHOTS = {
   /** La vague 1 guidée : reflet, main distribuée, carte soulevée, pose, chemin tracé. */
   async construction(page) {
     await page.goto(`${BASE}/`);
-    await page.evaluate((key) => localStorage.removeItem(key), KEY);
+    await page.evaluate((key) => localStorage.setItem(key, JSON.stringify({ saves: {}, welcomed: true })), KEY);
     await page.reload();
     await page.click('[data-action="pick-scenario"][data-scenario="url-shortener"]');
     await page.click('[data-action="start-build"]');

@@ -84,6 +84,10 @@ suivie de la même chose **« en vrai »**.
 
 ## Comment on joue
 
+<div align="center">
+<img src="docs/media/accueil.webp" width="720" alt="L'accueil : le chambellan en pied, ce qu'est le jeu, et les quatre temps d'une vague">
+</div>
+
 | | |
 |---|---|
 | **1. Le briefing** | Le chambellan annonce la vague : trafic, budget, plafond de complexité, SLA, et l'incident prévu (un cache qui redémarre à froid, une instance qui tombe). |
@@ -100,6 +104,13 @@ circuit breaker. Ils valent pour toutes les parties.
 
 <div align="center">
 <img src="docs/media/succes.webp" width="100%" alt="La fenêtre des succès : les concepts acquis en couleur, ceux à découvrir grisés">
+</div>
+
+**Un bilan à la fin de chaque scénario** : vague par vague, les notions que la vague a
+ajoutées, les autres parades qui tenaient aussi, et les vagues à rejouer pour leurs étoiles.
+
+<div align="center">
+<img src="docs/media/bilan.webp" width="720" alt="Le bilan du raccourcisseur : étoiles, notions ajoutées et autres parades, vague par vague">
 </div>
 
 ## En images
