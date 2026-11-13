@@ -37,7 +37,9 @@ export type Effect =
   /** Jouer une tentative sur le plateau, puis ouvrir son debrief. */
   | { kind: 'play'; attempt: number }
   /** Montrer l'export du calibrage. */
-  | { kind: 'export'; text: string };
+  | { kind: 'export'; text: string }
+  /** L'accueil a été vu : le magasin s'en souvient, il ne s'ouvrira plus tout seul. */
+  | { kind: 'welcomed' };
 
 export interface Outcome {
   patch?: Partial<ViewState>;
@@ -104,7 +106,7 @@ export const actions: Record<string, Action> = {
   'debrief-tab': (_, { data }) => patch({ debriefTab: data.tab as ViewState['debriefTab'] }),
   'show-briefing': () => patch({ phase: 'briefing', showMenu: false }, { kind: 'leave-wave' }),
   'start-build': () => patch({ phase: 'build' }),
-  'choose-scenario': () => patch({ phase: 'choose', showMenu: false }, { kind: 'leave-wave' }),
+  'choose-scenario': () => patch({ phase: 'choose', showMenu: false, showReview: false }, { kind: 'leave-wave' }),
   'pick-scenario': (_, { data }, { store }) => {
     const { calibrated, ...picked } = gameOf(store, data.scenario!);
     const effects: Effect[] = [{ kind: 'forget-history' }];
@@ -119,6 +121,8 @@ export const actions: Record<string, Action> = {
         selectedNode: undefined,
         tool: select,
         phase: picked.game.finished ? 'build' : 'briefing',
+        // Un scénario terminé s'ouvre sur son bilan, d'où chaque vague se rejoue.
+        showReview: picked.game.finished,
       },
       ...effects,
     );
@@ -131,7 +135,7 @@ export const actions: Record<string, Action> = {
     if (!(k >= 0 && k < real.game.waveIndex)) return undefined;
     const game = practiceGame(real.game, k);
     return patch(
-      { practice: real, game, draft: committedOrStart(s, game), selectedNode: undefined, tool: select, phase: 'briefing', showMenu: false },
+      { practice: real, game, draft: committedOrStart(s, game), selectedNode: undefined, tool: select, phase: 'briefing', showMenu: false, showReview: false },
       { kind: 'forget-history' },
       { kind: 'leave-wave' },
     );
@@ -254,9 +258,12 @@ export const actions: Record<string, Action> = {
   export: (s) => ({ effects: [{ kind: 'export', text: JSON.stringify({ catalog: s.catalog, scenario: s.scenario }, null, 2) }] }),
   // La fenêtre des succès : depuis le menu ou l'écran de choix, elle passe devant le reste.
   'show-achievements': (s) => patch({ showAchievements: !s.showAchievements, showMenu: false }),
+  // L'accueil (P4) : le fermer le marque comme vu ; le menu et l'écran de choix le rouvrent.
+  'show-welcome': (s) => (s.showWelcome ? patch({ showWelcome: false }, { kind: 'welcomed' }) : patch({ showWelcome: true, showMenu: false })),
+  'show-review': (s) => patch({ showReview: !s.showReview, showMenu: false }),
   'reset-game': (s) =>
     patch(
-      { practice: undefined, game: newGame(), draft: startOf(s.scenario), attempts: [], selected: undefined, selectedNode: undefined, phase: 'briefing', showMenu: false },
+      { practice: undefined, game: newGame(), draft: startOf(s.scenario), attempts: [], selected: undefined, selectedNode: undefined, phase: 'briefing', showMenu: false, showReview: false },
       { kind: 'forget-history' },
       { kind: 'leave-wave' },
     ),

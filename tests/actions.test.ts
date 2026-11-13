@@ -59,6 +59,25 @@ const FREE = freeCell(autoPlace(A.minimal));
 const kinds = (o: Outcome) => (o.effects ?? []).map((e: Effect) => e.kind);
 
 describe('les actions', () => {
+  it('l’accueil (P4) : le fermer le marque comme vu, le rouvrir ferme le menu', () => {
+    const closed = run('show-welcome', stateAt({ showWelcome: true }));
+    expect(closed.patch).toEqual({ showWelcome: false });
+    expect(kinds(closed)).toEqual(['welcomed']);
+    const opened = run('show-welcome', stateAt({ showMenu: true }));
+    expect(opened.patch).toEqual({ showWelcome: true, showMenu: false });
+    expect(kinds(opened)).toEqual([]);
+  });
+
+  it('un scénario terminé s’ouvre sur son bilan ; choisir un autre scénario le ferme', () => {
+    let game = stateAt().game;
+    for (const arch of [A.minimal, A.withLockedCache, A.scaled(3)]) ({ state: game } = playWave(game, urlShortener, arch, stateAt().catalog));
+    const done = { ...game, finished: true };
+    const store: Store = { saves: { [urlShortener.id]: { game: done, draft: A.minimal } } };
+    expect(run('pick-scenario', stateAt(), { data: { scenario: urlShortener.id } }, store).patch).toMatchObject({ showReview: true, phase: 'build' });
+    expect(run('pick-scenario', stateAt(), { data: { scenario: urlShortener.id } }).patch).toMatchObject({ showReview: false, phase: 'briefing' });
+    expect(run('choose-scenario', stateAt({ showReview: true })).patch).toMatchObject({ showReview: false, phase: 'choose' });
+  });
+
   it('jouer une vague perdue compte un essai, garde le brouillon et ouvre le rejeu', () => {
     const s = atWave2();
     const out = run('play', s);

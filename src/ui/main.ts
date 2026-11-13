@@ -53,6 +53,7 @@ function initialState(): ViewState {
     debugTab: 'attempts',
     debriefTab: 'analysis',
     showMenu: false,
+    showWelcome: !store.welcomed,
     choices: choices(store),
   };
 }
@@ -218,6 +219,10 @@ function run(outcome: Outcome | undefined): void {
         break;
       case 'attempt-recorded':
         nextAttemptId++;
+        break;
+      case 'welcomed':
+        store = { ...store, welcomed: true };
+        save(store);
         break;
       case 'play':
       case 'export':

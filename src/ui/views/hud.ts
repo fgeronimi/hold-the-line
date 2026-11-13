@@ -57,7 +57,9 @@ function renderMenu(s: ViewState): string {
         <button data-action="choose-scenario">Changer de scénario</button>
         <button data-action="reset-game">Nouvelle partie</button>
         ${replays}
+        ${realGame(s).finished ? '<button data-action="show-review">Bilan du scénario</button>' : ''}
         <button data-action="show-achievements">Succès</button>
+        <button data-action="show-welcome">Comment jouer</button>
         <button data-action="toggle-debug">${s.debug ? 'Quitter' : 'Ouvrir'} le mode debug</button>
       </div>`;
 }

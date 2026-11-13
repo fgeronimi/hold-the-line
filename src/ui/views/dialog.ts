@@ -14,6 +14,7 @@ import {
   hintsOf,
   nameOf,
   pct,
+  realGame,
   renderHints,
   speech,
   starIcons,
@@ -24,10 +25,13 @@ import {
 } from './common.ts';
 import { icon, type IconName } from '../icons.ts';
 import { CONCEPT_ACHIEVEMENTS, noHintId, type Achievement } from '../../data/achievements.ts';
+import { scenarioReview, type WaveReview } from '../review.ts';
 
 /** Les fenêtres : le choix du scénario, le briefing du chambellan, le debrief d'une vague, les succès. */
 export function renderDialog(s: ViewState): string {
+  if (s.showWelcome) return renderWelcome();
   if (s.showAchievements) return renderAchievements(s);
+  if (s.showReview && realGame(s).finished) return renderReview(s);
   if (s.phase === 'choose') return renderChoose(s);
   const wave = s.scenario.waves[s.game.waveIndex];
   if (s.phase === 'briefing' && wave) {
@@ -60,7 +64,8 @@ function debriefActions(s: ViewState, a: Attempt, finished: boolean): string {
     practice ? `<button class="${a.played && won ? 'primary' : ''}" data-action="leave-practice">${back}</button>` : '',
     !practice && a.played && won && !finished ? '<button class="primary" data-action="next">Vague suivante ➜</button>' : '',
     !a.played ? '<button class="primary" data-action="retry">Retour à la construction</button>' : '',
-    !practice && finished ? '<button class="primary" data-action="reset-game">Nouvelle partie</button>' : '',
+    !practice && finished ? '<button data-action="reset-game">Nouvelle partie</button>' : '',
+    !practice && finished ? `<button class="primary" data-action="show-review">${icon('ledger')} Voir le bilan</button>` : '',
   ].join('');
 }
 
@@ -87,7 +92,6 @@ function renderDebriefDialog(s: ViewState, a: Attempt): string {
   const attemptWave = s.scenario.waves[a.waveIndex];
   const finished = s.game.finished && a.played && r.won && !s.practice;
   const lostHere = a.played && !r.won;
-  const final = finished ? `<p class="final">${esc(theme.finale)} <b>${totalStars(s)} / ${s.scenario.waves.length * 3}</b> ★</p>` : '';
   // Une étoile manquée se reprend en rejouant la vague : le dire là où on la voit manquer.
   const missing = a.played && r.won && starCount(a.stars) < 3 ? `<p class="muted">${esc(theme.debrief.replayHint)}</p>` : '';
   return `<div class="dialog panel ${r.won ? 'won' : 'lost'}">
@@ -95,7 +99,6 @@ function renderDebriefDialog(s: ViewState, a: Attempt): string {
     ${attemptWave ? renderStars(a.stars, attemptWave) : ''}
     ${renderUnlocked(s, a.unlocked ?? [])}
     ${debriefTabs(s)}
-    ${final}
     ${attemptWave ? debriefBody(s, a, attemptWave) : ''}
     ${lostHere && a.waveIndex === s.game.waveIndex ? renderHints(hintsOf(s)) : ''}
     ${missing}
@@ -125,13 +128,20 @@ export function renderFindings(findings: Finding[]): string {
   return `<div class="findings">${items.join('')}</div>`;
 }
 
+/** Les trois objectifs d'une vague (décision E7), comme le debrief, l'accueil et le bilan les nomment. */
+const STAR_LABELS = {
+  held: 'Tenir la vague : SLA, budget et complexité respectés',
+  lean: 'Juste ce qu’il faut : rien qu’on puisse retirer en tenant la vague',
+  thrifty: 'Économe',
+} as const;
+
 /** Les trois objectifs de la vague, chacun une étoile (décision E7). */
 function renderStars(stars: Stars, wave: Wave): string {
   const line = (ok: boolean, label: string) => `<li class="${ok ? 'ok' : 'missed'}">${ok ? '★' : '☆'} ${esc(label)}</li>`;
   return `<div class="stars-box"><span class="star-row">${starIcons(starCount(stars))}</span><ul>
-    ${line(stars.held, 'Tenir la vague : SLA, budget et complexité respectés')}
-    ${line(stars.lean, 'Juste ce qu’il faut : rien qu’on puisse retirer en tenant la vague')}
-    ${line(stars.thrifty, `Économe : facture ≤ ${wave.thriftyCost ?? wave.budget}`)}
+    ${line(stars.held, STAR_LABELS.held)}
+    ${line(stars.lean, STAR_LABELS.lean)}
+    ${line(stars.thrifty, `${STAR_LABELS.thrifty} : facture ≤ ${wave.thriftyCost ?? wave.budget}`)}
   </ul></div>`;
 }
 
@@ -162,7 +172,71 @@ function renderChoose(s: ViewState): string {
     <h2>Hold the Line</h2>
     ${speech(theme.choose.says, theme.choose.real)}
     <div class="scenario-cards">${s.choices.map(scenarioCard).join('')}</div>
-    <p class="actions"><button data-action="show-achievements">${icon('medal')} Succès ${got} / ${all.length}</button></p>
+    <p class="actions"><button data-action="show-welcome">${icon('bulb')} Comment jouer</button><button data-action="show-achievements">${icon('medal')} Succès ${got} / ${all.length}</button></p>
+  </div>`;
+}
+
+// ——— L'accueil (P4) ———
+
+/** Le premier écran : le chambellan en pied, ce qu'est le jeu, comment se joue une vague. */
+function renderWelcome(): string {
+  const w = theme.welcome;
+  const steps = w.steps.map((st, i) => `<li>${icon(st.icon as IconName)}<span><b>${i + 1}. ${esc(st.title)}</b>${esc(st.text)}</span></li>`).join('');
+  return `<div class="dialog panel welcome">
+    <div class="welcome-head">
+      <img class="narrator-full" src="${esc(theme.narrator.full)}" alt="${esc(theme.narrator.name)}" draggable="false">
+      <div class="welcome-text">
+        <h2>${esc(w.title)}</h2>
+        ${bubble(`<b>${esc(theme.narrator.name)} :</b> « ${esc(w.says)} »`, w.real)}
+      </div>
+    </div>
+    <ol class="welcome-steps">${steps}</ol>
+    <ul class="welcome-stars"><li>★ ${esc(STAR_LABELS.held)}</li><li>★ ${esc(STAR_LABELS.lean)}</li><li>★ ${esc(STAR_LABELS.thrifty)} : la facture sous un seuil</li></ul>
+    <p class="actions"><button class="primary" data-action="show-welcome">${esc(w.start)}</button></p>
+  </div>`;
+}
+
+// ——— Le bilan (P4) ———
+
+const MISSING: Record<keyof Stars, string> = { held: 'tenir la vague', lean: 'rien de superflu', thrifty: 'économe' };
+
+function conceptChips(list: Achievement[]): string {
+  return list.length === 0 ? '<span class="muted">—</span>' : list.map((a) => `<span class="chip" data-tip="${esc(a.real)}">${icon(a.icon as IconName)} ${esc(a.tech)}</span>`).join('');
+}
+
+function reviewRow(w: WaveReview): string {
+  return `<tr>
+      <th>${w.index + 1}. ${esc(w.title)}</th>
+      <td class="star-row">${starIcons(starCount(w.stars))}</td>
+      <td>${conceptChips(w.fresh)}</td>
+      <td>${conceptChips(w.alternatives)}</td>
+    </tr>`;
+}
+
+/** Le bilan d'un scénario terminé : vague par vague, les notions appliquées, les autres parades, ce qui reste à revoir. */
+function renderReview(s: ViewState): string {
+  const game = realGame(s);
+  const review = scenarioReview(game, s.scenario, s.catalog);
+  const r = theme.review;
+  const missing = (w: WaveReview) =>
+    (Object.keys(MISSING) as (keyof Stars)[])
+      .filter((k) => !w.stars[k])
+      .map((k) => MISSING[k])
+      .join(', ');
+  const todo =
+    review.incomplete.length === 0
+      ? `<p class="muted">${esc(r.done)}</p>`
+      : `<ul class="review-todo">${review.incomplete
+          .map((w) => `<li>Vague ${w.index + 1}, ${esc(w.title)} : ${esc(missing(w))} <button data-action="replay-wave" data-wave="${w.index}">Rejouer la vague</button></li>`)
+          .join('')}</ul>`;
+  return `<div class="dialog panel review-dialog">
+    <h2>${icon('ledger')} ${esc(r.title)} · ${esc(s.scenario.title)} · ${review.stars} / ${review.maxStars} ★</h2>
+    ${speech(r.says, r.real)}
+    <table class="review"><thead><tr><th>Vague</th><th>Étoiles</th><th>${esc(r.applied)}</th><th>${esc(r.alternatives)}</th></tr></thead>
+      <tbody>${review.waves.map(reviewRow).join('')}</tbody></table>
+    <h3>${esc(r.toReview)}</h3>
+    ${todo}
+    <p class="actions"><button data-action="choose-scenario">Choisir un autre scénario</button><button data-action="reset-game">Nouvelle partie</button><button class="primary" data-action="show-review">Fermer</button></p>
   </div>`;
 }
 

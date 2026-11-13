@@ -4,8 +4,11 @@
 
 <br>
 
+<img src="public/narrator-full.webp" width="150" alt="Le chambellan, un petit mage en robe violette et chapeau pointu, qui guide le joueur">
+
 **Un jeu pour apprendre le system design.**<br>
-On bâtit une architecture distribuée sur un plateau, puis on la fait tenir, vague après vague.
+On bâtit une architecture distribuée sur un plateau, puis on la fait tenir, vague après vague.<br>
+Les vagues reprennent les sujets classiques d'un entretien de system design : cache, scaling, files, résilience.
 
 <br>
 

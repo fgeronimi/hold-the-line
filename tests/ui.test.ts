@@ -268,6 +268,21 @@ describe('le bouton « Un indice »', () => {
   });
 });
 
+describe('l’accueil (P4)', () => {
+  const view = (extra: Partial<ViewState>): ViewState =>
+    ({ catalog, scenario: urlShortener, game: newGame(), draft: A.minimal, attempts: [], achievements: {}, tool: { kind: 'select' }, history: { undo: 0, redo: 0 }, phase: 'choose', choices: [], ...extra }) as unknown as ViewState;
+
+  it('passe devant l’écran de choix : le chambellan en pied, les étapes, puis le choix', () => {
+    const html = renderDialog(view({ showWelcome: true }));
+    expect(html).toContain('class="narrator-full" src="narrator-full.webp"');
+    expect(html).toContain('entretien de system design');
+    expect(html.match(/<li>/g)!.length).toBeGreaterThanOrEqual(4);
+    expect(html).toContain('data-action="show-welcome"');
+    expect(renderDialog(view({}))).toContain('Comment jouer');
+    expect(renderDialog(view({}))).not.toContain('narrator-full');
+  });
+});
+
 describe('la barre du haut', () => {
   // La vague 2 vient d'être gagnée : la partie a déjà avancé et compté ses étoiles.
   const all = { held: true, lean: true, thrifty: true };

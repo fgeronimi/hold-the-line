@@ -30,6 +30,8 @@ export interface Store {
   current?: string;
   saves: Record<string, Saved>;
   achievements?: Unlocked;
+  /** L'accueil a été vu (P4) : il ne s'ouvre plus tout seul. */
+  welcomed?: boolean;
 }
 
 export type Picked = Pick<ViewState, 'catalog' | 'scenario' | 'game' | 'draft'>;
@@ -60,7 +62,8 @@ export function readStore(value: unknown): Store {
       .filter(([, s]) => isSaved(s))
       .map(([id, s]) => [id, { ...s, game: withStarObjects(s.game) }]),
   );
-  const { achievements: raw, ...rest } = value;
+  const { achievements: raw, welcomed, ...others } = value;
+  const rest = { ...others, ...(welcomed === true && { welcomed }) };
   if (!isObject(raw)) return { ...rest, saves };
   const achievements = Object.fromEntries(Object.entries(raw).filter(([, a]) => isObject(a) && typeof a.scenario === 'string' && typeof a.wave === 'number'));
   return { ...rest, saves, achievements: achievements as Unlocked };

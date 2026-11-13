@@ -61,6 +61,10 @@ export interface ViewState {
   achievements: Unlocked;
   /** La fenêtre des succès est ouverte, par-dessus le reste. */
   showAchievements?: boolean | undefined;
+  /** L'accueil (P4) : au premier lancement, puis à la demande. */
+  showWelcome?: boolean | undefined;
+  /** Le bilan d'un scénario terminé, par-dessus le reste. */
+  showReview?: boolean | undefined;
   /** Tentative mise en avant dans le détail du mode debug. */
   selected?: number | undefined;
   tool: Tool;

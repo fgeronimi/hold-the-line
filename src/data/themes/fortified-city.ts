@@ -90,7 +90,7 @@ export const fortifiedCity: Theme = {
       },
       metaphor: 'Crieur public', icon: '📣', shape: 'belfry', color: '#c7bfae', accent: '#3d5a80' },
   },
-  narrator: { name: 'Le chambellan', portrait: 'narrator.webp' },
+  narrator: { name: 'Le chambellan', portrait: 'narrator.webp', full: 'narrator-full.webp' },
   // Les pictogrammes du sprite (`src/ui/sprite.ts`, I18), par évolution du catalogue.
   upgradeIcons: {
     'horizontal-scaling': 'scale',
@@ -161,7 +161,27 @@ export const fortifiedCity: Theme = {
     overComplexity: 'Trop de rouages à entretenir : vos gens n’en suivront pas {complexity}.',
     launch: '{wave} : la cité tiendra-t-elle ? Quand vous serez prêt, lancez la vague.',
   },
-  finale: 'La cité a tenu toutes les vagues.',
+  welcome: {
+    title: 'Hold the Line',
+    says: 'Bienvenue, Sire. Je suis votre chambellan. Chaque jour, la cité reçoit plus de voyageurs que la veille, et chaque vague apporte son épreuve : une foule, une panne, un pillard. À vous de bâtir ce qui tiendra.',
+    real: 'Un jeu pour comprendre le system design en le pratiquant : on construit une architecture, des vagues de trafic la testent, et on comprend pourquoi elle tient ou cède. Les vagues reprennent les sujets classiques d’un entretien de system design : cache, scaling, files de messages, résilience.',
+    steps: [
+      { icon: 'hammer', title: 'Bâtir', text: 'Posez les bâtiments (serveur, base, cache…) et reliez-les : les requêtes suivent les chemins que vous tracez.' },
+      { icon: 'swords', title: 'Lancer la vague', text: 'Le trafic traverse la cité minute par minute. Ce qu’un bâtiment ne peut pas servir échoue, et le SLA se joue là.' },
+      { icon: 'bulb', title: 'Comprendre', text: 'Le chambellan analyse la vague : ce qui a cédé, pourquoi, et la parade. « En vrai » le redit en termes techniques.' },
+      { icon: 'star', title: 'Viser les trois étoiles', text: 'Tenir la vague, rien de superflu, une facture économe. Perdre ne coûte rien : on rejoue, et un essai perdu ouvre un indice.' },
+    ],
+    start: 'Choisir un scénario',
+  },
+  review: {
+    title: 'Le bilan',
+    says: 'La cité a tenu toutes les vagues, Sire. Voici ce qu’elle a appris, et ce qu’elle aurait pu tenter autrement.',
+    real: 'Le bilan du scénario : les notions de system design appliquées à chaque vague, les autres parades qui tenaient aussi, et ce qui reste à revoir.',
+    applied: 'Ce que la vague a ajouté',
+    alternatives: 'Autres parades possibles',
+    toReview: 'À revoir',
+    done: 'Rien à revoir : trois étoiles à chaque vague.',
+  },
   loading: 'Chargement de la cité…',
   achievements: {
     says: 'Sire, voici ce que la cité sait faire. Chaque savoir se gagne en le mettant en œuvre : il suffit d’une vague tenue où la parade a joué.',

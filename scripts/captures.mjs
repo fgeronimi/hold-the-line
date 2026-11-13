@@ -166,8 +166,29 @@ const SHOTS = {
     const png = join(dir, 'face.png');
     writeFileSync(png, Buffer.from(data.split(',')[1], 'base64'));
     execFileSync('cwebp', ['-quiet', '-q', '90', '-alpha_q', '100', '-resize', '160', '0', png, '-o', join(ROOT, 'public/narrator.webp')]);
-    rmSync(dir, { recursive: true, force: true });
     console.log('  public/narrator.webp');
+
+    // En pied, pour l'accueil et le README. Le kit allégé n'a gardé que la marche : la pose est
+    // figée là où les pieds se croisent, et la boucle ne fait que balancer et respirer.
+    const FRAMES = 36;
+    const NARRATOR_POSE = 0.4;
+    const frames = await page.evaluate(async ({ n, pose }) => {
+      const { portraitFrames } = await import('/src/render/avatar.ts');
+      const loop = Array.from({ length: n }, (_, k) => {
+        const a = (2 * Math.PI * k) / n;
+        return { turn: 16 + 10 * Math.sin(a), breath: 1 + 0.012 * Math.sin(2 * a) };
+      });
+      return portraitFrames('/models/kaykit-chars/Mage.glb', { size: 440, aspect: 0.62, crop: 1, clip: 'Walking_B', time: pose }, loop);
+    }, { n: FRAMES, pose: NARRATOR_POSE });
+    const args = ['-loop', '0', '-lossy', '-q', '70', '-m', '6'];
+    frames.forEach((f, i) => {
+      const file = join(dir, `${String(i).padStart(3, '0')}.png`);
+      writeFileSync(file, Buffer.from(f.split(',')[1], 'base64'));
+      args.push('-d', '110', file);
+    });
+    execFileSync('img2webp', [...args, '-o', join(ROOT, 'public/narrator-full.webp')], { stdio: 'pipe' });
+    rmSync(dir, { recursive: true, force: true });
+    console.log(`  public/narrator-full.webp : ${FRAMES} images`);
   },
 
   /** La bannière du README : la cité de la vague 5 en fond, la plaque du titre posée dessus. */

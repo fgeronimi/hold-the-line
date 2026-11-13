@@ -38,6 +38,12 @@ describe('la partie gardée', () => {
     expect(reloaded.current).toBe(urlShortener.id);
   });
 
+  it('l’accueil vu se garde ; une valeur qui n’est pas vraie est ignorée (P4)', () => {
+    expect(readStore(throughStorage({ ...EMPTY, welcomed: true })).welcomed).toBe(true);
+    expect(readStore({ saves: {}, welcomed: 'oui' })).not.toHaveProperty('welcomed');
+    expect(readStore({ saves: {}, welcomed: false })).not.toHaveProperty('welcomed');
+  });
+
   it('catalogue et scénario ne sont gardés que s’ils ont été calibrés', () => {
     const { calibrated: _, ...picked } = gameOf(EMPTY, urlShortener.id);
     expect(withGame(EMPTY, picked, false).saves[urlShortener.id]).not.toHaveProperty('calibration');

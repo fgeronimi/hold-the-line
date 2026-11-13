@@ -13,7 +13,8 @@ nouvelles contraintes : plus de trafic, un client abusif, un message livré deux
 instance qui tombe. Chaque vague apporte une information nouvelle ; il faut adapter
 l'architecture sans tout casser.
 
-Le jeu fait **comprendre** le system design ; il n'entraîne pas à l'entretien (P1). Il vise
+Le jeu fait **comprendre** le system design ; il n'entraîne pas à l'entretien (P1), mais ses
+vagues reprennent les sujets classiques d'un entretien de system design, et l'accueil le dit (P4). Il vise
 trois réflexes :
 
 - justifier chaque composant par un besoin précis ;
@@ -345,7 +346,13 @@ et déterministe, séparée de l'affichage.
 - **Succès** (I20) : un concept de system design appliqué dans une vague tenue (la parade a
   joué), plus « sans indice » par scénario ; valables pour toutes les parties. Une fenêtre les
   montre (menu, écran de choix) et le debrief annonce ceux qu'une vague débloque.
-- **Enchaînement** (I19) : choix → briefing → construction guidée → vague → debrief. Chaque
+- **Accueil** (P4) : au premier lancement, avant le choix ; « Comment jouer » le rouvre. Le
+  chambellan en pied, animé ; ce qu'est le jeu (« En vrai ») ; les quatre temps d'une vague ; les
+  trois étoiles.
+- **Bilan** (P4) : à la fin d'un scénario, et à chaque fois qu'on rouvre un scénario terminé. Vague
+  par vague, les étoiles, les notions que la vague ajoute, les autres parades qui tenaient ; puis
+  les vagues à rejouer pour leurs étoiles.
+- **Enchaînement** (I19) : accueil → choix → briefing → construction guidée → vague → debrief → bilan. Chaque
   écran ne dit qu'une chose : pas de barre du haut au choix, score caché pendant le rejeu,
   barre du rejeu retirée au debrief, outil rendu à la sélection après une pose, et pas de
   reflet sur le lancement après la vague 1.

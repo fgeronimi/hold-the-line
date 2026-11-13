@@ -58,7 +58,9 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   le plateau (barre du haut, barre d'outils, fiche, fenêtres, tiroir de debug) à chaque
   changement ; `board.ts` (poser, déplacer, relier par A*), `debrief.ts` (analyse du
   chambellan), `tutorial.ts` (guide de la vague 1), `hints.ts` (le bouton « Un indice », déduit de
-  `Wave.answers`, I14), `time.ts` (les durées en minutes), `editor.ts` et `calibration.ts` sont purs et testés.
+  `Wave.answers`, I14), `review.ts` (le bilan d'un scénario terminé, P4 : chaque vague rejouée sur
+  `history[i + 1]`), `time.ts` (les durées en minutes), `editor.ts` et `calibration.ts` sont purs et testés.
+  L'accueil (P4) s'ouvre tant que `Store.welcomed` manque ; le fermer émet l'effet `welcomed`.
 - `src/ui/main.ts` ne fait que le câblage : écouteurs, scène 3D, effets, rendu. Chaque geste
   est une fonction pure de `actions.ts` qui renvoie `{ patch, effects }` ; la partie gardée
   passe par `session.ts` (`readStore` valide le magasin, `withGame` n'y copie le calibrage
@@ -197,7 +199,9 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 - Double narration (décision I6) : nom technique d'abord, métaphore entre parenthèses ;
   toute réplique du chambellan a sa ligne « En vrai ». Elle s'écrit avec `speech()` ou
   `bubble()` (`src/ui/views/common.ts`) : une bulle, la réplique, puis « En vrai · » sous un
-  filet (I22). Le visage du chambellan est `narratorFace()`, une image de `public/`.
+  filet (I22). Le visage du chambellan est `narratorFace()`, une image de `public/` ; en pied et
+  animé, c'est `theme.narrator.full` (l'accueil et le README). Les deux se refont par
+  `npm run captures -- narrateur`.
 - Un incident (X5) ne coûte rien à une réponse attendue, sauf le prix que sa parade annonce
   (disjoncteur, lettres mortes), et fait perdre la vague à qui ne le pare pas (X12) : jamais de
   vague tenue de justesse malgré lui. `tests/incidents.test.ts` le vérifie sur tous les

@@ -41,7 +41,8 @@ export interface Theme {
   vehicles: Record<RequestKind, VehicleStyle>;
   /** Le personnage qui annonce les vagues et analyse les défaites : le recruteur, dans la métaphore. */
   /** Le narrateur : son nom, et son portrait (un personnage du kit, rendu par `npm run captures -- narrateur`). */
-  narrator: { name: string; portrait: string };
+  /** `portrait` : le visage des bulles ; `full` : le personnage en pied, animé, de l'accueil. */
+  narrator: { name: string; portrait: string; full: string };
   /** Le récit de chaque vague dans la métaphore (clé : id de la vague) ; les chiffres restent affichés à côté. */
   narratives: Record<string, string>;
   /** La règle du temps (décision M7), annoncée au premier briefing de chaque scénario : sa réplique, puis « En vrai ». */
@@ -72,8 +73,17 @@ export interface Theme {
    * `{budget}`, `{complexity}` et `{wave}` y sont remplacés.
    */
   guide: Record<GuideLine, string>;
-  /** La fin d'une partie gagnée, au debrief de la dernière vague ; la suite (étoiles, score) est chiffrée à côté. */
-  finale: string;
+  /**
+   * L'accueil, au premier lancement (P4) : le chambellan se présente, « En vrai » dit ce qu'est
+   * le jeu, puis les étapes d'une vague. Chaque étape nomme un pictogramme du sprite.
+   */
+  welcome: { title: string; says: string; real: string; steps: { icon: string; title: string; text: string }[]; start: string };
+  /**
+   * Le bilan d'un scénario tenu jusqu'au bout : le chambellan, « En vrai », puis les intitulés
+   * du tableau (`applied` : les notions qu'une vague ajoute aux précédentes). `done` remplace
+   * « À revoir » quand il ne reste rien.
+   */
+  review: { title: string; says: string; real: string; applied: string; alternatives: string; toReview: string; done: string };
   /** Ce qu'affiche le plateau pendant qu'il se charge. */
   loading: string;
   /**

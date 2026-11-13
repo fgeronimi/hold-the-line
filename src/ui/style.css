@@ -634,3 +634,41 @@ button.launch.hint {
 .unlocked { margin: 6px 0 10px; padding: 8px 10px; border-radius: 10px; background: rgba(233, 183, 59, .14); border: 1px solid rgba(165, 127, 37, .45); }
 .unlocked > p { margin: 0 0 4px; }
 .unlocked .achievements { margin: 0; }
+
+/* L'accueil (P4) : en haut, le chambellan en pied, hors de son médaillon, à gauche de sa bulle ;
+   dessous, les quatre temps d'une vague sur toute la largeur. */
+.layer.center > .welcome { max-width: min(900px, calc(100vw - 32px)); }
+.welcome-head { display: flex; gap: 18px; align-items: center; }
+.narrator-full { flex: none; width: 170px; height: auto; filter: drop-shadow(0 10px 8px rgba(30, 20, 8, .25)); }
+.welcome-text { flex: 1; min-width: 0; }
+.welcome h2 { font-family: var(--display); font-size: 34px; letter-spacing: .5px; }
+.welcome-steps { list-style: none; margin: 12px 0 8px; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.welcome-steps li { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fffaf0; box-shadow: var(--raise-low); }
+.welcome-steps .ico { width: 30px; height: 30px; flex: none; }
+.welcome-steps span { display: grid; gap: 2px; font-size: 13px; line-height: 1.35; }
+.welcome-stars { list-style: none; margin: 0 0 8px; padding: 0; font-size: 13px; color: #6b5a44; }
+.welcome-stars li::first-letter { color: #c8961f; }
+@media (max-width: 860px) { .welcome-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .welcome-head { align-items: flex-start; }
+  .narrator-full { width: 90px; }
+  .welcome-steps { grid-template-columns: 1fr; }
+}
+
+/* Le bilan (P4) : une ligne par vague, les notions en pastilles. */
+.layer.center > .review-dialog { max-width: min(860px, calc(100vw - 32px)); }
+.dialog h3 { margin: 12px 0 4px; font-size: 16px; }
+.review { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+.review th, .review td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.review thead th { font-size: 12px; color: #6b5a44; font-weight: 600; }
+.review td.star-row { white-space: nowrap; }
+.review .chip { display: inline-flex; align-items: center; gap: 4px; margin: 0 4px 4px 0; padding: 2px 8px 2px 4px; border: 1px solid var(--line); border-radius: 999px; background: #fffaf0; white-space: nowrap; }
+.review .chip .ico { width: 18px; height: 18px; }
+.review-todo { margin: 4px 0 8px; padding-left: 18px; font-size: 13px; }
+.review-todo li { margin: 4px 0; }
+.review-todo button { margin-left: 6px; padding: 2px 10px; font-size: 12px; }
+@media (max-width: 760px) {
+  .review thead { display: none; }
+  .review tr { display: grid; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .review th, .review td { border: 0; padding: 2px 0; }
+}
