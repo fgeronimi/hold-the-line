@@ -209,8 +209,12 @@ const SHOTS = {
     await still(page, 'banniere', { x: 0, y: 120, width: 1280, height: 480 }, 1280);
   },
 
-  /** Le bouton « Jouer » du README, dans la matière du bouton de lancement. */
-  async jouer(page) {
+  /**
+   * Le bouton « Jouer » du README, dans la matière du bouton de lancement. Affiché à 300 px de
+   * large, il est rendu à densité 3 : à l'échelle 1, un écran Retina l'agrandissait et le floutait.
+   */
+  async jouer(lowres) {
+    const page = await lowres.context().browser().newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 3 });
     await page.goto(`${BASE}/`);
     await overlay(
       page,
@@ -220,7 +224,8 @@ const SHOTS = {
        #readme-overlay button.launch { font-size: 24px; }`,
       `<button class="launch">{swords}<span>Jouer dans le navigateur</span></button>`,
     );
-    await element(page, '#readme-overlay', 'jouer', 440);
+    await element(page, '#readme-overlay', 'jouer', 900);
+    await page.close();
   },
 
   /** L'accueil du premier lancement (P4) : le chambellan en pied, les quatre temps d'une vague. */
