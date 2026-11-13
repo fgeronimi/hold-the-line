@@ -13,6 +13,16 @@ On bâtit une architecture distribuée sur un plateau, puis on la fait tenir, va
 
 <sub>Gratuit, sans inscription, dans le navigateur · 4 scénarios · 21 vagues · 26 succès</sub>
 
+<br>
+
+[![Tests et déploiement](https://github.com/fgeronimi/hold-the-line/actions/workflows/deploy.yml/badge.svg)](https://github.com/fgeronimi/hold-the-line/actions/workflows/deploy.yml)
+[![Équilibrage](https://github.com/fgeronimi/hold-the-line/actions/workflows/balance.yml/badge.svg)](https://github.com/fgeronimi/hold-the-line/actions/workflows/balance.yml)
+[![Code : MIT](https://img.shields.io/badge/code-MIT-b08a2e?labelColor=5a3a1a)](LICENSE)
+[![Contenu : CC BY 4.0](https://img.shields.io/badge/contenu-CC%20BY%204.0-b08a2e?labelColor=5a3a1a)](LICENSE-CONTENT.md)
+[![TypeScript](https://img.shields.io/badge/TypeScript-7-3d5a80?labelColor=5a3a1a&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Three.js](https://img.shields.io/badge/Three.js-0.186-3d5a80?labelColor=5a3a1a&logo=threedotjs&logoColor=white)](https://threejs.org)
+[![Modèles 3D : KayKit CC0](https://img.shields.io/badge/mod%C3%A8les%203D-KayKit%20CC0-6a994e?labelColor=5a3a1a)](public/models/CREDITS.md)
+
 <br><br>
 
 [Le principe](#le-principe) · [Comment on joue](#comment-on-joue) · [En images](#en-images) · [Développement](#développement) · [Crédits](#crédits)
