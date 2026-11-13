@@ -138,9 +138,8 @@ export const urlShortener: Scenario = {
       profile: flat,
       sources: [users({ read: 3000, write: 50 }), bigPartners({ read: 1500 }), runaway({ read: 2000 }), spreadScraper],
       sla: { maxFailureRate: 0.01, maxP95LatencyMs: 60 },
-      // Calé du temps où couper la limite unique coûtait 5 de migration (E2, abandonnée par E8) :
-      // 250 suffiraient, gardé tel quel.
-      budget: 255,
+      // La réponse sans CDN (instances, passerelle, réplica) coûte tout juste 250.
+      budget: 250,
       // Sans la limite unique : avec elle, un point de trop. L'autoscaling, sur ce trafic qui ne
       // retombe pas, n'y tient pas non plus (+2).
       complexityCap: 13,

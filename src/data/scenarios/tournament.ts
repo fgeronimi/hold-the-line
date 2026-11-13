@@ -121,16 +121,14 @@ export const tournament: Scenario = {
       profile: flat,
       sources: [fans(2000, 50), seats(300)],
       sla: SLA,
-      // 255 : depuis la réponse autoscaling de la vague 3, garder ses deux réplicas et passer en
-      // instances fixes coûte 250, plus 5 pour couper l'autoscaling (M2, M9b).
-      budget: 255,
+      // Démolir étant gratuit (E8), plus besoin de la marge qui permettait de garder les deux
+      // réplicas de la vague 3 : le budget revient à ce que demandent les stratégies gagnantes.
+      budget: 235,
       complexityCap: 14,
-      thriftyCost: 245,
+      thriftyCost: 210,
       answers: [
         { backoff: 1, scaling: 2, cache: 1, replicas: 1, leaderReads: 1, queue: 1 },
         { backoff: 1, scaling: 1, autoscaling: 3, cache: 1, replicas: 1, leaderReads: 1, queue: 1 },
-        // Les deux réplicas de la vague 3 gardés : la suite la plus directe d'une vague 3 gagnée.
-        { backoff: 1, scaling: 2, cache: 1, replicas: 2, leaderReads: 1, queue: 1 },
       ],
       consumers: ['mail'],
       incidents: [

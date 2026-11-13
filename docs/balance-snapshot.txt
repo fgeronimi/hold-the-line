@@ -31,8 +31,8 @@
      CDN + load balancer + scaling + rate limiting + cache    3 gagnantes | meilleure : scaling 2, rate limiting 3 | score 39.6 | coût 180/180 | marges coût 0 %, cx 0 %, échecs 100 %, p95 58 %
      load balancer + scaling + rate limiting + cache     1 gagnantes | meilleure : scaling 4, rate limiting 3 | score 34.8 | coût 180/180 | marges coût 0 %, cx 20 %, échecs 100 %, p95 19 %
 [ok] partner-keys — 2 stratégie(s) : load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica | CDN + load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache
-     load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica    2 gagnantes | meilleure : scaling 4, quota par clé 5, limite par adresse 1, réplica 1 | score 32.7 | coût 250/255 | marges coût 2 %, cx 8 %, échecs 100 %, p95 21 %
-     CDN + load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache    3 gagnantes | meilleure : scaling 3, quota par clé 5, limite par adresse 1 | score 32.2 | coût 230/255 | marges coût 10 %, cx 0 %, échecs 100 %, p95 19 %
+     load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica    2 gagnantes | meilleure : scaling 4, quota par clé 5, limite par adresse 1, réplica 1 | score 32.3 | coût 250/250 | marges coût 0 %, cx 8 %, échecs 100 %, p95 21 %
+     CDN + load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache    3 gagnantes | meilleure : scaling 3, quota par clé 5, limite par adresse 1 | score 31.8 | coût 230/250 | marges coût 8 %, cx 0 %, échecs 100 %, p95 19 %
 [ok] click-tracking (réponse unique assumée) — 1 stratégie(s) : load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica + file
      load balancer + scaling + passerelle d’API + quota par clé + limite par adresse + cache + réplica + file    2 gagnantes | meilleure : scaling 4, quota par clé 5, limite par adresse 1, réplica 1 | score 33.3 | coût 295/300 | marges coût 2 %, cx 6 %, échecs 100 %, p95 25 %
 
@@ -42,7 +42,7 @@ Tout au maximum, launch : perd (ok) — Budget dépassé : 645 / 100 ; Trop comp
 Tout au maximum, read-surge : perd (ok) — Budget dépassé : 645 / 115 ; Trop complexe : 25 / 7 points
 Tout au maximum, marketing-peak : perd (ok) — Budget dépassé : 645 / 170 ; Trop complexe : 25 / 9 points
 Tout au maximum, noisy-client : perd (ok) — Budget dépassé : 645 / 180 ; Trop complexe : 25 / 10 points
-Tout au maximum, partner-keys : perd (ok) — Budget dépassé : 645 / 255 ; Trop complexe : 25 / 13 points
+Tout au maximum, partner-keys : perd (ok) — Budget dépassé : 645 / 250 ; Trop complexe : 25 / 13 points
 Tout au maximum, click-tracking : perd (ok) — Budget dépassé : 645 / 300 ; Trop complexe : 25 / 16 points ; SLA rompu : 23.43 % d'échecs (max 1.00 %)
 
 ## Prise de commande — 1408 architectures × 6 vagues
@@ -256,24 +256,24 @@ Tout au maximum, fair : perd (ok) — Budget dépassé : 320 / 250
      backoff + délestage + scaling + réplica + lecture au primaire + file + capacité de file    1 gagnantes | meilleure : scaling 1, réplica 2, capacité de file 1 | score 29.9 | coût 230/230 | marges coût 0 %, cx 0 %, échecs 100 %, p95 20 %
        ↳ dominée par « délestage + scaling + réplica + lecture au primaire + file + capacité de file »
 [ok] final-joust — 2 stratégie(s) : backoff + scaling + cache + réplica + lecture au primaire + file | backoff + autoscaling + cache + réplica + lecture au primaire + file
-     backoff + scaling + cache + réplica + lecture au primaire + file    4 gagnantes | meilleure : scaling 3, réplica 1 | score 40.6 | coût 230/255 | marges coût 10 %, cx 14 %, échecs 100 %, p95 38 %
-     backoff + autoscaling + cache + réplica + lecture au primaire + file    2 gagnantes | meilleure : autoscaling 3, réplica 1 | score 38.5 | coût 224.58/255 | marges coût 12 %, cx 7 %, échecs 100 %, p95 35 %
-     backoff + scaling + cache + réplica + lecture au primaire + file + capacité de file    8 gagnantes | meilleure : scaling 3, réplica 1, capacité de file 1 | score 38.3 | coût 235/255 | marges coût 8 %, cx 7 %, échecs 100 %, p95 38 %
+     backoff + scaling + cache + réplica + lecture au primaire + file    2 gagnantes | meilleure : scaling 3, réplica 1 | score 38.7 | coût 230/235 | marges coût 2 %, cx 14 %, échecs 100 %, p95 38 %
+     backoff + autoscaling + cache + réplica + lecture au primaire + file    2 gagnantes | meilleure : autoscaling 3, réplica 1 | score 36.7 | coût 224.58/235 | marges coût 4 %, cx 7 %, échecs 100 %, p95 35 %
+     backoff + scaling + cache + réplica + lecture au primaire + file + capacité de file    4 gagnantes | meilleure : scaling 3, réplica 1, capacité de file 1 | score 36.4 | coût 235/235 | marges coût 0 %, cx 7 %, échecs 100 %, p95 38 %
        ↳ dominée par « backoff + scaling + cache + réplica + lecture au primaire + file »
-     backoff + délestage + scaling + cache + réplica + lecture au primaire + file    2 gagnantes | meilleure : scaling 3, réplica 1 | score 37.8 | coût 240/255 | marges coût 6 %, cx 7 %, échecs 100 %, p95 38 %
+     backoff + scaling + autoscaling + cache + réplica + lecture au primaire + file    4 gagnantes | meilleure : scaling 2, autoscaling 3, réplica 1 | score 35.6 | coût 225/235 | marges coût 4 %, cx 0 %, échecs 100 %, p95 38 %
+       ↳ dominée par « backoff + autoscaling + cache + réplica + lecture au primaire + file »
+     backoff + autoscaling + cache + réplica + lecture au primaire + file + capacité de file    4 gagnantes | meilleure : autoscaling 3, réplica 1, capacité de file 1 | score 34.3 | coût 229.58/235 | marges coût 2 %, cx 0 %, échecs 100 %, p95 35 %
+       ↳ dominée par « backoff + autoscaling + cache + réplica + lecture au primaire + file »
+     backoff + délestage + scaling + cache + réplica + lecture au primaire + file    1 gagnantes | meilleure : scaling 2, réplica 1 | score 32.3 | coût 220/235 | marges coût 6 %, cx 7 %, échecs 100 %, p95 16 %
        ↳ dominée par « backoff + scaling + cache + réplica + lecture au primaire + file »
-     backoff + scaling + autoscaling + cache + réplica + lecture au primaire + file    6 gagnantes | meilleure : scaling 2, autoscaling 3, réplica 1 | score 37.5 | coût 225/255 | marges coût 12 %, cx 0 %, échecs 100 %, p95 38 %
+     backoff + délestage + autoscaling + cache + réplica + lecture au primaire + file    2 gagnantes | meilleure : autoscaling 3, réplica 1 | score 30.1 | coût 227.08/235 | marges coût 3 %, cx 0 %, échecs 96 %, p95 21 %
        ↳ dominée par « backoff + autoscaling + cache + réplica + lecture au primaire + file »
-     backoff + autoscaling + cache + réplica + lecture au primaire + file + capacité de file    6 gagnantes | meilleure : autoscaling 3, réplica 1, capacité de file 1 | score 36.3 | coût 229.58/255 | marges coût 10 %, cx 0 %, échecs 100 %, p95 35 %
-       ↳ dominée par « backoff + autoscaling + cache + réplica + lecture au primaire + file »
-     backoff + délestage + scaling + cache + réplica + lecture au primaire + file + capacité de file    6 gagnantes | meilleure : scaling 3, réplica 1, capacité de file 1 | score 35.5 | coût 245/255 | marges coût 4 %, cx 0 %, échecs 100 %, p95 38 %
+     backoff + délestage + scaling + cache + réplica + lecture au primaire + file + capacité de file    3 gagnantes | meilleure : scaling 2, réplica 1, capacité de file 1 | score 30.0 | coût 225/235 | marges coût 4 %, cx 0 %, échecs 100 %, p95 16 %
        ↳ dominée par « backoff + scaling + cache + réplica + lecture au primaire + file + capacité de file »
-     backoff + délestage + autoscaling + cache + réplica + lecture au primaire + file    2 gagnantes | meilleure : autoscaling 3, réplica 1 | score 32.0 | coût 227.08/255 | marges coût 11 %, cx 0 %, échecs 96 %, p95 21 %
-       ↳ dominée par « backoff + autoscaling + cache + réplica + lecture au primaire + file »
 
 Architecture gagnant toutes les vagues : aucune (ok)
 Deux stratégies sur la majorité des vagues : oui
 Tout au maximum, ticket-rush : perd (ok) — Budget dépassé : 360 / 150 ; Trop complexe : 18 / 11 points
 Tout au maximum, pigeons-grounded : perd (ok) — Budget dépassé : 360 / 155 ; Trop complexe : 18 / 11 points
 Tout au maximum, split-registry : perd (ok) — Budget dépassé : 360 / 230 ; Trop complexe : 18 / 13 points
-Tout au maximum, final-joust : perd (ok) — Budget dépassé : 360 / 255 ; Trop complexe : 18 / 14 points
+Tout au maximum, final-joust : perd (ok) — Budget dépassé : 360 / 235 ; Trop complexe : 18 / 14 points
