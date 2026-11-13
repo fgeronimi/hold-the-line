@@ -20,10 +20,12 @@ import {
   type Attempt,
   type ViewState,
 } from './common.ts';
-import { icon } from '../icons.ts';
+import { icon, type IconName } from '../icons.ts';
+import { CONCEPT_ACHIEVEMENTS, noHintId, type Achievement } from '../../data/achievements.ts';
 
-/** Les fenêtres : le choix du scénario, le briefing du chambellan, le debrief d'une vague. */
+/** Les fenêtres : le choix du scénario, le briefing du chambellan, le debrief d'une vague, les succès. */
 export function renderDialog(s: ViewState): string {
+  if (s.showAchievements) return renderAchievements(s);
   if (s.phase === 'choose') return renderChoose(s);
   const wave = s.scenario.waves[s.game.waveIndex];
   if (s.phase === 'briefing' && wave) {
@@ -89,6 +91,7 @@ function renderDebriefDialog(s: ViewState, a: Attempt): string {
   return `<div class="dialog panel ${r.won ? 'won' : 'lost'}">
     <h2>${debriefTitle(a)}</h2>
     ${attemptWave ? renderStars(a.stars, attemptWave) : ''}
+    ${renderUnlocked(s, a.unlocked ?? [])}
     ${debriefTabs(s)}
     ${final}
     ${attemptWave ? debriefBody(s, a, attemptWave) : ''}
@@ -151,11 +154,60 @@ function scenarioCard(c: ViewState['choices'][number]): string {
 
 /** L'écran de choix du scénario, sans verrou (décision S2). */
 function renderChoose(s: ViewState): string {
+  const all = allAchievements(s);
+  const got = all.filter((a) => s.achievements[a.id]).length;
   return `<div class="dialog panel">
     <h2>Hold the Line</h2>
     ${speech(theme.choose.says, theme.choose.real)}
     <div class="scenario-cards">${s.choices.map(scenarioCard).join('')}</div>
+    <p class="actions"><button data-action="show-achievements">${icon('medal')} Succès ${got} / ${all.length}</button></p>
   </div>`;
+}
+
+// ——— Les succès (I20) ———
+
+/** Tous les succès : les concepts, puis « sans indice » pour chaque scénario. */
+function allAchievements(s: ViewState): Achievement[] {
+  const noHint = s.choices.map(
+    (c): Achievement => ({
+      id: noHintId(c.id),
+      concept: 'Trouver par soi-même',
+      tech: `Sans indice : ${capitalize(c.subtitle.replace(/^Hold the Line : /, ''))}`,
+      metaphor: theme.achievements.noHint,
+      real: theme.achievements.noHintReal,
+      icon: 'bulb',
+    }),
+  );
+  return [...CONCEPT_ACHIEVEMENTS, ...noHint];
+}
+
+function achievementCard(a: Achievement, got: boolean): string {
+  return `<li class="ach${got ? '' : ' locked'}">
+      ${icon(a.icon as IconName)}
+      <span><b>${esc(a.tech)}</b> <em>(${esc(a.metaphor)})</em>
+      <small>${got ? esc(a.real) : `À découvrir · ${esc(a.concept)}`}</small></span>
+    </li>`;
+}
+
+/** La fenêtre des succès : ce que la cité sait faire, acquis en couleur, à découvrir grisés. */
+function renderAchievements(s: ViewState): string {
+  const all = allAchievements(s);
+  const got = all.filter((a) => s.achievements[a.id]).length;
+  return `<div class="dialog panel achievements-dialog">
+    <h2>${icon('medal')} Succès · ${got} / ${all.length}</h2>
+    ${speech(theme.achievements.says, theme.achievements.real)}
+    <ul class="achievements">${all.map((a) => achievementCard(a, !!s.achievements[a.id])).join('')}</ul>
+    <p class="actions"><button class="primary" data-action="show-achievements">Fermer</button></p>
+  </div>`;
+}
+
+/** Au debrief, les succès que la vague vient de débloquer. */
+function renderUnlocked(s: ViewState, ids: string[]): string {
+  if (ids.length === 0) return '';
+  const all = allAchievements(s);
+  const items = ids.map((id) => all.find((a) => a.id === id)).filter((a): a is Achievement => !!a);
+  return `<div class="unlocked"><p>${icon('medal')} <b>${esc(theme.achievements.unlocked)}</b></p>
+    <ul class="achievements">${items.map((a) => achievementCard(a, true)).join('')}</ul></div>`;
 }
 
 // ——— Le briefing ———

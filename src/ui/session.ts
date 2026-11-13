@@ -19,10 +19,17 @@ export type Saved = Pick<ViewState, 'game' | 'draft'> & {
   calibration?: Pick<ViewState, 'catalog' | 'scenario'>;
 };
 
-/** Une partie par scénario (décision S2), et le dernier scénario joué. */
+/** Les succès débloqués (I20), par identifiant : où ils l'ont été. */
+export type Unlocked = Record<string, { scenario: string; wave: number }>;
+
+/**
+ * Une partie par scénario (décision S2), et le dernier scénario joué. Les succès valent pour
+ * toutes les parties : ils survivent à « Nouvelle partie ». Champ optionnel, la clé ne change pas.
+ */
 export interface Store {
   current?: string;
   saves: Record<string, Saved>;
+  achievements?: Unlocked;
 }
 
 export type Picked = Pick<ViewState, 'catalog' | 'scenario' | 'game' | 'draft'>;
@@ -53,7 +60,10 @@ export function readStore(value: unknown): Store {
       .filter(([, s]) => isSaved(s))
       .map(([id, s]) => [id, { ...s, game: withStarObjects(s.game) }]),
   );
-  return { ...value, saves };
+  const { achievements: raw, ...rest } = value;
+  if (!isObject(raw)) return { ...rest, saves };
+  const achievements = Object.fromEntries(Object.entries(raw).filter(([, a]) => isObject(a) && typeof a.scenario === 'string' && typeof a.wave === 'number'));
+  return { ...rest, saves, achievements: achievements as Unlocked };
 }
 
 /**
@@ -171,12 +181,17 @@ export function choices(store: Store): ViewState['choices'] {
 }
 
 /** Le magasin avec la partie en cours ; catalogue et scénario n'y entrent que s'ils ont été calibrés. */
-export function withGame(store: Store, state: Picked & Pick<Partial<ViewState>, 'practice'>, calibrated: boolean): Store {
+export function withGame(store: Store, state: Picked & Pick<Partial<ViewState>, 'practice' | 'achievements'>, calibrated: boolean): Store {
   const id = state.scenario.id;
   const calibration = calibrated ? { catalog: state.catalog, scenario: state.scenario } : undefined;
   // Pendant un rejeu (E10), la partie affichée est celle de travail : on garde la vraie.
   const { game, draft } = state.practice ?? state;
-  return { ...store, current: id, saves: { ...store.saves, [id]: { game, draft, ...(calibration && { calibration }) } } };
+  return {
+    ...store,
+    current: id,
+    saves: { ...store.saves, [id]: { game, draft, ...(calibration && { calibration }) } },
+    ...(state.achievements && { achievements: state.achievements }),
+  };
 }
 
 /** Catalogue et scénario du code, auxquels se comparent les réglages calibrés. */

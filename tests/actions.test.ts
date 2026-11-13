@@ -21,6 +21,7 @@ function stateAt(extra: Partial<ViewState> = {}): ViewState {
   return {
     ...picked,
     attempts: [],
+    achievements: {},
     tool: { kind: 'select' },
     history: { undo: 0, redo: 0 },
     phase: 'build',
@@ -116,6 +117,16 @@ describe('les actions', () => {
     expect(kinds(out)).toEqual(['forget-history', 'leave-wave']);
     // Une vague pas encore tenue ne se rejoue pas.
     expect(run('replay-wave', s, { data: { wave: '1' } }).patch).toBeUndefined();
+  });
+
+  it('une vague gagnée débloque ses succès, une seule fois ; le debrief les montre', () => {
+    const won = run('play', atWave2({ draft: A.withCache }));
+    expect(won.patch!.achievements).toHaveProperty('cache');
+    expect(won.patch!.attempts!.at(-1)!.unlocked).toContain('cache');
+    const again = run('play', atWave2({ draft: A.withCache, achievements: won.patch!.achievements! }));
+    expect(again.patch!.attempts!.at(-1)!.unlocked).toEqual([]);
+    const lost = run('play', atWave2({ draft: A.minimal }));
+    expect(lost.patch!.achievements).toEqual({});
   });
 
   it('un rejeu gagné donne ses étoiles à la vraie partie, sans la faire avancer ; quitter la rend', () => {

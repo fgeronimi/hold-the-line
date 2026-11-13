@@ -44,6 +44,7 @@ function initialState(): ViewState {
   return {
     ...picked,
     attempts: [],
+    achievements: store.achievements ?? {},
     tool: { kind: 'select' },
     history: { undo: 0, redo: 0 },
     // Chaque session s'ouvre sur l'écran de choix du scénario.

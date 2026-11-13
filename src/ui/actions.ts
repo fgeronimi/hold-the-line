@@ -1,6 +1,7 @@
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
 import { newGame, playWave, practiceGame, withReplayedStars, type GameState } from '../engine/game.ts';
 import { starCount, starsFor } from '../engine/score.ts';
+import { earned, noHintEarned } from './achievements.ts';
 import { simulateWave } from '../engine/simulate.ts';
 import type { Architecture, ArchNode, BoardCell } from '../engine/types.ts';
 import { isRiver } from '../render/terrain.ts';
@@ -212,7 +213,13 @@ export const actions: Record<string, Action> = {
     const { state: game, result, stars } = playWave(s.game, s.scenario, s.draft, s.catalog);
     const label = `#${id} V${waveIndex + 1} ${s.practice ? 'rejeu ' : ''}${describeDraft(s.draft)}`;
     // Le brouillon est gardé même perdu : on le corrige plutôt que de tout reposer.
-    const recorded = record(s, { label: `${label}${result.won ? '' : ` (perdue : ${wave.title})`}`, waveIndex, result, played: true }, id);
+    // Les succès (I20) : les parades qui ont joué, et « sans indice » quand la vraie partie s'achève sans en avoir pris.
+    const finishing = !s.practice && game.finished;
+    const ids = [...earned(result, s.draft, wave, s.catalog), ...noHintEarned(s.scenario.id, finishing, game.hinted)];
+    const unlocked = ids.filter((x) => !s.achievements[x]);
+    const achievements = unlocked.length > 0 ? { ...s.achievements, ...Object.fromEntries(unlocked.map((x) => [x, { scenario: s.scenario.id, wave: waveIndex }])) } : s.achievements;
+    const base = record(s, { label: `${label}${result.won ? '' : ` (perdue : ${wave.title})`}`, waveIndex, result, played: true }, id);
+    const recorded = { ...base, achievements, attempts: base.attempts!.map((a) => (a.id === id ? { ...a, unlocked } : a)) };
     if (s.practice) {
       // Un rejeu gagné n'apporte à la vraie partie que ses étoiles ; la partie de travail, elle, avance comme une autre.
       const before = s.practice.game.stars.reduce((a, x) => a + starCount(x), 0);
@@ -245,6 +252,8 @@ export const actions: Record<string, Action> = {
     return patch({ catalog: structuredClone(defaults.catalog), scenario: structuredClone(defaults.scenario) }, { kind: 'calibrated', id: s.scenario.id, on: false });
   },
   export: (s) => ({ effects: [{ kind: 'export', text: JSON.stringify({ catalog: s.catalog, scenario: s.scenario }, null, 2) }] }),
+  // La fenêtre des succès : depuis le menu ou l'écran de choix, elle passe devant le reste.
+  'show-achievements': (s) => patch({ showAchievements: !s.showAchievements, showMenu: false }),
   'reset-game': (s) =>
     patch(
       { practice: undefined, game: newGame(), draft: startOf(s.scenario), attempts: [], selected: undefined, selectedNode: undefined, phase: 'briefing', showMenu: false },

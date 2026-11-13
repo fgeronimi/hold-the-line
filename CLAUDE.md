@@ -78,6 +78,14 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   `design.html` (hors build, `/design.html`) est la planche où se choisissent ces dessins : ce qui est
   retenu s'y dessine depuis le sprite du jeu, seules les variantes écartées y restent en ligne. Titrage : `--display`
   (Lilita One, `src/ui/fonts/`, OFL). Une infobulle se pose avec `data-tip` et un `aria-label`.
+- Les succès (I20) : `src/data/achievements.ts` (textes, pictogrammes), `src/ui/achievements.ts`
+  (`earned` : ce que la vague tenue a montré, lu dans le résultat du moteur, sans simulation de
+  plus). Gardés dans `Store.achievements`, pour toutes les parties. `tests/achievements.test.ts`
+  exige que chaque réponse attendue en débloque un et chaque succès une réponse : une vague
+  ou une parade ajoutée doit avoir le sien.
+- Le rejeu d'une vague tenue (E10) : `ViewState.practice` garde la vraie partie et son brouillon,
+  `game` est la partie de travail (`practiceGame`). Tout ce qui écrit dans la partie gardée passe
+  par `withGame`, qui sauve `practice` s'il existe : ne pas sauver `game` directement.
 - `src/ui/draft.ts` : `draftInfo(arch, catalog)` donne validation, ordre, flux et facture d'un
   brouillon, mémorisés par identité de référence. Vues, guide, aide et plateau le lisent au
   lieu de rappeler `validateArchitecture` ou `linkFlows`.

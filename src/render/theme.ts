@@ -75,6 +75,11 @@ export interface Theme {
   finale: string;
   /** Ce qu'affiche le plateau pendant qu'il se charge. */
   loading: string;
+  /**
+   * Les succès (I20) : la fenêtre (le narrateur, puis « en vrai »), la ligne du debrief qui en
+   * annonce un, et le succès « sans indice » d'un scénario (`noHint` : sa métaphore).
+   */
+  achievements: { says: string; real: string; unlocked: string; noHint: string; noHintReal: string };
 }
 
 export type GuideLine =
@@ -101,6 +106,7 @@ export type HintLine = 'place' | 'placeMore' | 'link' | 'upgrade' | 'level' | 'r
  *   `outbox`, `queue`, `queues` (`{count}`) ;
  * - `hot` : le bâtiment le plus chargé d'une vague tenue ;
  * - `superfluous`, `superfluousMany` (`{names}`) : ce dont la vague se passait ;
+ * - `superfluousLevel` (`{names}`) : les évolutions dont un cran de moins suffisait ;
  * - `paradeCosts` : ce qu'ont coûté les protections en place, même quand elles ont tenu ;
  * - `sizing` (`{name}`) : le calcul de dimensionnement du serveur le plus chargé ;
  * - `replayHint` : une vague tenue sans ses trois étoiles se rejoue, sans rien perdre.
@@ -125,6 +131,7 @@ export type DebriefLine =
   | 'hot'
   | 'superfluous'
   | 'superfluousMany'
+  | 'superfluousLevel'
   | 'paradeCosts'
   | 'sizing'
   | 'replayHint';

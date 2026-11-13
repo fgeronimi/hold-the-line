@@ -55,7 +55,8 @@ avec les termes techniques. Chaque bâtiment dit à quoi il sert, dans les deux 
    casser et pourquoi, la parade, et ce qu'on pourrait alléger. Trois étoiles par vague :
    la tenir, sans rien de superflu, en restant économe. Perdre ne coûte rien, démolir non
    plus : on recommence jusqu'aux trois étoiles. Une vague tenue se rejoue aussi, depuis le
-   menu, sans effacer la suite de la partie.
+   menu, sans effacer la suite de la partie. Chaque concept appliqué dans une vague tenue
+   débloque un succès : cache, CDN, idempotence, outbox, circuit breaker…
 
 Mode debug (calibrage, vue tableau, essais hors partie) : ajouter `?debug` à l'URL, ou
 touche D.

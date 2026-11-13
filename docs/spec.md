@@ -339,6 +339,9 @@ et déterministe, séparée de l'affichage.
   parades en place ; le serveur le plus chargé reçoit son calcul de capacité.
 - **Fiches** (I17) : chiffres du jeu, puis une ligne « en vrai » avec l'ordre de grandeur réel
   et sa source quand un chiffre vient d'un fournisseur.
+- **Succès** (I20) : un concept de system design appliqué dans une vague tenue (la parade a
+  joué), plus « sans indice » par scénario ; valables pour toutes les parties. Une fenêtre les
+  montre (menu, écran de choix) et le debrief annonce ceux qu'une vague débloque.
 - **Enchaînement** (I19) : choix → briefing → construction guidée → vague → debrief. Chaque
   écran ne dit qu'une chose : pas de barre du haut au choix, score caché pendant le rejeu,
   barre du rejeu retirée au debrief, outil rendu à la sélection après une pose, et pas de
@@ -376,7 +379,6 @@ Par ordre d'apport pédagogique :
 | Faire jouer 2 ou 3 personnes de la cible, mesurer la durée d'une partie (cible 15 min, B4) | Valider avant d'ajouter |
 | Reproduire les fiches du calendrier dans le jeu (P3) | Le jeu se suffit à lui-même |
 | Questions de clarification : deux par vague, chacune révèle un paramètre caché | Apprendre à cadrer avant de construire |
-| Faire compter la longueur des chemins en coût et en latence | Placement stratégique ; impose de tout recalibrer |
 | Besoins métier flous à traduire en contraintes | Rapproche le jeu d'un énoncé réel |
 | Mode migration (Strangler Fig, Canary, Expand and Contract) | Thème Migration |
 | Partage d'une architecture par lien | Dimension sociale |

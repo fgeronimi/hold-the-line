@@ -8,6 +8,7 @@ import { SCENARIOS } from '../../data/scenarios/index.ts';
 import { hintPanel, type HintPanel } from '../hints.ts';
 import { icon } from '../icons.ts';
 import { guideStep, type TutorialStep } from '../tutorial.ts';
+import type { Unlocked } from '../session.ts';
 
 /**
  * Ce que partagent les calques de l'interface : l'état qu'ils rendent, l'échappement, les
@@ -29,6 +30,8 @@ export interface Attempt {
   stars: Stars;
   /** L'analyse du chambellan, calculée à l'enregistrement (`analysisOf`). */
   analysis?: Analysis | undefined;
+  /** Les succès que cette tentative a débloqués, montrés à son debrief (I20). */
+  unlocked?: string[] | undefined;
 }
 
 /** Outil actif sur le plateau. */
@@ -54,6 +57,10 @@ export interface ViewState {
    */
   practice?: { game: GameState; draft: Architecture; before?: number } | undefined;
   attempts: Attempt[];
+  /** Les succès débloqués, toutes parties confondues (I20) ; gardés dans le magasin. */
+  achievements: Unlocked;
+  /** La fenêtre des succès est ouverte, par-dessus le reste. */
+  showAchievements?: boolean | undefined;
   /** Tentative mise en avant dans le détail du mode debug. */
   selected?: number | undefined;
   tool: Tool;

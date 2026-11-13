@@ -276,20 +276,28 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
   const overspent = cost.value > cost.limit || complexity.value > complexity.limit;
   // Ce qui coûte l'étoile « juste ce qu'il faut » (E7) : un bâtiment ou un cran d'évolution en trop.
   const superfluous = won || overspent ? superfluousOf(arch, wave, catalog) : [];
-  if (superfluous.length > 0) {
-    const plural = superfluous.length > 1;
-    const said = (sp: Spare, label: (id: string) => string) => {
-      if (!sp.upgrade) return label(sp.node);
-      const up = catalog.upgrades[sp.upgrade];
-      const what = up?.techName ?? sp.upgrade;
-      return sp.level ? `${what} de ${label(sp.node)} (${sp.level} suffit)` : `${what} de ${label(sp.node)}`;
-    };
+  const said = (sp: Spare, label: (id: string) => string) => (sp.upgrade ? `${catalog.upgrades[sp.upgrade]?.techName ?? sp.upgrade} de ${label(sp.node)}` : label(sp.node));
+  // Ce dont la vague se passait entièrement : un bâtiment, ou une évolution coupée.
+  const removable = superfluous.filter((sp) => !sp.level);
+  if (removable.length > 0) {
+    const plural = removable.length > 1;
     out.push({
       tone: 'tip',
-      says: line(plural ? 'superfluousMany' : 'superfluous', { names: superfluous.map((sp) => said(sp, metaphor)).join(', ') }),
-      tech: `${superfluous.map((sp) => said(sp, name)).join(', ')} : la vague rejouée sans ${plural ? 'eux' : 'lui'} respecte toujours le SLA. Chaque composant d’un système doit répondre à un besoin précis.`,
+      says: line(plural ? 'superfluousMany' : 'superfluous', { names: removable.map((sp) => said(sp, metaphor)).join(', ') }),
+      tech: `${removable.map((sp) => said(sp, name)).join(', ')} : la vague rejouée sans ${plural ? 'eux' : 'lui'} respecte toujours le SLA. Chaque composant d’un système doit répondre à un besoin précis.`,
       remedy: 'Le retirer pour l’étoile « rien de superflu », ou le garder en connaissance de cause pour une vague à venir.',
       concept: 'Over-engineering',
+    });
+  }
+  // Ce qui était surdimensionné d'un cran : le niveau qui suffisait est dit.
+  const lowered = superfluous.filter((sp) => sp.level);
+  if (lowered.length > 0) {
+    out.push({
+      tone: 'tip',
+      says: line('superfluousLevel', { names: lowered.map((sp) => said(sp, metaphor)).join(', ') }),
+      tech: `${lowered.map((sp) => `${said(sp, name)} : ${sp.level} suffit`).join(' ; ')}. La vague rejouée ainsi respecte toujours le SLA : dimensionner au plus juste, c'est le calcul de capacité.`,
+      remedy: 'Baisser d’un cran pour l’étoile « rien de superflu ».',
+      concept: 'Calcul de capacité',
     });
   }
   return out;

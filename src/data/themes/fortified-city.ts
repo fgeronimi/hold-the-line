@@ -142,6 +142,7 @@ export const fortifiedCity: Theme = {
     hot: '{name} : presque plein au plus fort de la vague. À la prochaine affluence, c’est là que ça cédera.',
     superfluous: 'Sans {names}, la cité aurait tenu quand même : il coûte sans rien apporter cette vague.',
     superfluousMany: 'Sans {names}, la cité aurait tenu quand même : ils coûtent sans rien apporter cette vague.',
+    superfluousLevel: 'Un cran de moins aurait suffi, Sire : {names}.',
     paradeCosts: 'Chaque protection de la cité a son prix, Sire, même quand elle a tenu.',
     sizing: 'Voici le compte de {name}, Sire, pour le jour où la foule grossira.',
     replayHint: 'Une étoile vous échappe ? Rejouez cette vague quand vous voudrez : la suite de la partie n’en sera pas touchée.',
@@ -162,6 +163,13 @@ export const fortifiedCity: Theme = {
   },
   finale: 'La cité a tenu toutes les vagues.',
   loading: 'Chargement de la cité…',
+  achievements: {
+    says: 'Sire, voici ce que la cité sait faire. Chaque savoir se gagne en le mettant en œuvre : il suffit d’une vague tenue où la parade a joué.',
+    real: 'Chaque succès est un concept de system design appliqué dans une vague tenue. Ils valent pour toutes les parties, et se gardent même après « Nouvelle partie ».',
+    unlocked: 'La cité a appris quelque chose, Sire !',
+    noHint: 'sans souffler mot au chambellan',
+    noHintReal: 'Tout le scénario tenu sans prendre un seul indice.',
+  },
   choose: {
     says: 'Sire, quelle partie de la cité voulez-vous défendre ?',
     real: 'Choisissez un scénario. Chacun a sa propre partie, vous pouvez passer de l’un à l’autre sans rien perdre.',
