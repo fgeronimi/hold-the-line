@@ -1,7 +1,8 @@
 import type { Wave } from '../../engine/types.ts';
+import { starCount } from '../../engine/score.ts';
 import { draftInfo } from '../draft.ts';
 import { icon, type IconName } from '../icons.ts';
-import { decimal as fmt, esc, totalScore, totalStars, type ViewState } from './common.ts';
+import { decimal as fmt, esc, realGame, totalStars, type ViewState } from './common.ts';
 
 const KINDS: { k: 'read' | 'write' | 'async'; icon: IconName; short: string; tip: string }[] = [
   { k: 'read', icon: 'read', short: 'lectures/s', tip: 'Lectures par seconde au plus fort de la vague' },
@@ -25,6 +26,9 @@ function trafficPeak(wave: Wave): string {
     .join('');
 }
 
+/** Les étoiles des vagues d'avant `k` : la partie a déjà compté celles de la vague jouée. */
+const starsBefore = (s: ViewState, k: number) => s.game.stars.slice(0, k).reduce((a, x) => a + starCount(x), 0);
+
 /** Les losanges de la progression : vagues tenues en or, la vague en cours en rouge. */
 const pips = (current: number, total: number) =>
   `<span class="wave-pips" aria-hidden="true">${Array.from({ length: total }, (_, k) => `<i class="${k < current ? 'done' : k === current ? 'now' : ''}"></i>`).join('')}</span>`;
@@ -44,19 +48,20 @@ function buildGauges(s: ViewState, wave: Wave): string {
 }
 
 function renderMenu(s: ViewState): string {
-  const rewinds = s.game.history
-    .slice(0, s.game.waveIndex)
-    .map((_, i) => `<button data-action="rewind" data-wave="${i}">Revenir à la vague ${i + 1}</button>`)
-    .join('');
+  // Chaque vague tenue se rejoue sans rien effacer (E10), partie finie comprise.
+  const won = realGame(s).waveIndex;
+  const replays = s.practice
+    ? '<button data-action="leave-practice">Quitter le rejeu</button>'
+    : Array.from({ length: won }, (_, i) => `<button data-action="replay-wave" data-wave="${i}">Rejouer la vague ${i + 1}</button>`).join('');
   return `<div class="menu panel">
         <button data-action="choose-scenario">Changer de scénario</button>
         <button data-action="reset-game">Nouvelle partie</button>
-        ${rewinds}
+        ${replays}
         <button data-action="toggle-debug">${s.debug ? 'Quitter' : 'Ouvrir'} le mode debug</button>
       </div>`;
 }
 
-/** La barre du haut : la vague, ce que coûte la cité en construction, le score, le menu. */
+/** La barre du haut : la vague, ce que coûte la cité en construction, les étoiles, le menu. */
 export function renderHud(s: ViewState): string {
   // Avant le choix du scénario, aucune vague n'est encore la nôtre.
   if (s.phase === 'choose') return '';
@@ -68,12 +73,10 @@ export function renderHud(s: ViewState): string {
   const building = s.phase !== 'wave' && s.phase !== 'debrief';
   const gauges = wave && building ? buildGauges(s, wave) : '';
   const menu = s.showMenu ? renderMenu(s) : '';
-  const title = wave ? `Vague ${shownIndex + 1} / ${n}` : 'Partie terminée';
+  const title = wave ? `${s.practice ? 'Rejeu · ' : ''}Vague ${shownIndex + 1} / ${n}` : 'Partie terminée';
   const subtitle = wave ? esc(wave.title) : esc(s.scenario.subtitle);
-  // Pendant le rejeu, le score d'avant la vague : le résultat se découvre au debrief.
-  const before = s.phase === 'wave' && playing ? playing.waveIndex : undefined;
-  const stars = before === undefined ? totalStars(s) : s.game.stars.slice(0, before).reduce((a, x) => a + x, 0);
-  const score = before === undefined ? totalScore(s) : s.game.scores.slice(0, before).reduce((a, x) => a + x, 0);
+  // Pendant la vague, les étoiles d'avant : le résultat se découvre au debrief.
+  const stars = s.phase !== 'wave' || !playing ? totalStars(s) : s.practice ? (s.practice.before ?? totalStars(s)) : starsBefore(s, playing.waveIndex);
   const briefing = wave ? `<button class="round" data-action="show-briefing" data-tip="Revoir le briefing" aria-label="Revoir le briefing">${icon('hat')}</button>` : '';
   return `
     <div class="hud-bar">
@@ -84,7 +87,6 @@ export function renderHud(s: ViewState): string {
       ${gauges ? `<div class="plaque hud-gauges">${gauges}</div>` : ''}
       <div class="plaque hud-actions">
         ${gauge('star', 'étoiles', 'Étoiles gagnées', `${stars} <em>/ ${n * 3}</em>`, false, ' stars')}
-        ${gauge('medal', 'score', 'Score', fmt(score), false)}
         ${briefing}
         <button class="round" data-action="menu" data-tip="Menu" aria-label="Menu">${icon('menu')}</button>
       </div>

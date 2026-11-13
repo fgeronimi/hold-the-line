@@ -2,7 +2,6 @@ import { runMassSim } from '../src/balance/mass-sim.ts';
 import { diffLines, formatScenarioReport } from '../src/balance/report.ts';
 import { balanceSpaces } from '../src/data/balance-space.ts';
 import { catalog } from '../src/data/catalog.ts';
-import { scoring } from '../src/data/scoring.ts';
 
 // `npm run balance -- market` : un seul scénario, par son id.
 // `--snapshot` écrit docs/balance-snapshot.txt, `--check` le compare au rapport courant.
@@ -33,7 +32,7 @@ const stable: string[] = [];
 
 for (const { scenario, space } of balanceSpaces.filter((b) => !only || b.scenario.id === only)) {
   const started = performance.now();
-  const report = runMassSim(scenario, catalog, space, scoring);
+  const report = runMassSim(scenario, catalog, space);
   const elapsed = Math.round(performance.now() - started);
   const { lines, ko: scenarioKo } = formatScenarioReport(scenario, space, report);
   ko += scenarioKo;

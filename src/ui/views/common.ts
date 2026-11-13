@@ -1,5 +1,5 @@
 import type { GameState } from '../../engine/game.ts';
-import type { Stars } from '../../engine/score.ts';
+import { starCount, type Stars } from '../../engine/score.ts';
 import type { Architecture, BoardCell, Catalog, Scenario, Wave, WaveResult } from '../../engine/types.ts';
 import { fortifiedCity as theme } from '../../data/themes/fortified-city.ts';
 import { escapeHtml, percentPrecise } from '../../render/html.ts';
@@ -19,14 +19,13 @@ export interface Attempt {
   label: string;
   waveIndex: number;
   result: WaveResult;
-  score: number;
   /** Une tentative jouée compte dans la partie ; un essai sert seulement à comparer. */
   played: boolean;
   /** Réglages de calibrage différents du code au moment de la tentative. */
   settings: string[];
   /** Architecture jouée, pour la rejouer en 3D. */
   arch: Architecture;
-  /** Objectifs atteints, comptés au moment de la tentative (les rejeux d'avant comptent). */
+  /** Objectifs atteints par cette tentative (E7). */
   stars: Stars;
   /** L'analyse du chambellan, calculée à l'enregistrement (`analysisOf`). */
   analysis?: Analysis | undefined;
@@ -48,6 +47,12 @@ export interface ViewState {
   scenario: Scenario;
   game: GameState;
   draft: Architecture;
+  /**
+   * Un rejeu de vague tenue en cours (E10) : `game` est alors la partie de travail, et la vraie
+   * partie attend ici avec son brouillon. `before` : les étoiles de la vraie partie avant le
+   * dernier rejeu joué, que la barre du haut montre pendant la vague.
+   */
+  practice?: { game: GameState; draft: Architecture; before?: number } | undefined;
   attempts: Attempt[];
   /** Tentative mise en avant dans le détail du mode debug. */
   selected?: number | undefined;
@@ -99,8 +104,9 @@ export const decimal = (n: number) => (Number.isInteger(n) ? String(n) : n.toFix
 /** Les taux du détail chiffré, à deux décimales. */
 export const pct = percentPrecise;
 
-export const totalScore = (s: ViewState) => s.game.scores.reduce((a, x) => a + x, 0);
-export const totalStars = (s: ViewState) => s.game.stars.reduce((a, x) => a + x, 0);
+/** Les étoiles de la vraie partie, même pendant un rejeu : c'est elle qu'on remplit. */
+export const realGame = (s: ViewState) => s.practice?.game ?? s.game;
+export const totalStars = (s: ViewState) => realGame(s).stars.reduce((a, x) => a + starCount(x), 0);
 export const starIcons = (n: number) => '★'.repeat(n) + '☆'.repeat(3 - n);
 /** La classe `active` d'un bouton ou d'un onglet, ou rien. */
 export const activeClass = (on: boolean) => (on ? 'class="active"' : '');
@@ -121,7 +127,8 @@ export const hintsOf = (s: ViewState): HintPanel => hintPanel({ game: s.game, sc
 export function guideOf(s: ViewState): TutorialStep | undefined {
   const wave = s.scenario.waves[s.game.waveIndex];
   if (s.phase !== 'build' || !wave) return undefined;
-  const firstWaveOfGame = s.game.waveIndex === 0 && s.scenario.id === SCENARIOS[0]!.scenario.id;
+  // Le pas-à-pas ne guide que la toute première vague du jeu, pas son rejeu.
+  const firstWaveOfGame = s.game.waveIndex === 0 && s.scenario.id === SCENARIOS[0]!.scenario.id && !s.practice;
   return guideStep(s.draft, s.catalog, wave, s.game.waveIndex, s.game.committed, firstWaveOfGame);
 }
 

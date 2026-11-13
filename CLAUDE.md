@@ -29,7 +29,8 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
 
 - `src/engine/` : moteur pur, sans DOM. `simulateWave(architecture, wave, catalog)`
   renvoie jauges, facture, journal d'événements et
-  métriques par tick. `game.ts` enchaîne les vagues et les rejeux, `score.ts` note.
+  métriques par tick. `game.ts` enchaîne les vagues et les rejeux, `score.ts` compte les étoiles
+  (E7, pas de score), `lean.ts` trouve le superflu (étoile « rien de superflu »).
 - Modèle de flux par ticks : à chaque tick, le trafic traverse le graphe en ordre
   topologique ; au-delà de sa capacité un nœud fait échouer l'excédent. Seule la file
   garde un arriéré d'un tick à l'autre. Pas d'aléa, donc pas de graine.
@@ -119,7 +120,9 @@ moteur ou au calibrage. Toute nouvelle décision y est consignée, puis reporté
   par scénario, plus ses architectures types (`*.archetypes.ts`) ; `index.ts` liste les
   scénarios de l'écran de choix. Une partie par scénario, sauvegardées ensemble.
 - `tests/url-shortener.test.ts`, `tests/market.test.ts`, `tests/resilience.test.ts` et `tests/tournament.test.ts` verrouillent l'équilibrage : chaque vague gagnée avec la
-  réponse attendue, perdue sans elle et perdue sur-dimensionnée.
+  réponse attendue, perdue sans elle et perdue sur-dimensionnée. `tests/stars.test.ts` exige
+  qu'une réponse attendue de chaque vague ait les trois étoiles : un recalibrage qui la casse
+  se corrige dans la vague, pas dans l'étoile.
 
 ## Pièges
 

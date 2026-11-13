@@ -83,14 +83,6 @@ describe('calibration', () => {
   });
 });
 
-describe('pénalité de rejeu', () => {
-  it('ne retire jamais plus que les points de la vague', async () => {
-    const { replayCut } = await import('../src/ui/views.ts');
-    expect(replayCut(2)).toBe('−40 % au score');
-    expect(replayCut(13)).toBe('la vague ne rapporte plus de points');
-  });
-});
-
 describe('pastilles d’évolution', () => {
   // Pas de DOM dans les tests : on lit le HTML produit, pastille par pastille.
   const pipsOf = (node: Parameters<typeof upgradePips>[0]) => upgradePips(node, catalog).split(/(?=<(?:div|button) class="pip)/).slice(1);
@@ -270,7 +262,7 @@ describe('le bouton « Un indice »', () => {
     const wave = urlShortener.waves[2]!;
     const result = simulateWave(A.withCache, wave, catalog);
     expect(result.won).toBe(false);
-    const attempt = { id: 1, label: 'x', waveIndex: 2, result, score: 0, played: true, settings: [], arch: A.withCache, stars: { held: false, firstTry: false, thrifty: false } };
+    const attempt = { id: 1, label: 'x', waveIndex: 2, result, played: true, settings: [], arch: A.withCache, stars: { held: false, lean: false, thrifty: false } };
     const html = renderDialog(view(1, { phase: 'debrief', attempts: [attempt], current: 1, debriefTab: 'analysis' } as Partial<ViewState>));
     expect(button(html)).not.toContain('disabled');
   });
@@ -278,7 +270,8 @@ describe('le bouton « Un indice »', () => {
 
 describe('la barre du haut', () => {
   // La vague 2 vient d'être gagnée : la partie a déjà avancé et compté ses étoiles.
-  const won = { ...newGame(), waveIndex: 2, scores: [50, 80], stars: [3, 2], history: [{ nodes: [], links: [] }, A.minimal, A.withCache] };
+  const all = { held: true, lean: true, thrifty: true };
+  const won = { ...newGame(), waveIndex: 2, stars: [all, { ...all, lean: false }], history: [{ nodes: [], links: [] }, A.minimal, A.withCache] };
   const view = (extra: Partial<ViewState>): ViewState =>
     ({ catalog, scenario: urlShortener, game: won, draft: A.withCache, attempts: [{ id: 7, waveIndex: 1 }], current: 7, tool: { kind: 'select' }, history: { undo: 0, redo: 0 }, ...extra }) as unknown as ViewState;
 
@@ -286,10 +279,19 @@ describe('la barre du haut', () => {
     expect(renderHud(view({ phase: 'choose' }))).toBe('');
   });
 
-  it('pendant le rejeu, garde le score d’avant la vague ; le debrief le révèle', () => {
+  it('pendant la vague, garde les étoiles d’avant ; le debrief les révèle ; plus de score', () => {
     expect(renderHud(view({ phase: 'wave' }))).toMatch(/<b>3 <em>\/ 18<\/em><\/b>/);
-    expect(renderHud(view({ phase: 'wave' }))).toContain('<b>50</b>');
     expect(renderHud(view({ phase: 'debrief' }))).toMatch(/<b>5 <em>\/ 18<\/em><\/b>/);
-    expect(renderHud(view({ phase: 'debrief' }))).toContain('<b>130</b>');
+    expect(renderHud(view({ phase: 'debrief' }))).not.toContain('score');
+  });
+
+  it('le menu propose de rejouer chaque vague tenue ; pendant un rejeu, d’en sortir', () => {
+    const menu = renderHud(view({ phase: 'build', showMenu: true }));
+    expect(menu).toContain('data-action="replay-wave" data-wave="0"');
+    expect(menu).toContain('data-action="replay-wave" data-wave="1"');
+    expect(menu).not.toContain('data-wave="2"');
+    const inPractice = renderHud(view({ phase: 'build', showMenu: true, practice: { game: won, draft: A.withCache } }));
+    expect(inPractice).toContain('data-action="leave-practice"');
+    expect(inPractice).toContain('Rejeu · Vague');
   });
 });

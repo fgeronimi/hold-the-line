@@ -1,6 +1,7 @@
 import { catalog as defaultCatalog } from '../data/catalog.ts';
 import { SCENARIOS, scenarioById } from '../data/scenarios/index.ts';
 import { newGame, type GameState } from '../engine/game.ts';
+import { NO_STARS, starCount, type Stars } from '../engine/score.ts';
 import type { Architecture, Catalog, Scenario } from '../engine/types.ts';
 import { autoPlace } from './board.ts';
 import type { ViewState } from './views.ts';
@@ -47,8 +48,26 @@ function isSaved(x: unknown): x is Saved {
  */
 export function readStore(value: unknown): Store {
   if (!isStore(value)) return { saves: {} };
-  const saves = Object.fromEntries(Object.entries(value.saves).filter(([, s]) => isSaved(s)));
+  const saves = Object.fromEntries(
+    Object.entries(value.saves)
+      .filter(([, s]) => isSaved(s))
+      .map(([id, s]) => [id, { ...s, game: withStarObjects(s.game) }]),
+  );
   return { ...value, saves };
+}
+
+/**
+ * Une partie d'avant les étoiles détaillées (E7, E9) gardait un score et un nombre d'étoiles
+ * par vague. Le nombre se convertit au plus juste : une étoile, la vague était tenue ; trois,
+ * elle était aussi économe. « Rien de superflu » n'existait pas : elle reste à gagner, en
+ * rejouant la vague. Le score est oublié.
+ */
+export function withStarObjects(game: GameState): GameState {
+  const { scores: _, ...rest } = game as GameState & { scores?: unknown };
+  const stars = (game.stars as unknown[]).map((x): Stars =>
+    typeof x === 'number' ? { held: x >= 1, lean: false, thrifty: x >= 3 } : { ...NO_STARS, ...(x as Partial<Stars>) },
+  );
+  return { ...rest, stars };
 }
 
 export const defaultScenario = (id: string): Scenario => scenarioById(id) ?? SCENARIOS[0]!.scenario;
@@ -99,17 +118,17 @@ export function withWorkers(arch: Architecture, catalog: Catalog): Architecture 
 const INSERTED_WAVES: Record<string, number> = { 'url-shortener': 4, market: 4 };
 
 /**
- * Une partie terminée avant l'ajout d'une vague garde une note par vague de l'époque : sans
- * correction, chaque note glisse d'un cran et la dernière vague s'affiche sans score. La vague
- * ajoutée y entre sans note ni étoile, avec l'architecture de la vague d'avant. Une partie en
- * cours n'est pas touchée : rien ne dit si elle date d'avant ou d'après l'ajout.
+ * Une partie terminée avant l'ajout d'une vague garde des étoiles par vague de l'époque : sans
+ * correction, elles glissent d'un cran et la dernière vague s'affiche sans étoile. La vague
+ * ajoutée y entre sans étoile, avec l'architecture de la vague d'avant. Une partie en cours
+ * n'est pas touchée : rien ne dit si elle date d'avant ou d'après l'ajout.
  */
 export function withInsertedWaves(game: GameState, scenario: Scenario): GameState {
   const at = INSERTED_WAVES[scenario.id];
-  if (at === undefined || !game.finished || game.scores.length !== scenario.waves.length - 1 || game.scores.length < at) return game;
+  if (at === undefined || !game.finished || game.stars.length !== scenario.waves.length - 1 || game.stars.length < at) return game;
   const insert = <T>(xs: readonly T[], x: T) => [...xs.slice(0, at), x, ...xs.slice(at)];
   const before = game.history[at] ?? game.committed;
-  return { ...game, scores: insert(game.scores, 0), stars: insert(game.stars, 0), history: insert(game.history, before), waveIndex: scenario.waves.length };
+  return { ...game, stars: insert(game.stars, NO_STARS), history: insert(game.history, before), waveIndex: scenario.waves.length };
 }
 
 /** La partie convertie au catalogue courant : brouillon, architecture validée et historique ensemble. */
@@ -145,17 +164,19 @@ export function choices(store: Store): ViewState['choices'] {
       pitch,
       waves: scenario.waves.length,
       reached: game?.waveIndex ?? 0,
-      stars: game?.stars.reduce((a, x) => a + x, 0) ?? 0,
+      stars: game?.stars.reduce((a, x) => a + starCount(x), 0) ?? 0,
       finished: game?.finished ?? false,
     };
   });
 }
 
 /** Le magasin avec la partie en cours ; catalogue et scénario n'y entrent que s'ils ont été calibrés. */
-export function withGame(store: Store, state: Picked, calibrated: boolean): Store {
+export function withGame(store: Store, state: Picked & Pick<Partial<ViewState>, 'practice'>, calibrated: boolean): Store {
   const id = state.scenario.id;
   const calibration = calibrated ? { catalog: state.catalog, scenario: state.scenario } : undefined;
-  return { ...store, current: id, saves: { ...store.saves, [id]: { game: state.game, draft: state.draft, ...(calibration && { calibration }) } } };
+  // Pendant un rejeu (E10), la partie affichée est celle de travail : on garde la vraie.
+  const { game, draft } = state.practice ?? state;
+  return { ...store, current: id, saves: { ...store.saves, [id]: { game, draft, ...(calibration && { calibration }) } } };
 }
 
 /** Catalogue et scénario du code, auxquels se comparent les réglages calibrés. */

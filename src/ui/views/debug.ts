@@ -1,4 +1,5 @@
 import type { LinkFlows } from '../../engine/routing.ts';
+import { starCount } from '../../engine/score.ts';
 import type { Architecture, Gauge, SimEvent, Wave } from '../../engine/types.ts';
 import { calibrationGroups, formatField, getAt, type FieldGroup } from '../calibration.ts';
 import { draftInfo } from '../draft.ts';
@@ -166,16 +167,11 @@ function renderDebrief(a: Attempt, s: ViewState): string {
   const reasons = Object.entries(r.failuresByReason).filter(([, v]) => v > 0);
   const replay = r.ticks.length > 0 ? `<p><button data-action="replay" data-attempt="${a.id}"><b>Voir la vague</b></button></p>` : '';
   const losses = r.lossReasons.length > 0 ? `<ul>${r.lossReasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
-  const rewindNote =
-    a.played && !r.won
-      ? '<p>La vague se rejoue depuis l’architecture validée à la vague précédente. Si un choix plus ancien la rend impossible, revenir à une vague antérieure (en haut) : ça compte comme un rejeu.</p>'
-      : '';
   return `
     <section class="${r.won ? 'won' : 'lost'}">
-      <h2>${esc(a.label)} : ${r.won ? 'tenue' : 'perdue'}${a.played && r.won ? ` — ${fmt(a.score)} points` : ''}</h2>
+      <h2>${esc(a.label)} : ${r.won ? 'tenue' : 'perdue'}${r.won ? ` — ${starCount(a.stars)} ★` : ''}</h2>
       ${replay}
       ${losses}
-      ${rewindNote}
       ${wave ? renderFindings(findingsOf(a, wave, s)) : ''}
       <div class="cols">
         <div>
@@ -246,7 +242,7 @@ function renderComparison(attempts: Attempt[]): string {
     ${row('complexité', (a) => `${a.result.gauges.complexity.value} / ${a.result.gauges.complexity.limit}`)}
     ${row("taux d'échec", (a) => pct(a.result.gauges.failureRate.value))}
     ${row('latence p95', (a) => `${fmt(a.result.gauges.latency.value)} ms`)}
-    ${row('score', (a) => (a.played ? fmt(a.score) : '—'))}
+    ${row('étoiles', (a) => `${starCount(a.stars)} / 3`)}
     ${row('réglages modifiés', (a) => settings(a))}
   </table>`;
 }

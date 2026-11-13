@@ -121,7 +121,7 @@ Tout au maximum, three-trades : perd (ok) — Budget dépassé : 350 / 180 ; Tro
 Tout au maximum, double-delivery : perd (ok) — Budget dépassé : 350 / 210 ; Trop complexe : 18 / 15 points ; SLA rompu : latence p95 111.7 ms (max 60 ms) ; SLA rompu : latence p95 des événements 241.0 ms (max 60 ms)
 Tout au maximum, lost-orders : perd (ok) — Budget dépassé : 350 / 260 ; SLA rompu : latence p95 des événements 231.1 ms (max 60 ms)
 Tout au maximum, poison-order : perd (ok) — Budget dépassé : 350 / 275 ; SLA rompu : latence p95 des événements 231.1 ms (max 60 ms)
-Tout au maximum, sales : perd (ok) — Budget dépassé : 350 / 325 ; SLA rompu : latence p95 des événements 240.1 ms (max 60 ms)
+Tout au maximum, sales : perd (ok) — Budget dépassé : 350 / 325 ; SLA rompu : latence p95 des événements 246.3 ms (max 60 ms)
 
 ## Le comptoir des paiements — 384 architectures × 5 vagues
 [ok] checkout (réponse unique assumée) — 1 stratégie(s) : serveur + base

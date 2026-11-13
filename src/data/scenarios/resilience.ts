@@ -38,6 +38,8 @@ export const resilience: Scenario = {
       ramp: RAMP,
       profile: flat,
       sources: [customers(300, 30)],
+      // Chaque paiement doit parvenir au banquier : une cité qui ne le relie pas ne paie rien.
+      consumers: ['bank'],
       sla: SLA,
       budget: 80,
       complexityCap: 4,
@@ -56,6 +58,8 @@ export const resilience: Scenario = {
       ramp: RAMP,
       profile: flat,
       sources: [customers(300, 30)],
+      // Chaque paiement doit parvenir au banquier : une cité qui ne le relie pas ne paie rien.
+      consumers: ['bank'],
       sla: SLA,
       budget: 100,
       complexityCap: 7,
@@ -75,6 +79,8 @@ export const resilience: Scenario = {
       ramp: RAMP,
       profile: flat,
       sources: [customers(750, 30)],
+      // Chaque paiement doit parvenir au banquier : une cité qui ne le relie pas ne paie rien.
+      consumers: ['bank'],
       sla: SLA,
       budget: 125,
       complexityCap: 10,
@@ -94,6 +100,8 @@ export const resilience: Scenario = {
       ramp: RAMP,
       profile: flat,
       sources: [customers(900, 30)],
+      // Chaque paiement doit parvenir au banquier : une cité qui ne le relie pas ne paie rien.
+      consumers: ['bank'],
       sla: SLA,
       budget: 140,
       complexityCap: 12,
@@ -113,6 +121,8 @@ export const resilience: Scenario = {
       ramp: RAMP,
       profile: flat,
       sources: [customers(2200, 60)],
+      // Chaque paiement doit parvenir au banquier : une cité qui ne le relie pas ne paie rien.
+      consumers: ['bank'],
       sla: SLA,
       budget: 250,
       complexityCap: 18,

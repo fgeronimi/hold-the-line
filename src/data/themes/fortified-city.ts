@@ -144,6 +144,7 @@ export const fortifiedCity: Theme = {
     superfluousMany: 'Sans {names}, la cité aurait tenu quand même : ils coûtent sans rien apporter cette vague.',
     paradeCosts: 'Chaque protection de la cité a son prix, Sire, même quand elle a tenu.',
     sizing: 'Voici le compte de {name}, Sire, pour le jour où la foule grossira.',
+    replayHint: 'Une étoile vous échappe ? Rejouez cette vague quand vous voudrez : la suite de la partie n’en sera pas touchée.',
   },
   guide: {
     placeServer: 'Il nous faut des scribes pour répondre aux voyageurs. Posez une Tour des scribes près des hameaux.',

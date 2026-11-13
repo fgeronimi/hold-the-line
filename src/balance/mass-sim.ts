@@ -1,4 +1,3 @@
-import { scoreWave, type Scoring } from '../engine/score.ts';
 import { simulateWave } from '../engine/simulate.ts';
 import type { Catalog, Scenario, WaveResult } from '../engine/types.ts';
 import { choiceKey, enumerate, maxedChoice, reductions, strategyName, strategyParts, type BalanceSpace, type Choice } from './canonical.ts';
@@ -42,7 +41,17 @@ export interface MassSimReport {
  * Joue chaque architecture canonique sur chaque vague, isolément : démolir est gratuit
  * (E8), une vague ne dépend donc pas de la précédente. On mesure ce qui peut gagner.
  */
-export function runMassSim(scenario: Scenario, catalog: Catalog, space: BalanceSpace, scoring: Scoring): MassSimReport {
+/**
+ * La qualité d'une gagnante, pour classer les stratégies entre elles : 100 × la moyenne de ses
+ * marges bornées. Le jeu n'a plus de score (E9) ; l'équilibrage garde cette mesure pour ordonner.
+ */
+function quality(result: WaveResult): number {
+  if (!result.won) return 0;
+  const margins = Object.values(result.gauges).map((g) => Math.min(1, Math.max(0, g.margin)));
+  return (100 * margins.reduce((a, m) => a + m, 0)) / margins.length;
+}
+
+export function runMassSim(scenario: Scenario, catalog: Catalog, space: BalanceSpace): MassSimReport {
   const candidates = [...enumerate(space)];
   const winsEverywhere = new Set(candidates.map((_, i) => i));
 
@@ -59,7 +68,7 @@ export function runMassSim(scenario: Scenario, catalog: Catalog, space: BalanceS
       }
       winners.add(choiceKey(space, c.choice));
       winningChoices.set(c.strategy, [...(winningChoices.get(c.strategy) ?? []), c.choice]);
-      const score = scoreWave(result, 0, scoring);
+      const score = quality(result);
       const group = groups.get(c.strategy);
       if (!group) {
         groups.set(c.strategy, {

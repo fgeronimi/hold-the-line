@@ -94,7 +94,7 @@ async function seed(page, id, k, draft = 'answer') {
       const g = newGame();
       const history = [g.history[0]];
       for (let i = 1; i <= k; i++) history.push(answersOf(id, i - 1)[0]);
-      const game = { ...g, waveIndex: k, committed: history[k], history, scores: Array(k).fill(900), stars: Array(k).fill(3) };
+      const game = { ...g, waveIndex: k, committed: history[k], history, stars: Array(k).fill({ held: true, lean: true, thrifty: true }) };
       localStorage.setItem(key, JSON.stringify({ current: id, saves: { [id]: { game, draft: draft === 'answer' ? answersOf(id, k)[0] : history[k] } } }));
     },
     { id, k, draft, key: KEY },

@@ -1,11 +1,11 @@
 import { incidentLessons, paradeCosts, reasonLessons, saturationLessons, type Lesson } from '../data/lessons.ts';
 import { bill } from '../engine/budget.ts';
+import { superfluous as superfluousOf, type Spare } from '../engine/lean.ts';
 import { simulateWave } from '../engine/simulate.ts';
 import type { Architecture, Catalog, RequestKind, TickMetrics, UpgradeEffect, Wave, WaveResult } from '../engine/types.ts';
 import { hasEffect, resolveUpgrades, withEffect } from '../engine/upgrades.ts';
 import { percent as pct } from '../render/html.ts';
 import { nodeNames, type DebriefLine, type Theme } from '../render/theme.ts';
-import { removeNode } from './editor.ts';
 
 /** Un débit lisible : « 7 200 ». */
 const fmtCount = (x: number) => Math.round(x).toLocaleString('fr-FR').replace(/\u202f|\u00a0/g, ' ');
@@ -274,14 +274,21 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
   // Ce qu'on pourrait alléger : seulement si la vague a tenu, ou si le trésor ou la
   // complexité débordent (c'est alors la première chose à retirer).
   const overspent = cost.value > cost.limit || complexity.value > complexity.limit;
-  const superfluous = won || overspent ? superfluousNodes() : [];
+  // Ce qui coûte l'étoile « juste ce qu'il faut » (E7) : un bâtiment ou un cran d'évolution en trop.
+  const superfluous = won || overspent ? superfluousOf(arch, wave, catalog) : [];
   if (superfluous.length > 0) {
     const plural = superfluous.length > 1;
+    const said = (sp: Spare, label: (id: string) => string) => {
+      if (!sp.upgrade) return label(sp.node);
+      const up = catalog.upgrades[sp.upgrade];
+      const what = up?.techName ?? sp.upgrade;
+      return sp.level ? `${what} de ${label(sp.node)} (${sp.level} suffit)` : `${what} de ${label(sp.node)}`;
+    };
     out.push({
       tone: 'tip',
-      says: line(plural ? 'superfluousMany' : 'superfluous', { names: superfluous.map(metaphor).join(', ') }),
-      tech: `${superfluous.map(name).join(', ')} : la vague rejouée sans ${plural ? 'eux' : 'lui'} respecte toujours le SLA. Chaque composant d’un système doit répondre à un besoin précis.`,
-      remedy: 'Le retirer, ou le garder en connaissance de cause pour une vague à venir.',
+      says: line(plural ? 'superfluousMany' : 'superfluous', { names: superfluous.map((sp) => said(sp, metaphor)).join(', ') }),
+      tech: `${superfluous.map((sp) => said(sp, name)).join(', ')} : la vague rejouée sans ${plural ? 'eux' : 'lui'} respecte toujours le SLA. Chaque composant d’un système doit répondre à un besoin précis.`,
+      remedy: 'Le retirer pour l’étoile « rien de superflu », ou le garder en connaissance de cause pour une vague à venir.',
       concept: 'Over-engineering',
     });
   }
@@ -435,18 +442,6 @@ export function analyzeWave(result: WaveResult, arch: Architecture, wave: Wave, 
       concept: 'Calcul de capacité',
       node: node.id,
     };
-  }
-
-  function superfluousNodes(): string[] {
-    return arch.nodes
-      // La source et les services déjà en place ne se retirent pas.
-      .filter((n) => catalog.components[n.type]?.behavior !== 'source' && !n.fixed)
-      .filter((n) => {
-        const r = simulateWave(removeNode(arch, n.id), wave, catalog);
-        const valid = !r.events.some((e) => e.type === 'invalid') && r.failuresByReason['no-route'] === 0;
-        return valid && r.gauges.failureRate.margin >= 0 && r.gauges.latency.margin >= 0;
-      })
-      .map((n) => n.id);
   }
 }
 

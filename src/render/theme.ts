@@ -102,7 +102,8 @@ export type HintLine = 'place' | 'placeMore' | 'link' | 'upgrade' | 'level' | 'r
  * - `hot` : le bâtiment le plus chargé d'une vague tenue ;
  * - `superfluous`, `superfluousMany` (`{names}`) : ce dont la vague se passait ;
  * - `paradeCosts` : ce qu'ont coûté les protections en place, même quand elles ont tenu ;
- * - `sizing` (`{name}`) : le calcul de dimensionnement du serveur le plus chargé.
+ * - `sizing` (`{name}`) : le calcul de dimensionnement du serveur le plus chargé ;
+ * - `replayHint` : une vague tenue sans ses trois étoiles se rejoue, sans rien perdre.
  */
 export type DebriefLine =
   | 'won'
@@ -125,7 +126,8 @@ export type DebriefLine =
   | 'superfluous'
   | 'superfluousMany'
   | 'paradeCosts'
-  | 'sizing';
+  | 'sizing'
+  | 'replayHint';
 
 /** Nom technique et nom dans la métaphore d'un bâtiment ; un service déjà en place a le sien. */
 export function nodeNames(node: ArchNode, catalog: Catalog, theme: Theme): { tech: string; metaphor: string } {

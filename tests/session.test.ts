@@ -3,10 +3,11 @@ import { catalog } from '../src/data/catalog.ts';
 import { SCENARIOS } from '../src/data/scenarios/index.ts';
 import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
-import { scoring } from '../src/data/scoring.ts';
 import { hintsLeft, newGame, playWave } from '../src/engine/game.ts';
 import { setAt } from '../src/ui/calibration.ts';
 import { choices, gameOf, isStore, readStore, startOf, withFixtures, withGame, withInsertedWaves, withWorkers, type Store } from '../src/ui/session.ts';
+import { NO_STARS } from '../src/engine/score.ts';
+import type { GameState } from '../src/engine/game.ts';
 import { validateArchitecture } from '../src/engine/validate.ts';
 import type { Architecture } from '../src/engine/types.ts';
 
@@ -26,7 +27,7 @@ describe('la partie gardée', () => {
 
   it('une sauvegarde de la forme actuelle se recharge à l’identique', () => {
     const { calibrated: _, ...picked } = gameOf(EMPTY, urlShortener.id);
-    const { state: game } = playWave(picked.game, picked.scenario, A.minimal, picked.catalog, scoring);
+    const { state: game } = playWave(picked.game, picked.scenario, A.minimal, picked.catalog);
     const played = { ...picked, game, draft: gameOf(EMPTY, urlShortener.id).draft };
     const store = withGame(EMPTY, played, false);
     const reloaded = readStore(throughStorage(store));
@@ -97,7 +98,7 @@ describe('la partie gardée', () => {
   });
 
   it('l’écran de choix lit la progression de chaque partie', () => {
-    const game = { ...newGame(), waveIndex: 2, stars: [3, 2] };
+    const game = { ...newGame(), waveIndex: 2, stars: [{ held: true, lean: true, thrifty: true }, { held: true, lean: false, thrifty: true }] };
     const list = choices({ saves: { [urlShortener.id]: { game, draft: A.minimal } } });
     expect(list.find((c) => c.id === urlShortener.id)).toMatchObject({ reached: 2, stars: 5, finished: false, waves: urlShortener.waves.length });
     expect(list.find((c) => c.id !== urlShortener.id)).toMatchObject({ reached: 0, stars: 0 });
@@ -140,12 +141,12 @@ describe('le bâtiment Worker dans une partie en cours (ticket n° 1)', () => {
 describe('une vague ajoutée au milieu d’un scénario publié', () => {
   const n = urlShortener.waves.length;
   const archs = Array.from({ length: n }, (_, i) => ({ ...A.minimal, nodes: A.minimal.nodes.map((x) => ({ ...x, id: `${x.id}-${i}` })) }));
-  const old = { ...newGame(), waveIndex: n - 1, committed: archs[n - 1]!, history: archs, scores: [10, 20, 30, 40, 60], stars: [3, 3, 2, 2, 1], finished: true };
+  const s = (held: boolean, lean: boolean, thrifty: boolean) => ({ held, lean, thrifty });
+  const old = { ...newGame(), waveIndex: n - 1, committed: archs[n - 1]!, history: archs, stars: [s(true, true, true), s(true, true, false), s(true, false, true), s(true, false, false), s(true, true, true)], finished: true };
 
-  it('une partie terminée avant l’ajout garde chaque note sur sa vague, la nouvelle sans note', () => {
+  it('une partie terminée avant l’ajout garde chaque étoile sur sa vague, la nouvelle sans étoile', () => {
     const game = withInsertedWaves(old, urlShortener);
-    expect(game.scores).toEqual([10, 20, 30, 40, 0, 60]);
-    expect(game.stars).toEqual([3, 3, 2, 2, 0, 1]);
+    expect(game.stars).toEqual([...old.stars.slice(0, 4), NO_STARS, old.stars[4]]);
     expect(game.history).toHaveLength(n + 1);
     expect(game.history[4]).toBe(archs[4]);
     expect(game.history[5]).toBe(archs[4]);
@@ -153,9 +154,21 @@ describe('une vague ajoutée au milieu d’un scénario publié', () => {
   });
 
   it('une partie à jour, ou en cours, n’est pas touchée', () => {
-    const current = { ...old, scores: [...old.scores, 70], stars: [...old.stars, 3] };
+    const current = { ...old, stars: [...old.stars, s(true, true, true)] };
     expect(withInsertedWaves(current, urlShortener)).toBe(current);
     const playing = { ...old, finished: false };
     expect(withInsertedWaves(playing, urlShortener)).toBe(playing);
   });
+});
+
+describe('une partie d’avant les étoiles détaillées', () => {
+  it('garde ce que son nombre d’étoiles disait, oublie le score ; « rien de superflu » reste à gagner', () => {
+    const old = { ...newGame(), waveIndex: 3, stars: [3, 2, 1], scores: [80, 60, 40] } as unknown as GameState;
+    const store = readStore(throughStorage({ saves: { [urlShortener.id]: { game: old, draft: A.minimal } } }));
+    const game = store.saves[urlShortener.id]!.game;
+    expect(game.stars).toEqual([s3(true, false, true), s3(true, false, false), s3(true, false, false)]);
+    expect(game).not.toHaveProperty('scores');
+    expect(choices(store).find((c) => c.id === urlShortener.id)!.stars).toBe(4);
+  });
+  const s3 = (held: boolean, lean: boolean, thrifty: boolean) => ({ held, lean, thrifty });
 });

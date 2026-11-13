@@ -53,8 +53,9 @@ avec les termes techniques. Chaque bâtiment dit à quoi il sert, dans les deux 
    les incidents.
 4. **Le debrief** : ce qui a marché (la part de chaque bâtiment, chiffrée), ce qui a failli
    casser et pourquoi, la parade, et ce qu'on pourrait alléger. Trois étoiles par vague :
-   la tenir, du premier coup, en restant économe. Une vague perdue se rejoue ; le menu
-   permet de revenir à une vague antérieure.
+   la tenir, sans rien de superflu, en restant économe. Perdre ne coûte rien, démolir non
+   plus : on recommence jusqu'aux trois étoiles. Une vague tenue se rejoue aussi, depuis le
+   menu, sans effacer la suite de la partie.
 
 Mode debug (calibrage, vue tableau, essais hors partie) : ajouter `?debug` à l'URL, ou
 touche D.

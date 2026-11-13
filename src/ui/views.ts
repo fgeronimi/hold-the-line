@@ -9,5 +9,5 @@ export { renderHud } from './views/hud.ts';
 export { renderToolbar } from './views/toolbar.ts';
 export { renderCard, upgradePips } from './views/card.ts';
 export { renderHand } from './views/hand.ts';
-export { renderDialog, replayCut } from './views/dialog.ts';
+export { renderDialog } from './views/dialog.ts';
 export { renderDebug } from './views/debug.ts';

@@ -8,7 +8,6 @@ import { market } from '../src/data/scenarios/market.ts';
 import { resilience } from '../src/data/scenarios/resilience.ts';
 import { tournament } from '../src/data/scenarios/tournament.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
-import { scoring } from '../src/data/scoring.ts';
 import { simulateWave } from '../src/engine/simulate.ts';
 import { validateArchitecture } from '../src/engine/validate.ts';
 
@@ -90,7 +89,7 @@ describe('runMassSim sur le raccourcisseur', () => {
   const wave = (id: string) => report.waves.find((w) => w.waveId === id)!;
 
   beforeAll(() => {
-    report = runMassSim(urlShortener, catalog, shortener, scoring);
+    report = runMassSim(urlShortener, catalog, shortener);
   });
 
   it('aucune architecture ne gagne toutes les vagues', () => {
@@ -141,7 +140,7 @@ describe.each([
   ['le comptoir des paiements', resilience, resilienceSpace],
   ['la billetterie du tournoi', tournament, tournamentSpace],
 ] as const)('runMassSim sur %s', (_, scenario, space) => {
-  const report = runMassSim(scenario, catalog, space, scoring);
+  const report = runMassSim(scenario, catalog, space);
 
   it('chaque vague tient son critère de stratégies, aucune architecture ne gagne partout', () => {
     expect(report.waves.filter((w) => !w.meetsStrategyCriterion).map((w) => [w.waveId, w.strategies])).toEqual([]);
@@ -155,7 +154,7 @@ describe.each([
 
 describe('ce que la simulation en masse a trouvé', () => {
   it('soldes : des services abonnés au pub/sub sans file ne gagnent plus, noyés dans les lectures (S17)', () => {
-    const sales = runMassSim({ ...market, waves: market.waves.filter((w) => w.id === 'sales') }, catalog, marketSpace, scoring).waves[0]!;
+    const sales = runMassSim({ ...market, waves: market.waves.filter((w) => w.id === 'sales') }, catalog, marketSpace).waves[0]!;
     expect(sales.groups.some((g) => g.strategy.includes('pub/sub sans files'))).toBe(false);
   });
 });

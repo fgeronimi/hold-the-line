@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { catalog } from '../src/data/catalog.ts';
 import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
-import { scoring } from '../src/data/scoring.ts';
 import { newGame, playWave } from '../src/engine/game.ts';
 import { starCount, starsFor } from '../src/engine/score.ts';
 import { simulateWave } from '../src/engine/simulate.ts';
@@ -46,15 +45,17 @@ describe('incidents', () => {
 });
 
 describe('étoiles', () => {
-  it('une par objectif : tenir, du premier coup, sous le seuil d’économie', () => {
+  it('une par objectif : tenir, rien de superflu, sous le seuil d’économie', () => {
     const r = simulateWave(A.withCache, wave('read-surge'), catalog);
-    expect(starsFor(r, 0, wave('read-surge'))).toEqual({ held: true, firstTry: true, thrifty: true });
+    expect(starsFor(r, A.withCache, wave('read-surge'), catalog)).toEqual({ held: true, lean: true, thrifty: true });
+    // Le réplica tient sans rien de trop, mais coûte plus que le seuil d'économie.
     const replica = simulateWave(A.withReplica, wave('read-surge'), catalog);
-    expect(starCount(starsFor(replica, 1, wave('read-surge')))).toBe(1);
+    expect(starsFor(replica, A.withReplica, wave('read-surge'), catalog)).toEqual({ held: true, lean: true, thrifty: false });
+    expect(starCount(starsFor(replica, A.withReplica, wave('read-surge'), catalog))).toBe(2);
   });
 
   it('la partie garde les étoiles de chaque vague tenue', () => {
-    const { state } = playWave(newGame(), urlShortener, A.minimal, catalog, scoring);
-    expect(state.stars).toEqual([3]);
+    const { state } = playWave(newGame(), urlShortener, A.minimal, catalog);
+    expect(state.stars).toEqual([{ held: true, lean: true, thrifty: true }]);
   });
 });

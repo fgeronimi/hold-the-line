@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as A from '../src/data/scenarios/url-shortener.archetypes.ts';
 import { urlShortener } from '../src/data/scenarios/url-shortener.ts';
-import { scoring } from '../src/data/scoring.ts';
 import { newGame, playWave } from '../src/engine/game.ts';
 import { actions, boardClick, cardDragged, cardDropped, keyPressed, type ActionArgs, type Effect, type Outcome } from '../src/ui/actions.ts';
 import { autoPlace, insideBoard, nodeAt } from '../src/ui/board.ts';
@@ -37,7 +36,7 @@ function stateAt(extra: Partial<ViewState> = {}): ViewState {
 /** La vague 2, depuis l'architecture minimale validée en vague 1. */
 function atWave2(extra: Partial<ViewState> = {}): ViewState {
   const s = stateAt();
-  const { state: game } = playWave(s.game, s.scenario, A.minimal, s.catalog, scoring);
+  const { state: game } = playWave(s.game, s.scenario, A.minimal, s.catalog);
   return { ...s, game, draft: autoPlace(A.minimal), ...extra };
 }
 
@@ -106,15 +105,30 @@ describe('les actions', () => {
     expect(kinds(out)).toEqual(['leave-wave']);
   });
 
-  it('revenir à la vague n reprend son architecture validée, au briefing', () => {
+  it('rejouer une vague tenue : une partie de travail à son début, la vraie mise de côté', () => {
     const s = atWave2();
-    const out = run('rewind', s, { data: { wave: '0' } });
+    const out = run('replay-wave', s, { data: { wave: '0' } });
     expect(out.patch!.game!.waveIndex).toBe(0);
-    expect(out.patch!.game!.replays).toBe(1);
+    expect(out.patch!.practice).toEqual({ game: s.game, draft: s.draft });
     expect(out.patch!.phase).toBe('briefing');
     // La vague 1 n'a pas d'architecture validée : on repart du plateau de départ.
     expect(out.patch!.draft!.nodes.map((n) => n.id)).toEqual(['src']);
     expect(kinds(out)).toEqual(['forget-history', 'leave-wave']);
+    // Une vague pas encore tenue ne se rejoue pas.
+    expect(run('replay-wave', s, { data: { wave: '1' } }).patch).toBeUndefined();
+  });
+
+  it('un rejeu gagné donne ses étoiles à la vraie partie, sans la faire avancer ; quitter la rend', () => {
+    const s = atWave2();
+    const inPractice = { ...s, ...run('replay-wave', s, { data: { wave: '0' } }).patch! } as ViewState;
+    const played = run('play', { ...inPractice, draft: A.minimal });
+    const real = played.patch!.practice!.game;
+    expect(real.waveIndex).toBe(s.game.waveIndex);
+    expect(real.stars[0]).toEqual({ held: true, lean: true, thrifty: true });
+    const back = run('leave-practice', { ...inPractice, ...played.patch! } as ViewState);
+    expect(back.patch!.game).toBe(real);
+    expect(back.patch!.draft).toBe(s.draft);
+    expect(back.patch!.practice).toBeUndefined();
   });
 
   it('nouvelle partie : tout repart de zéro, au briefing', () => {

@@ -1,6 +1,5 @@
-import type { Stars } from '../../engine/score.ts';
+import { starCount, type Stars } from '../../engine/score.ts';
 import type { Wave } from '../../engine/types.ts';
-import { scoring } from '../../data/scoring.ts';
 import { chartModel, renderChart } from '../../render/charts.ts';
 import type { Finding } from '../debrief.ts';
 import { draftInfo } from '../draft.ts';
@@ -17,7 +16,6 @@ import {
   speech,
   starIcons,
   theme,
-  totalScore,
   totalStars,
   type Attempt,
   type ViewState,
@@ -30,7 +28,7 @@ export function renderDialog(s: ViewState): string {
   const wave = s.scenario.waves[s.game.waveIndex];
   if (s.phase === 'briefing' && wave) {
     return `<div class="dialog panel">
-      <h2>Vague ${s.game.waveIndex + 1} — ${esc(wave.title)}</h2>
+      <h2>${s.practice ? 'Rejeu de la vague' : 'Vague'} ${s.game.waveIndex + 1} — ${esc(wave.title)}</h2>
       ${renderBriefing(wave, s)}
       <p class="actions"><button class="primary" data-action="start-build">Construire</button></p>
     </div>`;
@@ -42,21 +40,28 @@ export function renderDialog(s: ViewState): string {
 
 // ——— Le debrief ———
 
-/** Revoir la vague, puis la suite : vague suivante, réessayer, retour à la construction ou nouvelle partie. */
-function debriefActions(a: Attempt, finished: boolean): string {
+/**
+ * Revoir la vague, puis la suite : vague suivante, réessayer, retour à la construction ou
+ * nouvelle partie. Une vague tenue sans ses trois étoiles se rejoue sur place (E10).
+ */
+function debriefActions(s: ViewState, a: Attempt, finished: boolean): string {
   const won = a.result.won;
+  const practice = !!s.practice;
+  const back = practice ? (s.practice!.game.finished ? 'Retour à la partie' : `Retour à la vague ${s.practice!.game.waveIndex + 1}`) : '';
+  const again = a.played && won && starCount(a.stars) < 3 ? `<button data-action="replay-wave" data-wave="${a.waveIndex}">Rejouer cette vague</button>` : '';
   return [
     `<button data-action="replay" data-attempt="${a.id}">Revoir la vague</button>`,
-    a.played && won && !finished ? '<button class="primary" data-action="next">Vague suivante ➜</button>' : '',
+    again,
     a.played && !won ? '<button class="primary" data-action="retry">Réessayer</button>' : '',
+    practice ? `<button class="${a.played && won ? 'primary' : ''}" data-action="leave-practice">${back}</button>` : '',
+    !practice && a.played && won && !finished ? '<button class="primary" data-action="next">Vague suivante ➜</button>' : '',
     !a.played ? '<button class="primary" data-action="retry">Retour à la construction</button>' : '',
-    finished ? '<button class="primary" data-action="reset-game">Nouvelle partie</button>' : '',
+    !practice && finished ? '<button class="primary" data-action="reset-game">Nouvelle partie</button>' : '',
   ].join('');
 }
 
 function debriefTitle(a: Attempt): string {
-  const won = a.result.won;
-  return `${won ? 'Vague tenue' : 'Vague perdue'}${a.played && won ? ` — +${fmt(a.score)} ${icon('medal')}` : ''}${a.played ? '' : ' (essai)'}`;
+  return `${a.result.won ? 'Vague tenue' : 'Vague perdue'}${a.played ? '' : ' (essai)'}`;
 }
 
 function debriefTabs(s: ViewState): string {
@@ -76,15 +81,11 @@ function debriefBody(s: ViewState, a: Attempt, wave: Wave): string {
 function renderDebriefDialog(s: ViewState, a: Attempt): string {
   const r = a.result;
   const attemptWave = s.scenario.waves[a.waveIndex];
-  const finished = s.game.finished && a.played && r.won;
+  const finished = s.game.finished && a.played && r.won && !s.practice;
   const lostHere = a.played && !r.won;
-  const final = finished
-    ? `<p class="final">${esc(theme.finale)} <b>${totalStars(s)} / ${s.scenario.waves.length * 3}</b> ★, score final <b>${fmt(totalScore(s))}</b> ${icon('medal')}</p>`
-    : '';
-  const penalty =
-    lostHere && s.game.replays > 0
-      ? `<p class="muted">Chaque nouvel essai coûte ${Math.round(scoring.replayPenalty * 100)} % des points de la vague, jusqu’à ne plus en rapporter ; les étoiles restent à prendre. Si un choix plus ancien bloque, le menu ☰ permet de revenir à une vague antérieure.</p>`
-      : '';
+  const final = finished ? `<p class="final">${esc(theme.finale)} <b>${totalStars(s)} / ${s.scenario.waves.length * 3}</b> ★</p>` : '';
+  // Une étoile manquée se reprend en rejouant la vague : le dire là où on la voit manquer.
+  const missing = a.played && r.won && starCount(a.stars) < 3 ? `<p class="muted">${esc(theme.debrief.replayHint)}</p>` : '';
   return `<div class="dialog panel ${r.won ? 'won' : 'lost'}">
     <h2>${debriefTitle(a)}</h2>
     ${attemptWave ? renderStars(a.stars, attemptWave) : ''}
@@ -92,8 +93,8 @@ function renderDebriefDialog(s: ViewState, a: Attempt): string {
     ${final}
     ${attemptWave ? debriefBody(s, a, attemptWave) : ''}
     ${lostHere && a.waveIndex === s.game.waveIndex ? renderHints(hintsOf(s)) : ''}
-    ${penalty}
-    <p class="actions">${debriefActions(a, finished)}</p>
+    ${missing}
+    <p class="actions">${debriefActions(s, a, finished)}</p>
   </div>`;
 }
 
@@ -121,11 +122,10 @@ export function renderFindings(findings: Finding[]): string {
 
 /** Les trois objectifs de la vague, chacun une étoile (décision E7). */
 function renderStars(stars: Stars, wave: Wave): string {
-  const n = Number(stars.held) + Number(stars.firstTry) + Number(stars.thrifty);
   const line = (ok: boolean, label: string) => `<li class="${ok ? 'ok' : 'missed'}">${ok ? '★' : '☆'} ${esc(label)}</li>`;
-  return `<div class="stars-box"><span class="star-row">${starIcons(n)}</span><ul>
+  return `<div class="stars-box"><span class="star-row">${starIcons(starCount(stars))}</span><ul>
     ${line(stars.held, 'Tenir la vague : SLA, budget et complexité respectés')}
-    ${line(stars.firstTry, 'Du premier coup, sans rejeu')}
+    ${line(stars.lean, 'Juste ce qu’il faut : rien qu’on puisse retirer en tenant la vague')}
     ${line(stars.thrifty, `Économe : facture ≤ ${wave.thriftyCost ?? wave.budget}`)}
   </ul></div>`;
 }
@@ -179,22 +179,15 @@ function trafficLine(src: Wave['sources'][number]): string {
 
 function renderBriefing(wave: Wave, s: ViewState): string {
   const narrative = theme.narratives[wave.id];
-  const replays = s.game.replays > 0 ? ` · <b>${s.game.replays} rejeu(x)</b>, ${replayCut(s.game.replays)}` : '';
   return `
     <section>
       ${narrative ? speech(narrative, wave.briefing) : `<p class="briefing">${esc(wave.briefing)}</p>`}
       ${s.scenario.waves[0]?.id === wave.id ? speech(theme.timeRule.says, theme.timeRule.real) : ''}
       ${(wave.incidents ?? []).map((i) => incidentLine(i, s)).join('')}
-      <p>${icon('star')} Objectifs : tenir · du premier coup · facture ≤ ${wave.thriftyCost ?? wave.budget}</p>
+      <p>${icon('star')} Objectifs : tenir · rien de superflu · facture ≤ ${wave.thriftyCost ?? wave.budget}</p>
       <p>Budget ${wave.budget} · complexité max ${wave.complexityCap}
-        · SLA : ${pct(wave.sla.maxFailureRate)} d'échecs, ${wave.sla.maxP95LatencyMs} ms p95
-        ${replays}</p>
+        · SLA : ${pct(wave.sla.maxFailureRate)} d'échecs, ${wave.sla.maxP95LatencyMs} ms p95</p>
       <p class="muted">Trafic : ${wave.sources.map(trafficLine).join(' · ')}</p>
     </section>`;
 }
 
-/** Ce que les rejeux retirent au score de la vague : jamais plus que ses points (décision E5). */
-export function replayCut(replays: number): string {
-  const cut = Math.min(1, replays * scoring.replayPenalty);
-  return cut >= 1 ? 'la vague ne rapporte plus de points' : `−${Math.round(cut * 100)} % au score`;
-}

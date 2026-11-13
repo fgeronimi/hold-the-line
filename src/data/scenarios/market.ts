@@ -171,7 +171,7 @@ export const market: Scenario = {
       singleStrategy: true,
       incidents: [
         // Plus forts qu'aux vagues 3 et 4 : noyés dans 1 500 lectures par seconde, ils doivent encore compter.
-        { id: 'sales-redelivery', title: 'Pic de relivraisons sur le bus', component: 'pubsub', from: 10, until: 30, effect: { type: 'duplicate-delivery', share: 0.3 } },
+        { id: 'sales-redelivery', title: 'Pic de relivraisons sur le bus', component: 'pubsub', from: 10, until: 30, effect: { type: 'duplicate-delivery', share: 0.6 } },
         { id: 'sales-crash', title: 'Le serveur tombe avant de publier', component: 'app-server', from: 30, until: 50, effect: { type: 'publish-loss', share: 0.8 } },
         { id: 'sales-poison', title: 'Des commandes mal formées', component: 'message-queue', from: 20, until: 25, effect: { type: 'poison-message', share: 0.05 } },
       ],

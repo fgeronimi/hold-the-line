@@ -1,7 +1,6 @@
-import { scoring } from '../data/scoring.ts';
 import { fortifiedCity as theme } from '../data/themes/fortified-city.ts';
-import { newGame, playWave, rewindTo, type GameState } from '../engine/game.ts';
-import { scoreWave, starsFor } from '../engine/score.ts';
+import { newGame, playWave, practiceGame, withReplayedStars, type GameState } from '../engine/game.ts';
+import { starCount, starsFor } from '../engine/score.ts';
 import { simulateWave } from '../engine/simulate.ts';
 import type { Architecture, ArchNode, BoardCell } from '../engine/types.ts';
 import { isRiver } from '../render/terrain.ts';
@@ -88,12 +87,11 @@ export function applied(result: BoardResult, extra: Partial<ViewState> = {}): Ou
 export function record(
   s: ViewState,
   attempt: Omit<Attempt, 'id' | 'settings' | 'arch' | 'stars' | 'analysis'>,
-  replays: number,
   id: number,
 ): Partial<ViewState> & { current: number } {
   const settings = changedSettings(defaultsOf(s.scenario.id), s, attempt.waveIndex);
   const wave = s.scenario.waves[attempt.waveIndex]!;
-  const stars = starsFor(attempt.result, replays, wave);
+  const stars = starsFor(attempt.result, s.draft, wave, s.catalog);
   const analysis = analysisOf(undefined, { result: attempt.result, arch: s.draft }, wave, s.catalog, theme);
   return { attempts: [...s.attempts, { ...attempt, id, settings, arch: s.draft, stars, analysis }], selected: id, current: id };
 }
@@ -113,6 +111,7 @@ export const actions: Record<string, Action> = {
     return patch(
       {
         ...picked,
+        practice: undefined,
         attempts: [],
         selected: undefined,
         current: undefined,
@@ -124,6 +123,28 @@ export const actions: Record<string, Action> = {
     );
   },
   next: (s) => patch({ phase: s.game.finished ? 'build' : 'briefing', selectedNode: undefined }, { kind: 'leave-wave' }),
+  // Rejouer une vague tenue (E10) : une partie de travail placée au début de la vague, la vraie mise de côté.
+  'replay-wave': (s, { data }) => {
+    const real = s.practice ?? { game: s.game, draft: s.draft };
+    const k = Number(data.wave);
+    if (!(k >= 0 && k < real.game.waveIndex)) return undefined;
+    const game = practiceGame(real.game, k);
+    return patch(
+      { practice: real, game, draft: committedOrStart(s, game), selectedNode: undefined, tool: select, phase: 'briefing', showMenu: false },
+      { kind: 'forget-history' },
+      { kind: 'leave-wave' },
+    );
+  },
+  // Fin du rejeu : la vraie partie reprend où elle était, avec son brouillon.
+  'leave-practice': (s) => {
+    if (!s.practice) return undefined;
+    const { game, draft } = s.practice;
+    return patch(
+      { practice: undefined, game, draft, selectedNode: undefined, tool: select, phase: game.finished ? 'build' : 'briefing', showMenu: false },
+      { kind: 'forget-history' },
+      { kind: 'leave-wave' },
+    );
+  },
   retry: () => patch({ phase: 'build' }, { kind: 'leave-wave' }),
   // Un indice par essai perdu (I14) : la partie le garde, la fenêtre « que faire » le montre.
   hint: (s) => patch({ game: askHint({ game: s.game, scenario: s.scenario, catalog: s.catalog, draft: s.draft }) }),
@@ -188,19 +209,23 @@ export const actions: Record<string, Action> = {
   play: (s, _, { nextAttemptId: id }) => {
     const waveIndex = s.game.waveIndex;
     const wave = s.scenario.waves[waveIndex]!;
-    const replays = s.game.replays;
-    const { state: game, result, score } = playWave(s.game, s.scenario, s.draft, s.catalog, scoring);
-    const label = `#${id} V${waveIndex + 1} ${describeDraft(s.draft)}`;
+    const { state: game, result, stars } = playWave(s.game, s.scenario, s.draft, s.catalog);
+    const label = `#${id} V${waveIndex + 1} ${s.practice ? 'rejeu ' : ''}${describeDraft(s.draft)}`;
     // Le brouillon est gardé même perdu : on le corrige plutôt que de tout reposer.
-    // La facture, elle, compte toujours depuis l'architecture validée.
-    const recorded = record(s, { label: `${label}${result.won ? '' : ` (perdue : ${wave.title})`}`, waveIndex, result, score, played: true }, replays, id);
+    const recorded = record(s, { label: `${label}${result.won ? '' : ` (perdue : ${wave.title})`}`, waveIndex, result, played: true }, id);
+    if (s.practice) {
+      // Un rejeu gagné n'apporte à la vraie partie que ses étoiles ; la partie de travail, elle, avance comme une autre.
+      const before = s.practice.game.stars.reduce((a, x) => a + starCount(x), 0);
+      const real = result.won ? withReplayedStars(s.practice.game, waveIndex, stars) : s.practice.game;
+      return patch({ game, practice: { ...s.practice, game: real, before }, ...recorded }, { kind: 'forget-history' }, { kind: 'attempt-recorded' }, { kind: 'play', attempt: id });
+    }
     return patch({ game, ...recorded }, { kind: 'forget-history' }, { kind: 'attempt-recorded' }, { kind: 'play', attempt: id });
   },
   try: (s, _, { nextAttemptId: id }) => {
     const waveIndex = s.game.waveIndex;
     const result = simulateWave(s.draft, s.scenario.waves[waveIndex]!, s.catalog);
     const label = `#${id} V${waveIndex + 1} essai ${describeDraft(s.draft)}`;
-    const recorded = record(s, { label, waveIndex, result, score: scoreWave(result, s.game.replays, scoring), played: false }, s.game.replays, id);
+    const recorded = record(s, { label, waveIndex, result, played: false }, id);
     return patch(recorded, { kind: 'attempt-recorded' }, { kind: 'play', attempt: id });
   },
   select: (_, { data }) => patch({ selected: Number(data.attempt) }),
@@ -220,17 +245,9 @@ export const actions: Record<string, Action> = {
     return patch({ catalog: structuredClone(defaults.catalog), scenario: structuredClone(defaults.scenario) }, { kind: 'calibrated', id: s.scenario.id, on: false });
   },
   export: (s) => ({ effects: [{ kind: 'export', text: JSON.stringify({ catalog: s.catalog, scenario: s.scenario }, null, 2) }] }),
-  rewind: (s, { data }) => {
-    const game = rewindTo(s.game, Number(data.wave));
-    return patch(
-      { game, draft: committedOrStart(s, game), selectedNode: undefined, phase: 'briefing', showMenu: false },
-      { kind: 'forget-history' },
-      { kind: 'leave-wave' },
-    );
-  },
   'reset-game': (s) =>
     patch(
-      { game: newGame(), draft: startOf(s.scenario), attempts: [], selected: undefined, selectedNode: undefined, phase: 'briefing', showMenu: false },
+      { practice: undefined, game: newGame(), draft: startOf(s.scenario), attempts: [], selected: undefined, selectedNode: undefined, phase: 'briefing', showMenu: false },
       { kind: 'forget-history' },
       { kind: 'leave-wave' },
     ),

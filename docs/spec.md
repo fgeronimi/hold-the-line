@@ -76,9 +76,9 @@ Une partie est une suite de vagues. Chacune passe par quatre phases (I5) :
 4. **Debrief** : ce qui a marché, ce qui a failli casser, ce qu'on pourrait alléger, avec
    la notion à retenir ; et les courbes minute par minute.
 
-Une vague perdue se rejoue sans limite (E4). On peut revenir au début de toute vague déjà
-atteinte, avec l'architecture validée à ce moment-là (E6) : un choix passé se paie, mais ne
-bloque jamais la partie.
+Une vague perdue se rejoue sans limite, et perdre ne coûte rien (E4, E9). Une vague tenue se
+rejoue aussi, depuis le menu ou son debrief, sans rien effacer de la suite (E10) : on y va
+chercher une étoile manquée.
 
 Un écran de choix ouvre chaque session (S2) : *Les portes de la cité* (débutant),
 *Le grand marché* (suite), *Le banquier lombard* (résilience) et *Le grand tournoi*
@@ -188,12 +188,10 @@ que le client relance n'est pas un échec : sa relance compte à sa place (S19).
 relancée réémet son événement ; un doublon, une copie non livrée ou une lecture périmée ne
 se relancent pas (M10).
 
-**Trois étoiles par vague** (E7) : tenir la vague, la tenir du premier coup, rester
-économe (facture sous le seuil de la stratégie gagnante la moins chère).
-
-**Score** (E5) : 100 × la moyenne des marges sur les jauges, moins 20 % par rejeu, sans
-jamais descendre sous zéro ; l'écran le dit (« la vague ne rapporte plus de points »)
-plutôt que d'afficher une pénalité au-delà de 100 %.
+**Trois étoiles par vague** (E7) : tenir la vague ; rien de superflu (aucun bâtiment, aucun
+cran d'évolution qu'on puisse retirer en tenant la vague) ; rester économe (facture sous le
+seuil de la stratégie gagnante la moins chère). La partie garde les meilleures, objectif par
+objectif. Pas de score (E9).
 
 Plusieurs bonnes réponses doivent exister par vague, avec des profils différents (B1, B2) :
 une vague à réponse unique le déclare dans ses données.
