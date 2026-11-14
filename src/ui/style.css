@@ -45,12 +45,12 @@ h1, h2, h3, .hud-title b, .launch, button.primary, .tool.build, .hcard-title b, 
 .ico { width: 1.25em; height: 1.25em; vertical-align: -.25em; flex: none; }
 
 /* Un bouton est un objet : une ombre le décolle, et il la perd quand on l'enfonce. Les cartes et les pastilles ont leur propre geste. */
-button:where(:not(.hcard, .pip)) {
+button:where(:not(.hcard, .pip)), a.button {
   font: inherit; cursor: pointer; color: var(--ink); padding: 4px 11px; border-radius: 8px; border: 1px solid var(--line);
   background: linear-gradient(#fbf1d6, #e6d2a2); box-shadow: var(--raise-low); transition: transform .08s, box-shadow .08s, filter .12s;
 }
-button:where(:not(.hcard, .pip)):hover:not(:disabled) { filter: brightness(1.06); }
-button:where(:not(.hcard, .pip)):active:not(:disabled) { transform: translateY(1px); box-shadow: var(--pressed); }
+button:where(:not(.hcard, .pip)):hover:not(:disabled), a.button:hover { filter: brightness(1.06); }
+button:where(:not(.hcard, .pip)):active:not(:disabled), a.button:active { transform: translateY(1px); box-shadow: var(--pressed); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 button:focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }
 button.primary { padding: 6px 14px; font-size: 16px; color: #fff; background: linear-gradient(#6a9a44, var(--forest)); border-color: #3c5f27; text-shadow: 0 1px 0 #2c4a1b;
@@ -103,7 +103,7 @@ button.round, .close { width: 30px; height: 30px; padding: 0; border-radius: 50%
 .hud-bar .gauge.ko b { color: #8f2a1f; }
 .hud-bar .gauge:focus-visible { outline: 2px solid #ffd166; outline-offset: 1px; }
 .menu { position: absolute; right: 0; top: 52px; display: flex; flex-direction: column; gap: 6px; padding: 10px; min-width: 220px; }
-.menu .menu-link { padding: 4px 8px; font-size: 13px; text-align: center; color: #6b4421; }
+.menu a.button { text-align: center; text-decoration: none; }
 
 /* Barre du bas : une plaque basse, des médaillons d'outils, et le lancement de la vague qui dépasse. */
 .toolbar { display: flex; align-items: center; gap: 14px; padding: 5px 12px; max-width: 100%; box-sizing: border-box;
@@ -492,10 +492,10 @@ button.pip:active .icon { transform: translateY(1px); box-shadow: var(--pressed)
 }
 .ico { width: 1.35em; height: 1.35em; vertical-align: -.3em; }
 
-button:where(:not(.hcard, .pip)) { border: 1.5px solid #9c7647; box-shadow: var(--relief); transition: transform .12s ease, box-shadow .12s ease, filter .12s ease; }
-button:where(:not(.hcard, .pip)):hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--relief-up); filter: brightness(1.04); }
-button:where(:not(.hcard, .pip)):active:not(:disabled) { transform: translateY(2px); box-shadow: var(--relief-down); }
-@media (prefers-reduced-motion: reduce) { button:where(:not(.hcard, .pip)) { transition: none; } button:where(:not(.hcard, .pip)):hover:not(:disabled) { transform: none; } }
+button:where(:not(.hcard, .pip)), a.button { border: 1.5px solid #9c7647; box-shadow: var(--relief); transition: transform .12s ease, box-shadow .12s ease, filter .12s ease; }
+button:where(:not(.hcard, .pip)):hover:not(:disabled), a.button:hover { transform: translateY(-1px); box-shadow: var(--relief-up); filter: brightness(1.04); }
+button:where(:not(.hcard, .pip)):active:not(:disabled), a.button:active { transform: translateY(2px); box-shadow: var(--relief-down); }
+@media (prefers-reduced-motion: reduce) { button:where(:not(.hcard, .pip)), a.button { transition: none; } button:where(:not(.hcard, .pip)):hover:not(:disabled), a.button:hover { transform: none; } }
 
 /* Médaillons : face de parchemin, cercle de laiton. L'anneau est peint dans la bordure : un pseudo-élément derrière recouvrirait la face. */
 button.tool, button.round {

@@ -28,6 +28,19 @@ interface Loaded {
  * Modèles 3D chargés une fois par rejeu, puis clonés à chaque pose. Chaque clone a ses
  * propres matériaux : un bâtiment saturé rougit sans teinter ses voisins.
  */
+// GitHub Pages répond parfois 503 sur l'un des dizaines de modèles chargés en parallèle :
+// un seul échec ferait tomber tout le plateau, alors on réessaie avant d'abandonner.
+async function withRetries<T>(load: () => Promise<T>, delays = [400, 1200, 3000]): Promise<T> {
+  for (const delay of delays) {
+    try {
+      return await load();
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  return load();
+}
+
 export class ModelLibrary {
   private readonly models: Map<ModelId, Loaded>;
 
@@ -40,7 +53,7 @@ export class ModelLibrary {
     const entries = await Promise.all(
       [...new Set(ids)].map(async (id) => {
         const file = /\.(glb|gltf)$/.test(id) ? id : `${id}.gltf`;
-        const gltf = await loader.loadAsync(`${baseUrl}models/${file}`);
+        const gltf = await withRetries(() => loader.loadAsync(`${baseUrl}models/${file}`));
         return [id, { scene: gltf.scene, animations: gltf.animations }] as const;
       }),
     );

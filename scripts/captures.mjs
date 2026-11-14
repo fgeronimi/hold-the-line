@@ -40,9 +40,10 @@ async function record(page) {
      * `speed` accélère (1.5 : une seconde de film pour 1,5 s filmée), ou `duration` fixe la
      * longueur du film en secondes : le rejeu avance au rythme des images, et le rendu logiciel
      * en tient plus ou moins selon la machine. `from`/`to` bornent en secondes filmées ; `crop`
-     * est en pixels de la page, `width` la largeur finale.
+     * est en pixels de la page, `width` la largeur finale. `mp4` : le chemin d'une vidéo H.264
+     * à monter avec ffmpeg, au lieu du WebP du README (une vidéo à téléverser, hors du dépôt).
      */
-    async stop(name, { from = 0, to = Infinity, fps = 10, speed: fixed = 1, duration, q = 65, crop, width = 800 } = {}) {
+    async stop(name, { from = 0, to = Infinity, fps = 10, speed: fixed = 1, duration, q = 65, crop, width = 800, mp4 } = {}) {
       await cdp.send('Page.stopScreencast');
       const t0 = frames[0].t;
       const kept = frames.filter((f) => f.t - t0 >= from && f.t - t0 <= to);
@@ -62,9 +63,15 @@ async function record(page) {
         execFileSync('sips', ['--resampleWidth', String(width), png], { stdio: 'ignore' });
         args.push('-d', String(Math.round(1000 / fps)), png);
       });
-      execFileSync('img2webp', [...args, '-o', join(MEDIA, `${name}.webp`)], { stdio: 'pipe' });
+      if (mp4) {
+        // yuv420p et faststart : ce que lisent les réseaux, les téléphones et QuickTime.
+        execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(fps), '-i', join(dir, '%04d.png'), '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', mp4]);
+        console.log(`  ${mp4} : ${picked.length} images`);
+      } else {
+        execFileSync('img2webp', [...args, '-o', join(MEDIA, `${name}.webp`)], { stdio: 'pipe' });
+        console.log(`  ${name}.webp : ${picked.length} images`);
+      }
       rmSync(dir, { recursive: true, force: true });
-      console.log(`  ${name}.webp : ${picked.length} images`);
     },
   };
 }
@@ -370,6 +377,30 @@ const SHOTS = {
     await still(page, 'debrief');
   },
 
+  /**
+   * La vague du README pour un post : en carré 1080 × 1080, l'interface du jeu comprise, en MP4.
+   * La vidéo ne va pas dans le dépôt : `HL_VIDEO=<chemin.mp4>`, le dossier temporaire à défaut.
+   */
+  async video() {
+    // Le screencast filme la fenêtre réelle, pas la page émulée : un carré de 1080 émulé en
+    // sortait à 1080 × 993, le bas coupé (la barre du rejeu). La page prend donc la taille de la
+    // fenêtre, plus haute de 87 px, ce que retranche Chrome sans tête.
+    const browser = await launch(['--window-size=1080,1167']);
+    const page = await browser.newPage({ viewport: null });
+    await seed(page, 'url-shortener', 2);
+    // Un plateau en paysage laisse un carré à moitié vide : on rapproche la caméra de la cité.
+    await page.mouse.move(470, 520);
+    for (let i = 0; i < 4; i++) {
+      await page.mouse.wheel(0, -120);
+      await page.waitForTimeout(150);
+    }
+    await page.waitForTimeout(800);
+    const film = await playWave(page);
+    const out = process.env.HL_VIDEO ?? join(tmpdir(), 'hold-the-line-vague.mp4');
+    await film.stop('video', { fps: 25, duration: 30, width: 1080, mp4: out });
+    await browser.close();
+  },
+
   /** Vague 2 du raccourcisseur avec la cité de la vague 1 : la base sature, le SLA rompt. */
   async defaite(page) {
     await seed(page, 'url-shortener', 1, 'previous');
@@ -431,14 +462,15 @@ if (unknown.length) {
 }
 const server = await createServer({ root: ROOT, logLevel: 'error', server: { host: '127.0.0.1', port: PORT, strictPort: true, hmr: false } });
 await server.listen();
-const launch = () =>
+const launch = (extra = []) =>
   chromium.launch({
     ...(process.env.HL_CHROME ? { executablePath: process.env.HL_CHROME } : { channel: 'chrome' }),
     headless: true,
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', ...extra],
   });
 try {
-  for (const name of wanted.length ? wanted : Object.keys(SHOTS)) {
+  // `video` ne sort pas d'image du README : il ne tourne que si on le nomme.
+  for (const name of wanted.length ? wanted : Object.keys(SHOTS).filter((n) => n !== 'video')) {
     console.log(name);
     // Un navigateur neuf par plan : enchaînés dans le même, le rendu logiciel s'essouffle et
     // la vague perdue n'atteignait plus son debrief.

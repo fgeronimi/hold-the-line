@@ -60,7 +60,7 @@ function renderMenu(s: ViewState): string {
         ${realGame(s).finished ? '<button data-action="show-review">Bilan du scénario</button>' : ''}
         <button data-action="show-achievements">Succès</button>
         <button data-action="show-welcome">Comment jouer</button>
-        ${repositoryLink('Le code sur GitHub', 'menu-link')}
+        ${repositoryLink('Le code sur GitHub', 'button')}
         <button data-action="toggle-debug">${s.debug ? 'Quitter' : 'Ouvrir'} le mode debug</button>
       </div>`;
 }
