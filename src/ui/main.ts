@@ -121,7 +121,21 @@ function renderHandLayer(): void {
   const html = renderCard(state);
   if (html === handHtml) return;
   regions.hand.classList.toggle('settled', handHtml !== '' && html !== '');
+  // Sur téléphone la main est une rangée qui défile : sans ceci, soulever une carte la ramenait
+  // au début, et la carte touchée sortait de l'écran.
+  const scrolled = regions.hand.querySelector('.hand-cards')?.scrollLeft ?? 0;
   regions.hand.innerHTML = html;
+  const cards = regions.hand.querySelector('.hand-cards');
+  if (cards) cards.scrollLeft = scrolled;
+  const lifted = cards?.querySelector<HTMLElement>('.hcard.lifted');
+  if (cards && lifted) {
+    // La carte soulevée au bord de l'écran y rentre en entier.
+    const margin = 16;
+    const left = lifted.offsetLeft - margin;
+    const right = lifted.offsetLeft + lifted.offsetWidth + margin - cards.clientWidth;
+    const target = Math.min(Math.max(cards.scrollLeft, right), left);
+    if (target !== cards.scrollLeft) cards.scrollTo({ left: target, behavior: 'smooth' });
+  }
   handHtml = html;
 }
 

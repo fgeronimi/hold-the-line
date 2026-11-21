@@ -76,6 +76,11 @@ export interface ViewState {
   showHand?: boolean | undefined;
   /** Au toucher, la carte soulevée par un premier contact : le second la joue. */
   liftedCard?: string | undefined;
+  /**
+   * La réplique du guide repliée par le joueur : sur un téléphone, la bulle couvre le plateau.
+   * Gardée par son texte, la bulle se rouvre d'elle-même au pas suivant.
+   */
+  foldedGuide?: string | undefined;
   /** Les miniatures des bâtiments, rendues par le plateau une fois chargé ; sans elles, l'icône du thème. */
   thumbnails?: Record<string, string> | undefined;
   /** Dernier refus ou conseil du plateau (case occupée, chemin impossible…). */
