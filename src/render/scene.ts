@@ -67,8 +67,12 @@ const POP_TEXT: Record<Outcome['result'], { html: string; className: string }> =
 };
 /** Distance d'un panneau de sens au milieu de la route : sur le bas-côté. */
 const SIGN_OFFSET = 0.5;
-/** Un glisser de moins de quelques pixels reste un clic (le glisser déplace la vue). */
+/**
+ * Un glisser de moins de quelques pixels reste un clic (le glisser déplace la vue). Un doigt
+ * bouge plus qu'une souris en touchant : à 5 px, un tap sur téléphone passait pour un glisser.
+ */
 const CLICK_TOLERANCE_PX = 5;
+const TAP_TOLERANCE_PX = 14;
 
 const K = (name: string): ModelId => `kaykit/${name}`;
 /** La courbe sRGB, d'une valeur linéaire sur 8 bits à sa valeur affichée. */
@@ -196,6 +200,7 @@ export class CityScene {
   private readonly raycaster = new Raycaster();
   private readonly ground = new Plane(new Vector3(0, 1, 0), 0);
   private pressedAt: Vector2 | undefined;
+  private tolerance = CLICK_TOLERANCE_PX;
   /** Case du bâtiment saisi, et si le glisser a vraiment commencé. */
   private grabbed: { cell: Hex; dragging: boolean } | undefined;
   private frameId = 0;
@@ -588,7 +593,7 @@ export class CityScene {
 
   private readonly pointerMove = (e: PointerEvent) => {
     if (this.mode !== 'build') return;
-    if (this.grabbed && !this.grabbed.dragging && this.pressedAt && this.pressedAt.distanceTo(new Vector2(e.clientX, e.clientY)) > CLICK_TOLERANCE_PX) {
+    if (this.grabbed && !this.grabbed.dragging && this.pressedAt && this.pressedAt.distanceTo(new Vector2(e.clientX, e.clientY)) > this.tolerance) {
       this.grabbed.dragging = true;
       this.events.onDragStart?.(this.grabbed.cell);
     }
@@ -608,6 +613,7 @@ export class CityScene {
 
   private readonly pointerDown = (e: PointerEvent) => {
     this.pressedAt = new Vector2(e.clientX, e.clientY);
+    this.tolerance = e.pointerType === 'touch' ? TAP_TOLERANCE_PX : CLICK_TOLERANCE_PX;
     const cell = this.mode === 'build' ? this.cellUnder(e) : undefined;
     if (cell && this.events.canDrag?.(cell)) {
       this.grabbed = { cell, dragging: false };
@@ -628,7 +634,7 @@ export class CityScene {
     }
     const moved = this.pressedAt ? this.pressedAt.distanceTo(new Vector2(e.clientX, e.clientY)) : Infinity;
     this.pressedAt = undefined;
-    if (this.mode !== 'build' || moved > CLICK_TOLERANCE_PX) return;
+    if (this.mode !== 'build' || moved > this.tolerance) return;
     const cell = this.cellUnder(e);
     if (cell) this.events.onClick?.(cell);
   };

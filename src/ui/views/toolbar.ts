@@ -1,7 +1,7 @@
 import { draftInfo } from '../draft.ts';
 import type { TutorialStep } from '../tutorial.ts';
 import { icon, type IconName } from '../icons.ts';
-import { esc, guideOf, hintClass as hint, hintsOf, nameOf, renderHints, speech, type Tool, type ViewState } from './common.ts';
+import { esc, guideOf, hintClass as hint, hintsOf, nameOf, narratorFace, renderHints, speech, type Tool, type ViewState } from './common.ts';
 
 type Blink = TutorialStep['highlight'];
 
@@ -59,7 +59,13 @@ export function renderToolbar(s: ViewState): string {
   const why = validation.ok ? 'Lancer la vague' : validation.errors.join('\n');
   // La main ouverte, la bulle se retire : la carte que désigne le guide clignote à sa place.
   const handOpen = !!s.showHand || !!s.buildAt;
-  const tutorial = handOpen ? '' : `<div class="tutorial panel">${speech(guide.says, guide.real)}${renderHints(help)}</div>`;
+  const folded = s.foldedGuide === guide.says;
+  const fold = `<button class="tool small fold" data-action="fold-guide" data-tip="Replier la bulle" aria-label="Replier la bulle">${icon('close')}</button>`;
+  const tutorial = handOpen
+    ? ''
+    : folded
+      ? `<button class="tutorial-folded" data-action="unfold-guide" aria-label="Rouvrir la bulle du chambellan">${narratorFace()}<span>Le chambellan</span></button>`
+      : `<div class="tutorial panel">${fold}${speech(guide.says, guide.real)}${renderHints(help)}</div>`;
   const errors = validation.ok ? '' : `<div class="errors panel">${validation.errors.map((e) => `<p>${icon('warn')} ${esc(e)}</p>`).join('')}</div>`;
   return `
     ${tutorial}

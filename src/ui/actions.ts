@@ -12,6 +12,7 @@ import { addLink, addNode, removeLink, removeNode, setUpgrade } from './editor.t
 import { askHint } from './hints.ts';
 import { defaultsOf, gameOf, startOf, type Store } from './session.ts';
 import type { Attempt, Tool, ViewState } from './views.ts';
+import { guideOf } from './views/common.ts';
 
 /**
  * Ce que fait chaque geste du joueur, sans DOM : un état et ce qu'a désigné le geste en
@@ -101,6 +102,8 @@ export function record(
 
 export const actions: Record<string, Action> = {
   menu: (s) => patch({ showMenu: !s.showMenu }),
+  'fold-guide': (s) => patch({ foldedGuide: guideOf(s)?.says }),
+  'unfold-guide': () => patch({ foldedGuide: undefined }),
   'toggle-debug': (s) => patch({ debug: !s.debug, showMenu: false }),
   'debug-tab': (_, { data }) => patch({ debugTab: data.tab as ViewState['debugTab'] }),
   'debrief-tab': (_, { data }) => patch({ debriefTab: data.tab as ViewState['debriefTab'] }),

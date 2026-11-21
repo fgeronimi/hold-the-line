@@ -453,7 +453,11 @@ button.pip:active .icon { transform: translateY(1px); box-shadow: var(--pressed)
 @media (max-width: 760px), (pointer: coarse) and (max-width: 1000px) {
   /* Petit écran : plus d'éventail, une rangée qui défile ; la carte touchée se soulève sur place. */
   .hand { --card-w: 150px; --card-h: 236px; margin-bottom: 0; }
-  .hand-cards { height: auto; display: flex; gap: 10px; overflow-x: auto; box-sizing: border-box; padding: 150px 16px 14px; scroll-snap-type: x proximity; scrollbar-width: none; }
+  /* La rangée reçoit elle-même le doigt : laissée transparente aux contacts, elle ne défilait pas
+     partout (retour de test sur téléphone). La marge où grandit une carte soulevée ne s'ouvre
+     qu'avec elle, pour ne pas masquer le plateau. */
+  .hand-cards { pointer-events: auto; height: auto; display: flex; gap: 10px; overflow-x: auto; box-sizing: border-box; padding: 14px 16px; scroll-snap-type: x proximity; scrollbar-width: none; }
+  .hand-cards:has(.lifted) { padding-top: 150px; }
   .hcard { position: relative; left: auto; margin: 0; flex: none; transform: none; scroll-snap-align: center; }
   /* La rangée qui défile coupe ce qui dépasse : la carte grandit dans la marge du haut, sans en sortir. */
   .hcard.lifted .hcard-face, .hcard:focus-visible .hcard-face { transform: translateY(-6px) scale(1.04); }
@@ -681,4 +685,38 @@ button.launch.hint {
   .unlocked .ach { padding: 6px 8px; align-items: center; }
   .unlocked .ach .ico { width: 24px; height: 24px; }
   .unlocked .ach em, .unlocked .ach small { display: none; }
+}
+
+/* La bulle du guide se replie en médaillon : sur un téléphone, dépliée, elle couvrait tout le
+   plateau et l'on ne pouvait plus ni bâtir ni relier. */
+.tutorial { position: relative; }
+.tutorial .fold { position: absolute; top: -10px; right: -8px; z-index: 1; }
+.tutorial .fold .ico { width: 14px; height: 14px; }
+button.tutorial-folded { display: flex; align-items: center; gap: 8px; padding: 3px 14px 3px 3px; border-radius: 999px; font: 14px var(--display); color: var(--ink);
+  background: var(--m-parchment); border-color: var(--line); }
+button.tutorial-folded .face { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #c9982f; box-sizing: border-box; }
+
+/* Téléphone : la barre du haut et la bulle se tassent pour laisser voir le plateau. */
+@media (max-width: 760px) {
+  .tutorial { max-height: 34vh; overflow-y: auto; overflow-x: visible; }
+  .tutorial .fold { top: 4px; right: 4px; }
+  .tutorial .speech { margin: 2px 26px 2px 0; gap: 6px; }
+  .tutorial .speech .speaker { width: 34px; height: 34px; border-width: 2px; }
+  .tutorial .bubble .line { font-size: 13.5px; padding: 6px 9px; }
+  .tutorial .bubble .real { font-size: 12px; padding: 5px 9px 6px; }
+  .tutorial .hints { margin-top: 2px; padding-top: 2px; }
+  .hud-bar { gap: 6px; }
+  .wave-skull { width: 44px; height: 44px; }
+  .wave-skull .ico { width: 26px; height: 26px; }
+  .wave-badge .hud-title { margin-left: -24px; padding: 3px 12px 4px 30px; min-height: 36px; }
+  .wave-badge .hud-title b { font-size: 16px; }
+  .hud-actions { min-height: 0; padding: 3px 6px; }
+  .hud-actions button.round { width: 32px; height: 32px; }
+  .hud-gauges { min-height: 0; padding: 3px 4px; }
+  .hud-bar .gauge { padding: 0 7px; column-gap: 4px; }
+  .hud-bar .gauge .ico { grid-row: auto; width: 20px; height: 20px; }
+  .hud-bar .gauge b { font-size: 15px; }
+  .hud-bar .gauge b em { font-size: 11px; }
+  /* Le nom de la jauge reste dans son infobulle. */
+  .hud-bar .gauge small { display: none; }
 }

@@ -7,7 +7,7 @@ import { autoPlace, insideBoard, nodeAt } from '../src/ui/board.ts';
 import { isRiver } from '../src/render/terrain.ts';
 import type { Architecture, BoardCell } from '../src/engine/types.ts';
 import { draftInfo } from '../src/ui/draft.ts';
-import { findingsOf, type ViewState } from '../src/ui/views.ts';
+import { findingsOf, renderToolbar, type ViewState } from '../src/ui/views.ts';
 import { gameOf, withGame, type Store } from '../src/ui/session.ts';
 import { analysisOf } from '../src/ui/debrief.ts';
 import { fortifiedCity } from '../src/data/themes/fortified-city.ts';
@@ -66,6 +66,16 @@ describe('les actions', () => {
     const opened = run('show-welcome', stateAt({ showMenu: true }));
     expect(opened.patch).toEqual({ showWelcome: true, showMenu: false });
     expect(kinds(opened)).toEqual([]);
+  });
+
+  it('la bulle du guide se replie, et se rouvre d’elle-même au pas suivant', () => {
+    const s = stateAt();
+    const folded = { ...s, ...run('fold-guide', s).patch };
+    expect(renderToolbar(folded)).toContain('data-action="unfold-guide"');
+    expect(renderToolbar(folded)).not.toContain('class="tutorial panel"');
+    expect(renderToolbar({ ...folded, ...run('unfold-guide', folded).patch })).toContain('class="tutorial panel"');
+    const nextStep = { ...folded, draft: autoPlace({ nodes: [{ id: 'app', type: 'app-server' }], links: [] }) };
+    expect(renderToolbar(nextStep)).toContain('class="tutorial panel"');
   });
 
   it('un scénario terminé s’ouvre sur son bilan ; choisir un autre scénario le ferme', () => {
