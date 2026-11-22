@@ -319,6 +319,8 @@ describe('la barre du haut', () => {
     expect(menu).not.toContain('data-wave="2"');
     const inPractice = renderHud(view({ phase: 'build', showMenu: true, practice: { game: won, draft: A.withCache } }));
     expect(inPractice).toContain('data-action="leave-practice"');
-    expect(inPractice).toContain('Rejeu · Vague');
+    expect(inPractice).toContain('<b><em class="practice wide">Rejeu · </em>Vague');
+    expect(inPractice).toMatch(/<em class="practice narrow">Rejeu · <\/em>\S/);
+    expect(menu).not.toContain('Rejeu');
   });
 });

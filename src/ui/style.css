@@ -92,6 +92,8 @@ button.round, .close { width: 30px; height: 30px; padding: 0; border-radius: 50%
 .hud-title { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; line-height: 1.15; padding: 4px 14px; }
 .hud-title b { font-size: 16px;  }
 .hud-title span { font-size: 12px; color: #7a6a55; }
+.hud-title em.practice { font-style: normal; }
+.hud-title .practice.narrow { display: none; }
 .hud-gauges { flex-wrap: wrap; justify-content: center; }
 .hud-bar .gauge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 5px; border-radius: 999px; font-size: 13px; white-space: nowrap; color: #7a6a55;
   background: #5a3a1e12; box-shadow: inset 0 0 0 1px #a9845559; cursor: default; }
@@ -483,6 +485,8 @@ button.pip:active .icon { transform: translateY(1px); box-shadow: var(--pressed)
   /* Étirée à la hauteur de la plus haute, une carte laissait voir la ligne d'après les trois points. */
   .hcard-face > .hcard-text { flex: none; }
   .hcard-face > .hcard-cost { margin-top: auto; padding-top: 5px; }
+  /* Ni le contact (`:active`) ni la sélection ne pivotent ou n'agrandissent une carte de la rangée. */
+  .hcard:active .hcard-face { transform: none; }
   .hcard.lifted .hcard-face, .hcard:focus-visible .hcard-face { transform: none; box-shadow: 0 0 0 3px #e0a82e, 0 8px 16px rgba(30, 20, 8, .2); }
   .hcard.lifted .hcard-more, .hcard:focus-visible .hcard-more { display: none; }
   .hcard.lifted .hcard-text, .hcard:focus-visible .hcard-text { -webkit-line-clamp: 3; line-clamp: 3; }
@@ -761,6 +765,15 @@ button.tutorial-folded .face { width: 34px; height: 34px; border-radius: 50%; bo
   /* La fiche d'un bâtiment se pose là où est la bulle : elle se retire le temps de la lire, comme
      pour la main de cartes (issue 7). */
   body:has(.detail-card) :is(.tutorial, .tutorial-folded) { display: none; }
+  /* Le badge et les étoiles tiennent sur une ligne, même en rejeu (issue 7) : le badge prend ce
+     que les étoiles lui laissent, et son sous-titre s'abrège plutôt que de les renvoyer dessous. */
+  .wave-badge { flex: 1 1 0; min-width: 0; }
+  .wave-badge .hud-title { min-width: 0; }
+  .wave-badge .hud-title b { white-space: nowrap; }
+  .wave-badge .hud-title > span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hud-actions { flex: none; }
+  .hud-title .practice.wide { display: none; }
+  .hud-title .practice.narrow { display: inline; }
   /* Le nom de la jauge reste dans son infobulle. */
   .hud-bar .gauge small { display: none; }
 }

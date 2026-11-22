@@ -77,8 +77,11 @@ export function renderHud(s: ViewState): string {
   const building = s.phase !== 'wave' && s.phase !== 'debrief';
   const gauges = wave && building ? buildGauges(s, wave) : '';
   const menu = s.showMenu ? renderMenu(s) : '';
-  const title = wave ? `${s.practice ? 'Rejeu · ' : ''}Vague ${shownIndex + 1} / ${n}` : 'Partie terminée';
-  const subtitle = wave ? esc(wave.title) : esc(s.scenario.subtitle);
+  // « Rejeu » est écrit deux fois : sur téléphone il passe sous le titre, que le numéro de vague
+  // reste entier sur la même ligne que les étoiles (issue 7).
+  const practice = (where: string) => (s.practice ? `<em class="practice ${where}">Rejeu · </em>` : '');
+  const title = wave ? `${practice('wide')}Vague ${shownIndex + 1} / ${n}` : 'Partie terminée';
+  const subtitle = wave ? `${practice('narrow')}${esc(wave.title)}` : esc(s.scenario.subtitle);
   // Pendant la vague, les étoiles d'avant : le résultat se découvre au debrief.
   const stars = s.phase !== 'wave' || !playing ? totalStars(s) : s.practice ? (s.practice.before ?? totalStars(s)) : starsBefore(s, playing.waveIndex);
   const briefing = wave ? `<button class="round" data-action="show-briefing" data-tip="Revoir le briefing" aria-label="Revoir le briefing">${narratorFace()}</button>` : '';
