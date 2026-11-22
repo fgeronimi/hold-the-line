@@ -188,6 +188,7 @@ export const actions: Record<string, Action> = {
     return applied(result, { ...noHand, selectedNode: placed });
   },
   'close-build': () => patch({ ...noHand }),
+  'drop-card': () => patch({ liftedCard: undefined }),
 
   'add-node': (s, { newNode }) => patch({ draft: addNode(s.draft, newNode!) }),
   'remove-node': (s, { data }) => {

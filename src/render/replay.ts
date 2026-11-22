@@ -44,6 +44,10 @@ function legend(o: ReplayOptions): string {
 }
 
 export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOptions): () => void {
+  // Barre, alerte et courbes ensemble : sur téléphone, elles s'empilent au lieu de se couvrir (issue 7).
+  const dock = document.createElement('div');
+  dock.className = 'replay-dock';
+  barHost.appendChild(dock);
   const bar = document.createElement('div');
   bar.className = 'replay-bar';
   bar.innerHTML = `
@@ -57,18 +61,18 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
     <button data-r="charts" title="Courbes minute par minute, bâtiment par bâtiment">${pict('chart')} Courbes</button>
     <span class="replay-legend">${legend(o)}</span>
     <button data-r="skip" title="Aller à la fin de la vague">Passer</button>`;
-  barHost.appendChild(bar);
+  dock.appendChild(bar);
   const alert = document.createElement('div');
   alert.className = 'replay-alert';
   alert.hidden = true;
-  barHost.appendChild(alert);
+  dock.appendChild(alert);
 
   const model = chartModel(o.result, o.arch, o.wave, o.catalog, o.theme);
   const panel = document.createElement('div');
   panel.className = 'replay-charts';
   panel.hidden = true;
   panel.innerHTML = renderChart(model, { live: true });
-  barHost.appendChild(panel);
+  dock.appendChild(panel);
   const chart = attachChart(panel.querySelector('[data-chart="root"]')!, model, (tick) => {
     time = tick;
     seek.value = String(time);
@@ -242,15 +246,13 @@ export function startReplay(scene: CityScene, barHost: HTMLElement, o: ReplayOpt
   const stop = () => {
     scene.onFrame = undefined;
     scene.focusOn(undefined);
-    alert.remove();
     alarm.remove();
-    panel.remove();
     scene.slaLatencyMs = undefined;
     scene.slaLatencyByKind = {};
     scene.showTick(0, undefined, []);
     scene.setMode('build');
     window.removeEventListener('keydown', onKey);
-    bar.remove();
+    dock.remove();
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === ' ' && (e.target as HTMLElement).tagName !== 'INPUT') {

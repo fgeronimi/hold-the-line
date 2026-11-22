@@ -263,6 +263,7 @@ describe('les actions', () => {
     const second = run('pick-card', { ...s, liftedCard: 'cache' }, args).patch!;
     expect(second.draft!.nodes.some((n) => n.type === 'cache')).toBe(true);
     expect(second.liftedCard).toBeUndefined();
+    expect(run('drop-card', { ...s, liftedCard: 'cache' }).patch).toEqual({ liftedCard: undefined });
   });
 
   it('une carte glissée referme la main ; lâchée sur une case, elle y est posée', () => {

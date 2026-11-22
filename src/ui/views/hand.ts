@@ -28,13 +28,41 @@ function realOf(type: string): string {
   return `<span class="real named"><b>En vrai :</b> ${esc(r.text)}${r.source ? ` (${esc(r.source.label)})` : ''}</span>`;
 }
 
-function handCard(s: ViewState, d: ComponentDef, slot: FanSlot, index: number, hinted: boolean): string {
-  const style = theme.buildings[d.id];
+/** Ce que montre une carte soulevée en plus de sa face : chiffres, évolutions, « en vrai ». */
+function moreOf(s: ViewState, d: ComponentDef): string {
   const accepts = d.accepts.map((k) => KINDS_TEXT[k] ?? k).join(', ');
   const ups = Object.values(s.catalog.upgrades)
     .filter((u) => u.appliesTo === d.id)
     .map((u) => `${upgradeIcon(theme.upgradeIcons[u.id])} ${esc(u.techName)}`)
     .join(' · ');
+  return `<span>${fmt(d.capacity)} unités de travail/s · ${d.latencyMs} ms${accepts ? ` · reçoit ${accepts}` : ''}</span>
+            ${ups ? `<span>Évolutions : ${ups}</span>` : ''}
+            ${realOf(d.id)}`;
+}
+
+const costOf = (d: ComponentDef) => `<span class="hcard-cost"><span title="Prix">${icon('coin')} ${d.cost}</span><span title="Complexité">${icon('cog')} ${d.complexity}</span></span>`;
+
+/**
+ * Sur téléphone, la carte touchée se lit ici plutôt que soulevée sur place : la rangée qui
+ * défile coupait ce qui dépassait d'elle, et la carte restait soulevée en défilant (issue 7).
+ * La feuille de style ne la montre que là où la main est une rangée.
+ */
+function cardPreview(s: ViewState, d: ComponentDef): string {
+  const style = theme.buildings[d.id];
+  return `<div class="hand-preview" role="group" aria-label="${esc(nameOf(d.id, s.catalog))}">
+      <p class="hcard-title"><b>${esc(d.techName)}</b><small>${esc(style?.metaphor ?? '')}</small>
+        <button class="close" data-action="drop-card" aria-label="Reposer la carte">${icon('close')}</button></p>
+      <p class="preview-body">
+        ${style ? `<span class="hcard-text">${esc(style.role.real)}</span>` : ''}
+        <span class="hcard-more">${moreOf(s, d)}</span>
+      </p>
+      <p class="preview-foot">${costOf(d)}
+        <button class="primary" data-action="pick-card" data-type="${esc(d.id)}">${s.buildAt ? 'Bâtir ici' : 'Choisir'}</button></p>
+    </div>`;
+}
+
+function handCard(s: ViewState, d: ComponentDef, slot: FanSlot, index: number, hinted: boolean): string {
+  const style = theme.buildings[d.id];
   const budget = s.scenario.waves[s.game.waveIndex]?.budget ?? Infinity;
   const left = Math.max(0, budget - draftInfo(s.draft, s.catalog).cost);
   const affordable = d.cost <= left;
@@ -50,11 +78,9 @@ function handCard(s: ViewState, d: ComponentDef, slot: FanSlot, index: number, h
           <span class="hcard-art">${cardArt(s, d.id)}</span>
           ${style ? `<span class="hcard-text">${esc(style.role.real)}</span>` : ''}
           <span class="hcard-more">
-            <span>${fmt(d.capacity)} unités de travail/s · ${d.latencyMs} ms${accepts ? ` · reçoit ${accepts}` : ''}</span>
-            ${ups ? `<span>Évolutions : ${ups}</span>` : ''}
-            ${realOf(d.id)}
+            ${moreOf(s, d)}
           </span>
-          <span class="hcard-cost"><span title="Prix">${icon('coin')} ${d.cost}</span><span title="Complexité">${icon('cog')} ${d.complexity}</span></span>
+          ${costOf(d)}
           <span class="hcard-ribbon${affordable || lifted ? '' : ' dear'}">${ribbon}</span>
         </span>
       </button>`;
@@ -81,8 +107,10 @@ export function renderHand(s: ViewState): string {
   const slots = fan(defs.length);
   const hinted = blinkOf(s);
   const cards = defs.map((d, i) => handCard(s, d, slots[i]!, i, hinted?.tool === 'place' && hinted.type === d.id)).join('');
+  const lifted = defs.find((d) => d.id === s.liftedCard);
   return `
     <section class="hand" style="--n:${defs.length}" aria-label="Bâtiments à construire">
+      ${lifted ? cardPreview(s, lifted) : ''}
       <p class="hand-head"><span>${destination(s, s.buildAt)}</span>
         <button class="close" data-action="close-build" title="Fermer (Échap)" aria-label="Fermer">${icon('close')}</button></p>
       <div class="hand-cards">${cards}</div>

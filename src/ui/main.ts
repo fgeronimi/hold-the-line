@@ -127,17 +127,24 @@ function renderHandLayer(): void {
   regions.hand.innerHTML = html;
   const cards = regions.hand.querySelector('.hand-cards');
   if (cards) cards.scrollLeft = scrolled;
-  const lifted = cards?.querySelector<HTMLElement>('.hcard.lifted');
-  if (cards && lifted) {
-    // La carte soulevée au bord de l'écran y rentre en entier.
-    const margin = 16;
-    const left = lifted.offsetLeft - margin;
-    const right = lifted.offsetLeft + lifted.offsetWidth + margin - cards.clientWidth;
-    const target = Math.min(Math.max(cards.scrollLeft, right), left);
-    if (target !== cards.scrollLeft) cards.scrollTo({ left: target, behavior: 'smooth' });
-  }
+  liftedAt = cards?.scrollLeft ?? 0;
   handHtml = html;
 }
+
+/**
+ * Faire défiler la rangée repose la carte soulevée : sa fiche ne correspondait plus à rien
+ * de visible (issue 7). Le seuil ignore le défilement que rétablit `renderHandLayer`.
+ */
+let liftedAt = 0;
+regions.hand.addEventListener(
+  'scroll',
+  (e) => {
+    const row = e.target;
+    if (!state.liftedCard || !(row instanceof HTMLElement) || !row.classList.contains('hand-cards')) return;
+    if (Math.abs(row.scrollLeft - liftedAt) > 24) update({ liftedCard: undefined });
+  },
+  { capture: true, passive: true },
+);
 
 /** Le survol des courbes du debrief : le HTML est réécrit à chaque rendu, on le rebranche. */
 function attachDebriefChart(): void {

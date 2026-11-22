@@ -206,6 +206,18 @@ describe('la main de cartes', () => {
     expect(renderHand(view({ showHand: true, liftedCard: 'cache' }))).toContain('Toucher encore pour choisir');
   });
 
+  it('la carte soulevée se lit en entier dans une fiche hors de la rangée qui défile', () => {
+    expect(renderHand(view({ showHand: true }))).not.toContain('hand-preview');
+    const html = renderHand(view({ buildAt: { q: 5, r: 3 }, liftedCard: 'cache' }));
+    const preview = html.match(/<div class="hand-preview"[\s\S]*?<\/div>/)![0];
+    expect(html.indexOf('hand-preview')).toBeLessThan(html.indexOf('hand-cards'));
+    expect(preview).toContain(catalog.components.cache!.techName);
+    expect(preview).toContain('Évolutions');
+    expect(preview).toMatch(/data-action="pick-card" data-type="cache"[^>]*>[\s\S]*Bâtir ici/);
+    expect(preview).toContain('data-action="drop-card"');
+    expect(renderHand(view({ showHand: true, liftedCard: 'cache' }))).toMatch(/hand-preview[\s\S]*Choisir/);
+  });
+
   it('la main passe devant la carte du bâtiment sélectionné', () => {
     expect(renderCard(view({ selectedNode: 'db' }))).toContain('detail-card');
     const both = renderCard(view({ selectedNode: 'db', showHand: true }));

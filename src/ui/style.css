@@ -184,6 +184,18 @@ body[data-phase='debrief'] .replay-bar, body[data-phase='debrief'] .replay-chart
 .replay-alert { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); z-index: 2; padding: 6px 14px; border-radius: 18px; text-align: center; max-width: calc(100vw - 32px); background: linear-gradient(#d8574a, #a93226); border: 2px solid #5e1a12; color: #fff; font-weight: bold; box-shadow: 0 3px 0 #5e1a12, 0 7px 12px rgba(30, 20, 8, .35); }
 .replay-alert p { margin: 0; }
 .replay-alert p + p { margin-top: 4px; padding-top: 4px; border-top: 1px solid #ffffff40; }
+/* Le conteneur ne compte que sur téléphone : ailleurs, barre, alerte et courbes gardent leur place. */
+.replay-dock { display: contents; }
+@media (max-width: 760px) {
+  /* Téléphone : alerte, courbes et barre s'empilent depuis le bas, sous la bannière du SLA ; les
+     courbes prennent ce qui reste et défilent (issue 7 : tout se couvrait). */
+  .replay-dock { position: absolute; z-index: 2; left: 10px; right: 10px; bottom: 10px; max-height: calc(100% - 190px); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .replay-dock > :is(.replay-bar, .replay-alert, .replay-charts) { pointer-events: auto; position: static; transform: none; width: auto; max-width: none; box-sizing: border-box; }
+  .replay-dock > .replay-alert { order: 0; flex: none; align-self: center; }
+  .replay-dock > .replay-charts { order: 1; flex: 0 1 auto; min-height: 0; max-height: none; }
+  .replay-dock > .replay-bar { order: 2; flex: none; }
+  .sla-alarm .sla-banner { top: 118px; max-width: calc(100vw - 40px); box-sizing: border-box; text-align: center; }
+}
 .replay-loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: #555; font-family: var(--display); font-size: 18px; }
 
 /* Étiquettes et pastilles au-dessus des bâtiments. */
@@ -296,7 +308,8 @@ body[data-phase='debrief'] .replay-bar, body[data-phase='debrief'] .replay-chart
 .chart-tip span { color: #7a6a55; }
 .dialog .tabs { display: flex; gap: 6px; margin: 4px 0 8px; }
 .dialog .tabs button.active { background: var(--m-brass); border-color: #a57f25; box-shadow: var(--pressed); transform: translateY(1px); }
-.replay-charts { position: absolute; z-index: 2; top: 118px; right: 10px; width: min(600px, calc(100vw - 20px)); max-height: calc(100vh - 270px); overflow-y: auto; padding: 8px; background: var(--m-parchment); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 2px 4px rgba(30, 20, 8, .14), 0 12px 26px rgba(30, 20, 8, .18); }
+/* Sous la bannière du SLA (`top: 112px`), qu'il couvrait. */
+.replay-charts { position: absolute; z-index: 2; top: 158px; right: 10px; width: min(600px, calc(100vw - 20px)); max-height: calc(100vh - 310px); overflow-y: auto; padding: 8px; background: var(--m-parchment); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 2px 4px rgba(30, 20, 8, .14), 0 12px 26px rgba(30, 20, 8, .18); }
 
 /* Écran de choix du scénario. */
 .scenario-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 10px; }
@@ -421,6 +434,10 @@ button.pip:active .icon { transform: translateY(1px); box-shadow: var(--pressed)
   .hcard:hover .hcard-more { display: block; }
   .hcard:hover .hcard-text { -webkit-line-clamp: unset; line-clamp: unset; }
 }
+/* La fiche de la carte touchée n'a de place que là où la main est une rangée (téléphone) ; en
+   éventail, la carte soulevée se lit sur place. */
+.hand-preview { display: none; }
+@keyframes preview-in { from { opacity: 0; transform: translateY(16px); } }
 .hcard:active .hcard-face { transition-duration: .06s; transform: translateY(-10px) rotate(calc(var(--tilt) * -1)) scale(1.17); }
 /* La carte que désigne le guide : l'anneau est sur sa face, la distribution reste sur la carte. */
 .hcard.hint { animation: deal .42s cubic-bezier(.2, .9, .3, 1.15) backwards; animation-delay: calc(var(--i) * 28ms); box-shadow: none; }
@@ -457,16 +474,40 @@ button.pip:active .icon { transform: translateY(1px); box-shadow: var(--pressed)
      partout (retour de test sur téléphone). La marge où grandit une carte soulevée ne s'ouvre
      qu'avec elle, pour ne pas masquer le plateau. */
   .hand-cards { pointer-events: auto; height: auto; display: flex; gap: 10px; overflow-x: auto; box-sizing: border-box; padding: 14px 16px; scroll-snap-type: x proximity; scrollbar-width: none; }
-  .hand-cards:has(.lifted) { padding-top: 150px; }
-  .hcard { position: relative; left: auto; margin: 0; flex: none; transform: none; scroll-snap-align: center; }
-  /* La rangée qui défile coupe ce qui dépasse : la carte grandit dans la marge du haut, sans en sortir. */
-  .hcard.lifted .hcard-face, .hcard:focus-visible .hcard-face { transform: translateY(-6px) scale(1.04); }
+  /* La rangée qui défile coupe tout ce qui dépasse d'elle : la carte prend la hauteur de son
+     contenu (sinon son titre sortait par le haut), et la carte touchée ne grandit pas sur place,
+     elle se lit dans `.hand-preview` (issue 7). */
+  .hcard { position: relative; left: auto; margin: 0; flex: none; transform: none; scroll-snap-align: center; height: auto; min-height: var(--card-h); display: flex; }
+  .hcard-face { position: relative; flex: 1; }
+  .hcard-art { --art-h: 88px; }
+  /* Étirée à la hauteur de la plus haute, une carte laissait voir la ligne d'après les trois points. */
+  .hcard-face > .hcard-text { flex: none; }
+  .hcard-face > .hcard-cost { margin-top: auto; padding-top: 5px; }
+  .hcard.lifted .hcard-face, .hcard:focus-visible .hcard-face { transform: none; box-shadow: 0 0 0 3px #e0a82e, 0 8px 16px rgba(30, 20, 8, .2); }
+  .hcard.lifted .hcard-more, .hcard:focus-visible .hcard-more { display: none; }
+  .hcard.lifted .hcard-text, .hcard:focus-visible .hcard-text { -webkit-line-clamp: 3; line-clamp: 3; }
+  .hand-preview { pointer-events: auto; display: flex; flex-direction: column; box-sizing: border-box; width: min(360px, calc(100vw - 20px)); max-height: calc(100svh - var(--card-h) - 215px); overflow: hidden;
+    color: var(--ink); font-size: 13px; border: 1px solid #8a6238; border-radius: 14px; background: var(--grain), linear-gradient(170deg, #fbf3dc, #ecd9ad);
+    box-shadow: 0 1px 2px rgba(30, 20, 8, .2), 0 10px 22px rgba(30, 20, 8, .28); animation: preview-in .2s cubic-bezier(.2, .8, .2, 1); }
+  .settled .hand-preview { animation: none; }
+  .hand-preview .hcard-title { position: relative; margin: 0; padding: 7px 34px 6px; flex: none; }
+  .hand-preview .hcard-title b { font-size: 17px; }
+  .hand-preview .hcard-title small { font-size: 12px; }
+  .hand-preview .hcard-title .close { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; box-shadow: none; }
+  .hand-preview .preview-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0; padding: 4px 12px 2px; }
+  .hand-preview .hcard-text { display: block; margin: 4px 0; }
+  .hand-preview .hcard-more { display: block; margin: 6px 0 0; padding-top: 5px; border-top: 1px dashed #b9965a; color: #4a3d2c; font-size: 12px; }
+  .hand-preview .hcard-more > span { display: block; margin-bottom: 2px; }
+  .hand-preview .preview-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 7px 10px; border-top: 1px dashed #b9965a; }
+  .hand-preview .preview-foot .hcard-cost { margin: 0; }
+  /* La fiche dit déjà où ira la carte : la bulle d'en-tête se retire pour lui laisser la place. */
+  .hand:has(.hand-preview) .hand-head { display: none; }
   .hand-head { white-space: normal; border-radius: 14px; }
   .detail-card { justify-self: center; align-self: end; width: min(320px, calc(100vw - 20px)); margin: 0 10px 132px; max-height: 52vh; }
   .detail-card .hcard-art { --art-h: 84px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .hcard, .hcard.hint, .detail-card { animation: none; }
+  .hcard, .hcard.hint, .detail-card, .hand-preview { animation: none; }
   .hcard-face { transition: none; }
   .hcard.hint .hcard-face { animation: none; }
 }
@@ -717,6 +758,9 @@ button.tutorial-folded .face { width: 34px; height: 34px; border-radius: 50%; bo
   .hud-bar .gauge .ico { grid-row: auto; width: 20px; height: 20px; }
   .hud-bar .gauge b { font-size: 15px; }
   .hud-bar .gauge b em { font-size: 11px; }
+  /* La fiche d'un bâtiment se pose là où est la bulle : elle se retire le temps de la lire, comme
+     pour la main de cartes (issue 7). */
+  body:has(.detail-card) :is(.tutorial, .tutorial-folded) { display: none; }
   /* Le nom de la jauge reste dans son infobulle. */
   .hud-bar .gauge small { display: none; }
 }

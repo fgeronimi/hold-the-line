@@ -319,7 +319,8 @@ et déterministe, séparée de l'affichage.
   un bâtiment par carte, en éventail au centre de l'écran. Cliquer une case vide l'ouvre pour
   cette case ; « Bâtir » l'ouvre sans case, et la carte choisie se pose ensuite d'un clic. On
   peut aussi glisser une carte sur le plateau. Au survol une carte se soulève et montre ses
-  chiffres ; au doigt, un premier contact la soulève, le second la joue. L'illustration est
+  chiffres ; au doigt, un premier contact la soulève, le second la joue (sur téléphone, elle
+  se lit dans une fiche au-dessus de la rangée, I23). L'illustration est
   le bâtiment tel que le plateau le rend. Posé sur un chemin, un bâtiment
   s'insère dans le lien quand c'est sensé (I11) ; on déplace un bâtiment en le
   glissant ; on relie en cliquant A puis B, et le plus court chemin de cases se trace seul.
